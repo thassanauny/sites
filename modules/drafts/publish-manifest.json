@@ -1,0 +1,23 @@
+{
+  "app": "drafts",
+  "version": "1.0.1",
+  "chrome": {
+    "version": "1.0.1",
+    "url": "https://chromewebstore.google.com/detail/drafts/gapbkcacdkhdmcgnldfbjohdeagiabhd"
+  },
+  "site": "site/drafts",
+  "files": {
+    ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "assets/drafts-icon.png": "0ddf38b4ca2bed16edc6c5c3f65fbd37fe3562deebbaca944c5b34dafdc0608d",
+    "assets/drafts-screenshot.png": "b8d1db1e366e8ac4b6e8f70e3d0534583f13af6fa88ddff0f0ae5520da564824",
+    "index.html": "839e1fb69fea7d54ad0c5c671c44704323a2d2f54ae67db0cfabe452beb7dd02",
+    "styles.css": "ca40429a98575d91f8d33b059daa70773cd647470525be5cdfdfb5446cd79f76"
+  },
+  "mac": {
+    "version": "1.0.1",
+    "architecture": "aarch64",
+    "url": "https://github.com/thassanauny/sites/releases/download/drafts-v1.0.1/drafts_1.0.1_aarch64.dmg",
+    "sha256": "54e1b472f663e75f7befe059980464bd380a1830debfc1a31ee47022e3506622",
+    "checksumUrl": "https://github.com/thassanauny/sites/releases/download/drafts-v1.0.1/drafts_1.0.1_aarch64.dmg.sha256"
+  }
+}
