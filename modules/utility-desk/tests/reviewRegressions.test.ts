@@ -34,17 +34,29 @@ function drop(zone: HTMLElement, files: File[]) {
 }
 
 describe('reviewed file and draft lifecycle', () => {
+  it('hides the previous completed progress when new inputs fail validation', async () => {
+    const root = main();
+    let validation: string | null = null;
+    const task = taskControls('crop-image', 'Export fixture', async () => 'Downloaded.', { validate: () => validation });
+    root.append(task.el);
+    await task.run();
+    const bar = root.querySelector<HTMLProgressElement>('progress')!;
+    expect(bar.parentElement?.hidden).toBe(false);
+    validation = 'Choose a valid image.';
+    await task.run();
+    expect(root.querySelector('.status')?.textContent).toBe(validation);
+    expect(bar.parentElement?.hidden).toBe(true);
+  });
   for (const [id, mount] of [['images-to-pdf', mountImages], ['merge-pdfs', mountMerge]] as const) {
     it(`does not save planner fields in the previous ${id} draft`, () => {
       vi.useFakeTimers();
       const root = main();
-      const cleanup = mount(root);
+      mount(root);
       const filename = root.querySelector<HTMLInputElement>('[name="outName"]')!;
       filename.value = 'chosen.pdf'; filename.dispatchEvent(new Event('input', { bubbles: true }));
       root.dispatchEvent(new Event('utility-desk:leave'));
-      if (typeof cleanup === 'function') cleanup();
       const expected = store.getDraft(id);
-      expect(expected.outName).toBe('chosen.pdf');
+      expect(expected.outName).toBeUndefined();
       for (const planner of [mountSync, mountScp, mountDownloader]) {
         root.replaceChildren(); planner(root);
         root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input:not([type="checkbox"]), textarea').forEach((control) => {
@@ -162,11 +174,11 @@ describe('media duration and frozen operation inputs', () => {
     root.querySelector<HTMLSelectElement>('[name="format"]')!.value = 'wav';
     root.querySelector<HTMLInputElement>('[name="end"]')!.value = '5';
     finishLoad();
-    await vi.waitFor(() => expect(root.querySelector('.status')!.textContent).toContain('Done. original.mp4'));
+    await vi.waitFor(() => expect(root.querySelector('.status')!.textContent).toContain('Done. original_converted.mp4'));
     expect(ffmpeg.writeFile).toHaveBeenCalledWith('input.mp4', new Uint8Array([10]));
     expect(ffmpeg.exec.mock.calls[0][0]).toContain('output.mp4');
     expect(ffmpeg.exec.mock.calls[0][0]).not.toContain('-t');
-    expect(root.querySelector<HTMLAnchorElement>('.download-links a')!.download).toBe('original.mp4');
+    expect(document.querySelector<HTMLAnchorElement>('a[download]')!.download).toBe('original_converted.mp4');
     root.dispatchEvent(new Event('utility-desk:leave')); cleanup();
   });
 });

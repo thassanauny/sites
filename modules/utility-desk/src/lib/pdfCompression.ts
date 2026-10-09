@@ -3,6 +3,7 @@ import { Unzlib, Zlib } from 'fflate';
 import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { MAX_FILE_BYTES, MAX_TOTAL_BYTES, throwIfAborted } from './util';
+import { restoreStreamLengths } from './pdfStreams';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -64,6 +65,7 @@ export async function compressPdf(original: Uint8Array, mode: CompressionMode, s
   const pages = source.getPageCount();
   if (!pages || pages > MAX_PAGES) throw new Error('PDF compression accepts 1 to 1,000 pages.');
   if (mode !== 'lossless') return compressPageImages(original, mode, pages, signal, onProgress);
+  await restoreStreamLengths(source, original, signal);
 
   // Recompress only plain and single-Flate streams. Keeping DecodeParms intact
   // preserves image predictors; opaque image codecs and filter chains stay intact.

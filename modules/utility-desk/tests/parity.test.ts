@@ -80,16 +80,20 @@ describe('original functionality parity', () => {
 });
 
 describe('navigation during work', () => {
-  it('keeps a downloadable result link and releases it on navigation', () => {
+  it('downloads directly without a visible result section', () => {
     document.body.innerHTML = '<main id="main"></main>';
-    const create = vi.fn(() => 'blob:fixture'), revoke = vi.fn();
-    vi.stubGlobal('URL', { createObjectURL: create, revokeObjectURL: revoke });
+    const revoke = vi.fn();
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:fixture', revokeObjectURL: revoke });
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    downloadBlob(new Blob(['output']), 'output.txt');
-    const link = document.querySelector<HTMLAnchorElement>('.download-links a')!;
-    expect(link.download).toBe('output.txt'); expect(link.getAttribute('href')).toBe('blob:fixture');
+    downloadBlob(new Blob(['output']), 'unlocked.pdf');
+    expect(click).toHaveBeenCalledOnce();
+    expect(document.querySelector('.download-links')).toBeNull();
+    const link = document.querySelector<HTMLAnchorElement>('a')!;
+    expect(link.hidden).toBe(true);
+    expect(link.download).toBe('unlocked.pdf');
     document.getElementById('main')!.dispatchEvent(new Event('utility-desk:leave'));
-    expect(revoke).toHaveBeenCalledWith('blob:fixture'); expect(link.hasAttribute('href')).toBe(false);
+    expect(revoke).toHaveBeenCalledWith('blob:fixture');
+    expect(document.querySelector('a')).toBeNull();
     click.mockRestore(); vi.unstubAllGlobals();
   });
   it('flushes form choices immediately on navigation', () => {

@@ -50,6 +50,13 @@ describe('pdf operations', () => {
     const ac = new AbortController(); ac.abort();
     await expect(mergePdfs([{ bytes: await makePdf(1) }], ac.signal)).rejects.toMatchObject({ name: 'AbortError' });
   });
+  it('honours cancellation at the final progress update', async () => {
+    const bytes = await makePdf(1);
+    const merge = new AbortController();
+    await expect(mergePdfs([{ bytes }], merge.signal, () => merge.abort())).rejects.toMatchObject({ name: 'AbortError' });
+    const split = new AbortController();
+    await expect(splitEachPage(bytes, split.signal, () => split.abort())).rejects.toMatchObject({ name: 'AbortError' });
+  });
   it('lays out images', () => {
     const page = pageDimensions('A4', 'auto', { width: 2000, height: 1000 }, 150);
     expect(page[0]).toBeGreaterThan(page[1]);

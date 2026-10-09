@@ -69,6 +69,8 @@ export function resizeKeepingAspect(w: number, h: number, target: { width?: numb
   return [w, h];
 }
 export const MAX_PIXELS = 100_000_000;
+// Extension aliases also admit images whose OS supplies no MIME type.
+export const IMAGE_ACCEPT = 'image/*,.png,.jpg,.jpeg,.jfif,.webp,.gif,.avif,.bmp,.svg,.ico';
 
 export function detectUnsupportedImage(file: { name: string; type: string }): string | null {
   const n = file.name.toLowerCase();

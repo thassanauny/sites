@@ -115,7 +115,7 @@ function shell() {
     h('div', { class: 'workspace' },
       h('header', { class: 'topbar' }, h('span', {}, h('a', { href: '#/' }, 'Home'), h('span', { class: 'breadcrumb-separator' }, '/'), h('strong', { id: 'breadcrumb' }, 'Home')), topbarActions),
       h('main', { id: 'main', tabindex: -1 }),
-      h('footer', {}, h('span', {}, 'Made for everyday tasks. Runs in your browser.'), h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, 'Utility Desk Lite · 1.0.34'))));
+      h('footer', {}, h('span', {}, 'Made for everyday tasks. Runs in your browser.'), h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, 'Utility Desk Lite · 1.0.62'))));
 }
 
 let renderRevision = 0;

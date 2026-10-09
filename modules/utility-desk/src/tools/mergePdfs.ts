@@ -1,5 +1,5 @@
 import { toolPage, group } from '../page';
-import { h, field, input, filePicker, fileList, taskControls, notice, persistForm, button } from '../ui';
+import { h, field, input, filePicker, fileList, taskControls, notice, persistForm } from '../ui';
 import { mergePdfs, pageCount } from '../lib/pdfops';
 import { parsePageRanges } from '../lib/ranges';
 import { readFileBytes, downloadBlob, bytesToBlob, sanitizeFilename, MAX_FILE_BYTES, MAX_TOTAL_BYTES, formatBytes, throwIfAborted } from '../lib/util';
@@ -20,21 +20,21 @@ export function mount(root: HTMLElement) {
     }
     list.refresh();
   } });
-  const name = field('Output filename', input('text', 'outName', 'merged.pdf'));
+  const name = field('Output filename (without extension)', input('text', 'outName', 'merged'));
   const task = taskControls('merge-pdfs', 'Merge PDFs', async ({ signal, progress }) => {
     const selection = items.map((item) => ({ ...item }));
     let n = sanitizeFilename((name.querySelector('input') as HTMLInputElement).value, 'merged.pdf');
     if (!/\.pdf$/i.test(n)) n += '.pdf';
+    const selections = selection.map((it, index) => {
+      try { return { ...it, selectedPages: parsePageRanges(it.range, it.pages, true) }; }
+      catch (error) { throw new Error(`PDF ${index + 1} (${it.name}): ${(error as Error).message}`); }
+    });
     const sources = [];
-    for (const it of selection) sources.push({ bytes: await readFileBytes(it.file, signal), pages: parsePageRanges(it.range, it.pages, true) });
+    for (const it of selections) sources.push({ bytes: await readFileBytes(it.file, signal), pages: it.selectedPages });
     const out = await mergePdfs(sources, signal, progress);
     throwIfAborted(signal); downloadBlob(bytesToBlob(out, 'application/pdf'), n);
     return `${n} (${formatBytes(out.length)}, ${sources.reduce((a, s) => a + s.pages.length, 0)} pages)`;
   }, { validate: () => (items.length < 2 ? 'Add at least two PDFs.' : null) });
-  const preview = button('Preview merge', () => {
-    try { if (items.length < 2) throw new Error('Add at least two PDFs.'); msg.replaceChildren(notice('info', ...items.map((it) => h('p', {}, `${it.name}: ${parsePageRanges(it.range, it.pages, true).join(', ')}`)), 'No output has been created.')); }
-    catch (e) { msg.replaceChildren(notice('danger', (e as Error).message)); }
-  });
-  toolPage(root, 'merge-pdfs', { config: [group('Merge order', h('p', { class: 'field-hint' }, 'Reorder with the arrow buttons. Enter pages like 1-3, 5, 8- per file (blank = all).'), picker, msg, list.el), group(null, name)], actions: [preview, task.el] });
+  toolPage(root, 'merge-pdfs', { config: [group('Merge order', h('p', { class: 'field-hint' }, 'Reorder with the arrow buttons. Enter pages like 1-3, 5, 8- per file (blank = all).'), picker, msg, list.el), group(null, name)], actions: [task.el] });
   persistForm('merge-pdfs', root);
 }

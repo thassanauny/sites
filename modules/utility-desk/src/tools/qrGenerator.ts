@@ -56,6 +56,6 @@ export function mount(root: HTMLElement) {
         button('Download SVG', () => downloadBlob(new Blob([result.svg], { type: 'image/svg+xml' }), `${filename}.svg`))));
     return 'QR code ready.';
   }, { validate: () => { try { buildQrPayload(type.value as QrType, values()); return null; } catch (error) { return (error as Error).message; } } });
-  toolPage(root, 'qr-generator', { config: [group(null, field('QR type', type, 'Details stay on this page and are not saved.'), ...sections.map(([, section]) => section), h('div', { class: 'option-grid' }, field('PNG size', size), field('Error correction', level, 'Higher levels tolerate more damage and fit less text.')), field('Output filename', name))], actions: [task.el], output: [outputPanel('QR code', 'PREVIEW & DOWNLOAD', results)] });
+  toolPage(root, 'qr-generator', { config: [group(null, field('QR type', type, 'Details stay on this page and are not saved.'), ...sections.map(([, section]) => section), h('div', { class: 'option-grid' }, field('PNG size', size), field('Error correction', level, 'Higher levels tolerate more damage and fit less text.')), field('Output filename (without extension)', name))], actions: [task.el], output: [outputPanel('QR code', 'PREVIEW & DOWNLOAD', results)] });
   return () => { root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((control) => { control.value = ''; }); results.replaceChildren(); };
 }

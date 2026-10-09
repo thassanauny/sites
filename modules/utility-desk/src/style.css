@@ -93,8 +93,10 @@ input[type="range"] { width: 100%; }
 .empty p { margin: 0; }
 
 .file-list, .activity, .caps { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 8px; }
-.file-row { display: flex; gap: 4px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; background: #fafcf8; }
-.file-name { flex: 1; overflow-wrap: anywhere; font-size: 12px; }
+.file-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; background: #fafcf8; }
+.file-name { flex: 1 0 100%; min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+.file-row > input { flex: 1 1 160px; min-width: 0; width: 160px; }
+.file-row > button { flex-shrink: 0; }
 .caps li { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
 .activity li { font-size: 12px; padding: 6px 0; border-bottom: 1px solid #f1f3ee; }
 .progress { display: flex; gap: 12px; align-items: center; margin: 10px 0; }
@@ -266,7 +268,6 @@ h3 { font-size: 14px; font-weight: 600; margin: 0 0 7px; }
 .home-workspace h1 { font-size: 28px; margin-bottom: 0; }
 .home-workspace .dash-grid { margin-top: 24px; }
 .utility-card[data-unavailable] .utility-card-category { color: var(--warn); }
-.download-links { display: flex; flex-wrap: wrap; gap: 10px; }
 @media (min-width: 931px) and (max-width: 1150px) { .sidebar { width: 205px; padding: 28px 13px 20px; } .brand { font-size: 17px; gap: 9px; } .workspace { margin-left: 205px; } main { padding: 30px 26px; } .topbar, footer { padding-left: 26px; padding-right: 26px; } .page-grid { grid-template-columns: minmax(0, 1fr) 265px; gap: 18px; } }
 @media (max-width: 650px) { form .panel-heading > .eyebrow { display: none; } }
 @media (max-width: 380px) { .brand { font-size: 16px; } .brand small { font-size: 10px; } }

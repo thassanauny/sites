@@ -1,7 +1,7 @@
 import { toolPage, group } from '../page';
 import { h, field, input, select, filePicker, taskControls, notice, persistForm, button } from '../ui';
-import { clampCrop, detectUnsupportedImage, MAX_PIXELS } from '../lib/imageops';
-import { downloadBlob, baseName, sanitizeFilename, formatBytes, MAX_FILE_BYTES, throwIfAborted } from '../lib/util';
+import { clampCrop, detectUnsupportedImage, MAX_PIXELS, IMAGE_ACCEPT } from '../lib/imageops';
+import { downloadBlob, sanitizeFilename, formatBytes, MAX_FILE_BYTES, throwIfAborted, suggestOutputName } from '../lib/util';
 
 export function mount(root: HTMLElement) {
   let file: File | null = null, bmp: ImageBitmap | null = null;
@@ -25,7 +25,8 @@ export function mount(root: HTMLElement) {
     quality, h('div', { class: 'quality-scale', 'aria-hidden': 'true' }, h('span', {}, 'Low'), h('span', {}, 'High')));
   const updateQuality = () => { qualityValue.value = quality.value; };
   quality.addEventListener('input', updateQuality); quality.addEventListener('change', updateQuality);
-  const name = input('text', 'outName', 'cropped');
+  const name = input('text', 'outName', '', { placeholder: 'Choose a file to suggest a name' });
+  const suggestName = suggestOutputName(name, 'cropped');
   function selectedCrop() {
     if (!bmp) throw new Error('Choose an image first.');
     for (const [control, min, max, blank] of [[cx, 0, 100000, false], [cy, 0, 100000, false], [cw, 1, 20000, true], [ch, 1, 20000, true]] as const) {
@@ -85,7 +86,7 @@ export function mount(root: HTMLElement) {
     try { selectedCrop(); } catch (error) { return (error as Error).message; }
     return name.value.trim() ? null : 'Enter an output filename.';
   } });
-  const picker = filePicker({ label: 'Image', accept: 'image/*', onFiles: async ([fl]) => {
+  const picker = filePicker({ label: 'Image', accept: IMAGE_ACCEPT, onFiles: async ([fl]) => {
     const request = ++imageRequest;
     info.replaceChildren(); bmp?.close(); bmp = null; file = null;
     updateCropPreview();
@@ -95,7 +96,7 @@ export function mount(root: HTMLElement) {
     try {
       const decoded = await createImageBitmap(fl);
       if (request !== imageRequest) { decoded.close(); return; }
-      bmp = decoded; file = fl; name.value = sanitizeFilename(baseName(file.name) + '-cropped');
+      bmp = decoded; file = fl; suggestName(file.name);
       if (bmp.width * bmp.height > MAX_PIXELS) { bmp.close(); bmp = null; throw new Error('Image is too large to process in the browser.'); }
       info.append(notice('info', `${fl.name}: ${bmp.width}×${bmp.height}. The original file is never changed.`));
       const scale = Math.min(1, 640 / bmp.width, 280 / bmp.height);
@@ -105,7 +106,7 @@ export function mount(root: HTMLElement) {
       updateCropPreview();
     } catch (e) { if (request === imageRequest) { updateCropPreview(); info.append(notice('danger', `Cannot decode this image (${(e as Error).message}). The format may be unsupported by this browser.`)); } }
   } });
-  toolPage(root, 'crop-image', { config: [group(null, picker, info), cropSection, group('Output', h('div', { class: 'option-grid' }, field('Output format', fmt), qualityField), field('Output filename', name), h('p', { class: 'field-hint' }, 'Photos are rotated upright automatically. PNG/WebP keep transparency; JPEG turns it white. Camera details, location and comments are removed. Your original stays unchanged.'))], actions: [task.el] });
-  persistForm('crop-image', root);
+  toolPage(root, 'crop-image', { config: [group(null, picker, info), cropSection, group('Output', h('div', { class: 'option-grid' }, field('Output format', fmt), qualityField), field('Output filename (without extension)', name), h('p', { class: 'field-hint' }, 'Photos are rotated upright automatically. PNG/WebP keep transparency; JPEG turns it white. Camera details, location and comments are removed. Your original stays unchanged.'))], actions: [task.el] });
+  persistForm('crop-image', root, ['cropX', 'cropY', 'cropW', 'cropH']);
   return () => { imageRequest++; bmp?.close(); bmp = null; file = null; cropCanvas.width = cropCanvas.height = 0; };
 }

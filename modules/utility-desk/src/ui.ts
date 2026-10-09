@@ -58,7 +58,7 @@ export function progress() {
   const bar = h('progress', { max: 100, value: 0, 'aria-label': 'Progress' });
   const label = h('span', { class: 'muted', 'aria-live': 'polite' }, '');
   const el = h('div', { class: 'progress', hidden: true }, bar, label);
-  return { el, set(pct: number, text = '') { el.hidden = false; bar.value = Math.round(pct); label.textContent = text || `${Math.round(pct)}%`; }, hide() { el.hidden = true; } };
+  return { el, set(pct: number | null, text = '') { el.hidden = false; if (pct === null) bar.removeAttribute('value'); else bar.value = Math.round(pct); label.textContent = text || (pct === null ? 'Working…' : `${Math.round(pct)}%`); }, hide() { el.hidden = true; } };
 }
 
 // ---- toasts ----
@@ -73,19 +73,30 @@ export function toast(message: string, tone: Tone = 'info') {
 // ---- file picking ----
 export function filePicker(opts: { label: string; accept?: string; multiple?: boolean; directory?: boolean; hint?: string; onFiles: (f: File[]) => void }) {
   const inp = h('input', { type: 'file', accept: opts.accept, multiple: !!opts.multiple, class: 'file-input' });
+  const message = h('div');
+  const acceptedTypes = opts.accept?.toLowerCase().split(',').map((type) => type.trim()).filter(Boolean) ?? [];
+  const selectFiles = (files: File[]) => {
+    if (inp.matches(':disabled')) return;
+    const accepted = files.filter((file) => !acceptedTypes.length || acceptedTypes.some((type) => {
+      if (type.startsWith('.')) return file.name.toLowerCase().endsWith(type);
+      if (type.endsWith('/*')) return file.type.toLowerCase().startsWith(type.slice(0, -1));
+      return file.type.toLowerCase() === type;
+    }));
+    message.replaceChildren();
+    if (accepted.length !== files.length) message.append(notice('warn', 'Unsupported files were skipped. Choose a file type listed by this picker.'));
+    if (accepted.length) opts.onFiles(opts.multiple || opts.directory ? accepted : accepted.slice(0, 1));
+  };
   if (opts.directory) { inp.setAttribute('webkitdirectory', ''); inp.multiple = true; }
-  inp.addEventListener('change', () => { if (inp.matches(':disabled')) return; const f = [...(inp.files ?? [])]; if (f.length) opts.onFiles(f); inp.value = ''; });
+  inp.addEventListener('change', () => { selectFiles([...(inp.files ?? [])]); inp.value = ''; });
   const wrap = field(opts.label, inp, opts.hint ?? 'Files stay on your device and are never uploaded.');
+  wrap.append(message);
   if (!opts.directory) {
     wrap.classList.add('dropzone');
     wrap.addEventListener('dragover', (e) => { e.preventDefault(); if (!inp.matches(':disabled')) wrap.classList.add('drag'); });
     wrap.addEventListener('dragleave', () => wrap.classList.remove('drag'));
     wrap.addEventListener('drop', (e) => {
       e.preventDefault(); wrap.classList.remove('drag');
-      if (inp.matches(':disabled')) return;
-      let f = [...(e.dataTransfer?.files ?? [])];
-      if (opts.accept) { const exts = opts.accept.split(','); f = f.filter((x) => exts.some((a) => (a.startsWith('.') ? x.name.toLowerCase().endsWith(a) : a.endsWith('/*') ? x.type.startsWith(a.slice(0, -1)) : x.type === a))); }
-      if (f.length) opts.onFiles(opts.multiple ? f : f.slice(0, 1));
+      selectFiles([...(e.dataTransfer?.files ?? [])]);
     });
   }
   return wrap;
@@ -117,6 +128,7 @@ let activeTask: AbortController | null = null;
 export function taskControls(toolId: string, label: string, run: (ctx: TaskCtx) => Promise<string | void>, opts: { validate?: () => string | null } = {}) {
   const status = h('p', { class: 'status', role: 'status', 'aria-live': 'polite' }, 'Ready.');
   const prog = progress();
+  const fileTask = ['media-converter', 'document-converter', 'images-to-pdf', 'merge-pdfs', 'split-pdf', 'pdf-to-images', 'compress-pdf', 'unlock-pdf', 'crop-image', 'image-workshop'].includes(toolId);
   let ac: AbortController | null = null;
   const go = button(`${label} →`, () => start(), { variant: 'primary' });
   const cancel = button('Cancel', () => ac?.abort(), { variant: 'danger' });
@@ -127,7 +139,7 @@ export function taskControls(toolId: string, label: string, run: (ctx: TaskCtx) 
   async function start() {
     if (activeTask) { toast('An operation is already running. Cancel it before starting another.', 'warn'); return; }
     const err = opts.validate?.();
-    if (err) { status.textContent = err; status.className = 'status status-danger'; toast(err, 'danger'); return; }
+    if (err) { status.textContent = err; status.className = 'status status-danger'; prog.hide(); return; }
     ac = new AbortController();
     const controller = ac;
     activeTask = controller;
@@ -137,25 +149,27 @@ export function taskControls(toolId: string, label: string, run: (ctx: TaskCtx) 
     const controls = [...(root?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>('input, select, textarea, button') ?? [])].filter((el) => el !== cancel && !el.disabled);
     controls.forEach((el) => { el.disabled = true; });
     go.disabled = true; cancel.hidden = false; retry.hidden = true;
-    status.className = 'status'; status.textContent = 'Working…'; prog.set(0, 'Starting…');
+    status.className = 'status'; status.textContent = 'Working…'; prog.set(null, 'Starting…');
     try {
       const msg = await run({ signal: ac.signal, progress: (p, l) => prog.set(p * 100, l) });
       if (controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
       status.textContent = `Done. ${msg ?? ''}`.trim(); status.className = 'status status-success';
+      if (fileTask) prog.set(100, 'Completed.');
       toast(status.textContent, 'success'); log('done', msg || label);
     } catch (e) {
       if ((e as Error).name === 'AbortError') { status.textContent = 'Cancelled.'; status.className = 'status status-warn'; log('cancelled', `${label} cancelled`); }
-      else { const m = (e as Error).message || 'Unknown error'; status.textContent = `Failed: ${m}`; status.className = 'status status-danger'; toast(`Failed: ${m}`, 'danger'); log('failed', m); }
+      else { const m = (e as Error).message || 'Unknown error'; status.textContent = `Failed: ${m}`; status.className = 'status status-danger'; log('failed', m); }
       retry.hidden = false;
-    } finally { controls.forEach((el) => { el.disabled = false; }); root?.removeEventListener('utility-desk:leave', abort); go.disabled = false; cancel.hidden = true; prog.hide(); ac = null; activeTask = null; }
+    } finally { controls.forEach((el) => { el.disabled = false; }); root?.removeEventListener('utility-desk:leave', abort); go.disabled = false; cancel.hidden = true; if (!fileTask || status.className !== 'status status-success') prog.hide(); ac = null; activeTask = null; }
   }
   return { el: h('div', { class: 'task' }, h('div', { class: 'action-buttons' }, go, cancel, retry), prog.el, status), run: start };
 }
 
-/** Persist named form controls (excluding files) as a local draft. */
-export function persistForm(toolId: string, root: HTMLElement) {
+/** Persist preferences, excluding files, passwords, and source-dependent fields. */
+export function persistForm(toolId: string, root: HTMLElement, sourceFields: string[] = []) {
   const draft = store.getDraft(toolId);
-  const controls = [...root.querySelectorAll<HTMLInputElement>('[name]')].filter((e) => e.type !== 'file' && e.type !== 'password');
+  const excluded = new Set(['outputName', 'outName', ...sourceFields]);
+  const controls = [...root.querySelectorAll<HTMLInputElement>('[name]')].filter((e) => e.type !== 'file' && e.type !== 'password' && !excluded.has(e.name));
   controls.forEach((e) => { const v = draft[e.name]; if (v !== undefined) { if (e.type === 'checkbox') e.checked = v === '1'; else if (e.tagName !== 'SELECT' || [...(e as unknown as HTMLSelectElement).options].some((o) => o.value === v)) e.value = v; e.dispatchEvent(new Event('change')); } });
   let t: ReturnType<typeof setTimeout>;
   const flush = () => { clearTimeout(t); store.setDraft(toolId, Object.fromEntries(controls.map((e) => [e.name, e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value]))); };

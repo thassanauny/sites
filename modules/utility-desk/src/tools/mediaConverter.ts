@@ -4,9 +4,10 @@ import coreUrl from '@ffmpeg/core?url';
 import wasmUrl from '@ffmpeg/core/wasm?url';
 import { h, field, input, select, pageHeader, filePicker, taskControls, notice, persistForm, badge, button } from '../ui';
 import { detectCapabilities } from '../lib/caps';
-import { downloadBlob, baseName, sanitizeFilename, formatBytes, bytesToBlob } from '../lib/util';
+import { downloadBlob, baseName, sanitizeFilename, formatBytes, bytesToBlob, suggestOutputName } from '../lib/util';
 
 export const MEDIA_LIMIT = 256 * 1024 * 1024;
+const MEDIA_ACCEPT = 'video/*,audio/*,.mp4,.m4v,.mkv,.mov,.avi,.webm,.mpg,.mpeg,.ogv,.3gp,.flv,.wmv,.mp3,.wav,.flac,.aac,.m4a,.aif,.aiff,.opus,.ogg,.wma,.gif';
 export const FORMATS: Record<string, { label: string; ext: string; mime: string; args: string[] }> = {
   mp4: { label: 'MP4 (H.264/AAC)', ext: 'mp4', mime: 'video/mp4', args: ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac', '-movflags', '+faststart'] },
   mkv: { label: 'MKV (H.264/AAC)', ext: 'mkv', mime: 'video/x-matroska', args: ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-c:a', 'aac'] },
@@ -62,16 +63,17 @@ export function mount(root: HTMLElement) {
   const height = select('height', [['', 'Original size'], ['1080', '1080p'], ['720', '720p'], ['480', '480p']]);
   const bitrate = select('bitrate', [['128', '128 kbps'], ['192', '192 kbps'], ['320', '320 kbps']], '192');
   const outputName = input('text', 'outputName', '', { placeholder: 'Use the source filename' });
+  const suggestName = suggestOutputName(outputName, 'converted');
   const start = input('text', 'start', '', { placeholder: '0 or 00:00:05' }), end = input('text', 'end', '', { placeholder: 'Full length or 00:00:15' });
   const plan = h('pre', { class: 'report', hidden: true });
   const sync = () => { const video = ['mp4', 'mkv', 'webm'].includes(fmt.value); quality.disabled = height.disabled = !video; bitrate.disabled = ['wav', 'gif'].includes(fmt.value); plan.hidden = true; };
   fmt.addEventListener('change', sync); sync();
   preview.addEventListener('loadedmetadata', () => { end.placeholder = Number.isFinite(preview.duration) ? `Full length (${Math.round(preview.duration * 1000) / 1000} s)` : 'Full length or 00:00:15'; });
-  const picker = filePicker({ label: 'Audio or video file', accept: 'video/*,audio/*', onFiles: ([f]) => {
+  const picker = filePicker({ label: 'Audio or video file', accept: MEDIA_ACCEPT, onFiles: ([f]) => {
     info.replaceChildren(); if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = ''; preview.hidden = true; file = null;
     end.placeholder = 'Full length or 00:00:15';
     if (f.size > MEDIA_LIMIT) { info.append(notice('warn', `${f.name} is ${formatBytes(f.size)}. The browser limit is ${formatBytes(MEDIA_LIMIT)} (WebAssembly memory).`)); return; }
-    file = f; previewUrl = URL.createObjectURL(f); preview.src = previewUrl; preview.hidden = false;
+    file = f; suggestName(f.name); previewUrl = URL.createObjectURL(f); preview.src = previewUrl; preview.hidden = false;
     info.append(notice('info', `${f.name} · ${formatBytes(f.size)}. Conversion is single-threaded and can be slow for large files.`));
   } });
   const args = () => mediaArgs(fmt.value, quality.value, height.value, bitrate.value, start.value, end.value);
@@ -111,7 +113,7 @@ export function mount(root: HTMLElement) {
       group('Output', field('Output format', fmt), h('div', { class: 'option-grid' }, field('Video quality', quality), field('Maximum video height', height), field('Audio bitrate', bitrate), field('Output filename (without extension)', outputName))),
       group('Trim time range', h('div', { class: 'option-grid' }, field('From', start, 'Seconds, M:SS, or H:MM:SS. Blank = beginning.'), field('To', end, 'Blank = media’s end.')), button('Use media’s end time', () => { end.value = Number.isFinite(preview.duration) ? String(preview.duration) : ''; })), plan],
     actions: [previewPlan, task.el] });
-  persistForm('media-converter', root);
+  persistForm('media-converter', root, ['start', 'end']);
   sync();
   return () => { ff?.terminate(); if (previewUrl) URL.revokeObjectURL(previewUrl); };
 }

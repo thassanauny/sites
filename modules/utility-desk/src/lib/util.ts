@@ -16,6 +16,14 @@ export function baseName(name: string): string {
   return i > 0 ? name.slice(0, i) : name;
 }
 
+/** Suggest a filename stem when the source changes; exporters add the extension. */
+export function suggestOutputName(control: HTMLInputElement, suffix: string) {
+  return (source = '') => {
+    const suggestion = source ? sanitizeFilename(`${baseName(source)}_${suffix}`) : '';
+    control.value = suggestion;
+  };
+}
+
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   const u = ['KB', 'MB', 'GB'];
@@ -37,22 +45,12 @@ export function downloadBlob(blob: Blob, filename: string) {
   const a = document.createElement('a');
   a.href = url;
   a.download = sanitizeFilename(filename, 'download');
-  a.className = 'btn btn-secondary';
-  a.textContent = `Download ${a.download}`;
-  const root = document.getElementById('main');
-  let downloads = root?.querySelector('.download-links');
-  if (root && !downloads) {
-    const panel = document.createElement('section'); panel.className = 'panel run-panel'; panel.setAttribute('aria-label', 'Downloads ready');
-    const heading = document.createElement('div'); heading.className = 'panel-heading';
-    const title = document.createElement('h2'); title.textContent = 'Downloads ready'; heading.append(title);
-    downloads = document.createElement('div'); downloads.className = 'run-body download-links';
-    panel.append(heading, downloads); root.append(panel);
-  }
-  (downloads ?? document.body).appendChild(a);
+  a.hidden = true;
+  document.body.appendChild(a);
   a.click();
-  // Keep a real link available if the browser blocks the automatic download.
-  // Immediate anchor removal can also cancel downloads in embedded browsers.
-  const release = () => { clearTimeout(timer); URL.revokeObjectURL(url); a.removeAttribute('href'); a.textContent = 'Download expired · run again'; root?.removeEventListener('utility-desk:leave', release); };
+  // Retain the hidden anchor briefly for embedded browsers, then release it.
+  const root = document.getElementById('main');
+  const release = () => { clearTimeout(timer); URL.revokeObjectURL(url); a.remove(); root?.removeEventListener('utility-desk:leave', release); };
   const timer = setTimeout(release, 10 * 60_000);
   root?.addEventListener('utility-desk:leave', release, { once: true });
 }

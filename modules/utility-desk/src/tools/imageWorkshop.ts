@@ -1,6 +1,6 @@
 import { toolPage, group, outputPanel } from '../page';
 import { h, field, input, select, filePicker, taskControls, notice, persistForm, button, option } from '../ui';
-import { encodeWithinLimit, grayscale, sepia, contrast, autoContrast, sharpen, rotatedSize, sizeImage, type Sizing, detectUnsupportedImage, MAX_PIXELS } from '../lib/imageops';
+import { encodeWithinLimit, grayscale, sepia, contrast, autoContrast, sharpen, rotatedSize, sizeImage, type Sizing, detectUnsupportedImage, MAX_PIXELS, IMAGE_ACCEPT } from '../lib/imageops';
 import { downloadBlob, baseName, sanitizeFilename, formatBytes, MAX_FILE_BYTES, throwIfAborted } from '../lib/util';
 
 export function mount(root: HTMLElement) {
@@ -98,7 +98,7 @@ export function mount(root: HTMLElement) {
     throwIfAborted(signal); downloadBlob(blob, name);
     return `${name} (${formatBytes(blob.size)})`;
   }, { validate: () => (bmp ? null : 'Choose an image first.') });
-  const picker = filePicker({ label: 'Image', accept: 'image/*', onFiles: async ([fl]) => {
+  const picker = filePicker({ label: 'Image', accept: IMAGE_ACCEPT, onFiles: async ([fl]) => {
     const request = ++imageRequest;
     clearTimeout(t); info.replaceChildren(); bmp?.close(); bmp = null; file = null;
     canvas.width = canvas.height = 0;

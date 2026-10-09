@@ -1,4 +1,6 @@
 import { PDFDocument, PageSizes, pushGraphicsState, popGraphicsState, rectangle, clip, endPath } from 'pdf-lib';
+import { restoreStreamLengths } from './pdfStreams';
+import { throwIfAborted } from './util';
 
 export async function pageCount(bytes: Uint8Array): Promise<number> {
   const doc = await PDFDocument.load(bytes, { ignoreEncryption: false, updateMetadata: false });
@@ -7,48 +9,60 @@ export async function pageCount(bytes: Uint8Array): Promise<number> {
 
 export interface MergeSource { bytes: Uint8Array; /** 1-based pages; all pages when omitted */ pages?: number[] }
 
+async function loadForCopy(bytes: Uint8Array, signal?: AbortSignal): Promise<PDFDocument> {
+  throwIfAborted(signal);
+  const document = await PDFDocument.load(bytes, { updateMetadata: false });
+  await restoreStreamLengths(document, bytes, signal);
+  throwIfAborted(signal);
+  return document;
+}
+
 export async function mergePdfs(sources: MergeSource[], signal?: AbortSignal, onProgress?: (p: number) => void): Promise<Uint8Array> {
   if (!sources.length) throw new Error('Add at least one PDF');
+  throwIfAborted(signal);
   const out = await PDFDocument.create();
   for (let i = 0; i < sources.length; i++) {
-    if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
-    const src = await PDFDocument.load(sources[i].bytes, { updateMetadata: false });
+    const src = await loadForCopy(sources[i].bytes, signal);
     const idx = (sources[i].pages ?? src.getPageIndices().map((n) => n + 1)).map((n) => n - 1);
     const pages = await out.copyPages(src, idx);
     pages.forEach((p) => out.addPage(p));
     onProgress?.((i + 1) / sources.length);
   }
-  return out.save();
+  throwIfAborted(signal);
+  const bytes = await out.save();
+  throwIfAborted(signal);
+  return bytes;
 }
 
-export function extractPages(bytes: Uint8Array, pages: number[]): Promise<Uint8Array> {
-  return mergePdfs([{ bytes, pages }]);
+export function extractPages(bytes: Uint8Array, pages: number[], signal?: AbortSignal, onProgress?: (p: number) => void): Promise<Uint8Array> {
+  return mergePdfs([{ bytes, pages }], signal, onProgress);
 }
 
 export async function splitEachPage(bytes: Uint8Array, signal?: AbortSignal, onProgress?: (p: number) => void, selected?: number[]): Promise<Uint8Array[]> {
-  const src = await PDFDocument.load(bytes, { updateMetadata: false });
+  const src = await loadForCopy(bytes, signal);
   const pages = selected ?? src.getPageIndices().map((i) => i + 1);
   const n = pages.length;
   const out: Uint8Array[] = [];
   for (let i = 0; i < n; i++) {
-    if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
+    throwIfAborted(signal);
     const d = await PDFDocument.create();
     const [p] = await d.copyPages(src, [pages[i] - 1]);
     d.addPage(p);
     out.push(await d.save());
     onProgress?.((i + 1) / n);
   }
+  throwIfAborted(signal);
   return out;
 }
 
-export type PageSizeName = 'A4' | 'Letter' | 'Legal' | 'A3' | 'A5' | 'Fit';
+export type PageSizeName = 'A4' | 'Letter' | 'Fit';
 export type Fit = 'contain' | 'cover' | 'stretch' | 'original';
 export interface ImageToPdfOptions { pageSize: PageSizeName; orientation: 'portrait' | 'landscape' | 'auto'; fit: Fit; dpi: number; marginPt: number }
 export interface PdfImage { bytes: Uint8Array; type: 'png' | 'jpg'; width: number; height: number }
 
 export function pageDimensions(size: PageSizeName, orientation: 'portrait' | 'landscape' | 'auto', img: { width: number; height: number }, dpi: number): [number, number] {
   if (size === 'Fit') return [(img.width / dpi) * 72, (img.height / dpi) * 72];
-  const base = size === 'A4' ? PageSizes.A4 : size === 'Letter' ? PageSizes.Letter : size === 'Legal' ? PageSizes.Legal : size === 'A3' ? PageSizes.A3 : PageSizes.A5;
+  const base = size === 'A4' ? PageSizes.A4 : PageSizes.Letter;
   const [w, h] = base;
   const landscape = orientation === 'auto' ? img.width > img.height : orientation === 'landscape';
   return landscape ? [h, w] : [w, h];
