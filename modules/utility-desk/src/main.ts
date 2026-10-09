@@ -1,4 +1,5 @@
 import './style.css';
+import { icon } from './icons';
 import { parseHash, hrefFor } from './lib/router';
 import { TOOLS } from './registry';
 import { h, badge, emptyState, button, pageHeader, input, toast, notice } from './ui';
@@ -31,7 +32,7 @@ function dashboard(root: HTMLElement) {
     const cards = ids.map((id) => {
       const t = TOOLS.find((x) => x.id === id)!;
       const p = PRESENTATION[id];
-      const a = h('a', { class: 'utility-card', href: hrefFor(id) }, h('span', { class: 'utility-card-icon', 'aria-hidden': 'true' }, t.icon), t.unavailable ? h('span', { class: 'utility-card-category' }, 'Local app') : null, h('h3', {}, t.title), h('p', {}, p.summary), h('span', { class: 'utility-card-arrow', 'aria-hidden': 'true' }, '→'));
+      const a = h('a', { class: 'utility-card', href: hrefFor(id) }, h('span', { class: 'utility-card-icon', 'aria-hidden': 'true' }, icon(t.icon)), t.unavailable ? h('span', { class: 'utility-card-category' }, 'Local app') : null, h('h3', {}, t.title), h('p', {}, p.summary), h('span', { class: 'utility-card-arrow', 'aria-hidden': 'true' }, '→'));
       if (t.unavailable) a.dataset.unavailable = 'true';
       a.dataset.search = `${t.title} ${t.desc} ${t.sub} ${cat}`.toLowerCase();
       return a;
@@ -92,14 +93,14 @@ function shell() {
   const topbarActions = h('div', { class: 'topbar-actions' },
     h('span', { class: 'local-pill' }, h('span', { class: 'status-dot' }), 'Local workspace'));
   const nav = h('nav', { id: 'utility-navigation', 'aria-label': 'Utilities' },
-    h('a', { href: '#/' }, h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, '⌂'), h('span', {}, 'Home', h('small', {}, 'All utilities'))),
+    h('a', { href: '#/' }, h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, icon('home')), h('span', {}, 'Home', h('small', {}, 'All utilities'))),
     ...GROUPS.map(([cat, ids], index) => {
       const headingId = `nav-group-${index}`;
       return h('div', { class: 'nav-section', role: 'group', 'aria-labelledby': headingId },
         h('h2', { id: headingId, class: 'nav-section-heading' }, cat),
         h('div', { class: 'nav-section-links' }, ...ids.map((id) => {
           const t = TOOLS.find((tool) => tool.id === id)!;
-          return h('a', { href: hrefFor(t.id) }, h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, t.icon), h('span', {}, t.title, h('small', {}, t.sub)));
+          return h('a', { href: hrefFor(t.id) }, h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, icon(t.icon)), h('span', {}, t.title, h('small', {}, t.sub)));
         })));
     }));
   const aside = h('aside', { class: 'sidebar' },
@@ -114,7 +115,7 @@ function shell() {
     h('div', { class: 'workspace' },
       h('header', { class: 'topbar' }, h('span', {}, h('a', { href: '#/' }, 'Home'), h('span', { class: 'breadcrumb-separator' }, '/'), h('strong', { id: 'breadcrumb' }, 'Home')), topbarActions),
       h('main', { id: 'main', tabindex: -1 }),
-      h('footer', {}, h('span', {}, 'Made for everyday tasks. Runs in your browser.'), h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, 'Utility Desk Lite · 1.0.19'))));
+      h('footer', {}, h('span', {}, 'Made for everyday tasks. Runs in your browser.'), h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, 'Utility Desk Lite · 1.0.34'))));
 }
 
 let renderRevision = 0;

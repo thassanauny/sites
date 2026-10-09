@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 describe('tool pages mount', () => {
-  for (const id of ['dateTime', 'folderSync', 'documentConverter', 'imagesToPdf', 'mergePdfs', 'splitPdf', 'compressPdf', 'imageWorkshop']) {
+  for (const id of ['dateTime', 'folderSync', 'documentConverter', 'imagesToPdf', 'mergePdfs', 'splitPdf', 'compressPdf', 'unlockPdf', 'qrGenerator', 'imageWorkshop', 'cropImage']) {
     it(`renders ${id} with shared layout`, async () => {
       document.body.innerHTML = '<main id="m"></main>';
       const root = document.getElementById('m')!;

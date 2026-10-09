@@ -2,10 +2,10 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TOOLS } from '../src/registry';
 
 const expectedSections = [
-  ['Media, documents & images', ['media-converter', 'document-converter', 'image-workshop']],
-  ['PDFs', ['pdf-to-images', 'images-to-pdf', 'merge-pdfs', 'split-pdf', 'compress-pdf']],
+  ['Media, documents & images', ['media-converter', 'document-converter', 'image-workshop', 'crop-image']],
+  ['PDFs', ['pdf-to-images', 'images-to-pdf', 'merge-pdfs', 'split-pdf', 'compress-pdf', 'unlock-pdf']],
   ['Command planners', ['folder-sync', 'media-downloader', 'secure-copy']],
-  ['Miscellaneous', ['date-time']],
+  ['Miscellaneous', ['date-time', 'qr-generator']],
 ];
 
 const links = (section: Element) => [...section.querySelectorAll('a')].map((link) => link.getAttribute('href')?.slice(2));
@@ -46,7 +46,7 @@ describe('grouped utility navigation', () => {
     const visible = homeSections().filter((section) => !section.hidden);
     expect(visible).toHaveLength(1);
     expect(links(visible[0])).toEqual(['folder-sync', 'media-downloader', 'secure-copy']);
-    expect(document.getElementById('utility-count')?.textContent).toBe('3 of 12 utilities');
+    expect(document.getElementById('utility-count')?.textContent).toBe('3 of 15 utilities');
     expect(document.querySelectorAll('.sidebar .nav-section')).toHaveLength(4);
   });
 
@@ -58,7 +58,7 @@ describe('grouped utility navigation', () => {
     clear.click();
     expect(homeSections().every((section) => !section.hidden)).toBe(true);
     expect((document.querySelector('.empty-note') as HTMLElement).hidden).toBe(true);
-    expect(document.getElementById('utility-count')?.textContent).toBe('12 of 12 utilities');
+    expect(document.getElementById('utility-count')?.textContent).toBe('15 of 15 utilities');
     expect(document.activeElement?.id).toBe('utility-search');
   });
 });

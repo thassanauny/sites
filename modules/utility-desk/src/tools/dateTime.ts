@@ -1,5 +1,6 @@
 import { h, field, input, select, button, toast, notice, type Child } from '../ui';
 import { sideTitle } from '../page';
+import { icon } from '../icons';
 import { PRESENTATION } from '../presentation';
 import { shiftDate, diffDates, timestampToDate, dateToTimestamp, worldClock, WORLD_ZONES } from '../lib/dates';
 import { store } from '../lib/storage';
@@ -84,7 +85,7 @@ export function mount(root: HTMLElement) {
   }
 
   root.append(
-    h('div', { class: 'page-heading' }, h('div', {}, h('span', { class: 'eyebrow' }, p.eyebrow), h('h1', { id: 'page-title', tabindex: -1 }, 'Date & time'), h('p', {}, 'Calculate dates, convert Unix timestamps, and compare world clocks without sending your data anywhere.')), h('div', { class: 'tool-mark', 'aria-hidden': 'true' }, '◷')),
+    h('div', { class: 'page-heading' }, h('div', {}, h('span', { class: 'eyebrow' }, p.eyebrow), h('h1', { id: 'page-title', tabindex: -1 }, 'Date & time'), h('p', {}, 'Calculate dates, convert Unix timestamps, and compare world clocks without sending your data anywhere.')), h('div', { class: 'tool-mark', 'aria-hidden': 'true' }, icon('date-time'))),
     h('datalist', { id: 'dt-zones' }, zones.map((z) => h('option', { value: z }))),
     h('div', { class: 'datetime-layout' },
       h('div', {}, h('section', { class: 'panel datetime-panel' }, tabsEl, body), outputPanel),

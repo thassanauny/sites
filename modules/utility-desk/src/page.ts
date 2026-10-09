@@ -1,4 +1,5 @@
 import { h, badge, notice } from './ui';
+import { icon } from './icons';
 import type { Child } from './ui';
 import { PRESENTATION } from './presentation';
 import { TOOLS } from './registry';
@@ -31,7 +32,7 @@ export function toolPage(root: HTMLElement, id: Exclude<RouteId, 'dashboard'>, o
   const caps = detectCapabilities().filter((c) => p.caps.includes(c.id));
   const worst = caps.some((c) => c.state === 'Unavailable') ? 'Unavailable' : caps.some((c) => c.state === 'Limited') ? 'Limited' : 'Supported';
   root.append(
-    h('div', { class: 'page-heading' }, h('div', {}, h('span', { class: 'eyebrow' }, p.eyebrow), h('h1', { id: 'page-title', tabindex: -1 }, def.title), h('p', {}, def.desc)), h('div', { class: 'tool-mark', 'aria-hidden': 'true' }, def.icon)),
+    h('div', { class: 'page-heading' }, h('div', {}, h('span', { class: 'eyebrow' }, p.eyebrow), h('h1', { id: 'page-title', tabindex: -1 }, def.title), h('p', {}, def.desc)), h('div', { class: 'tool-mark', 'aria-hidden': 'true' }, icon(def.icon))),
     h('div', { class: 'page-grid' },
       h('form', { class: 'panel', onsubmit: (e: Event) => e.preventDefault() }, sideTitle(p.intro, 'CONFIGURATION'), h('div', { class: 'form-content' }, ...o.config), h('div', { class: 'actions' }, ...o.actions)),
       h('aside', { class: 'side-panels' },

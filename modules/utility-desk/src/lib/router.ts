@@ -1,4 +1,4 @@
-export const ROUTES = ['dashboard', 'date-time', 'folder-sync', 'media-downloader', 'secure-copy', 'media-converter', 'document-converter', 'pdf-to-images', 'images-to-pdf', 'merge-pdfs', 'split-pdf', 'compress-pdf', 'image-workshop'] as const;
+export const ROUTES = ['dashboard', 'date-time', 'folder-sync', 'media-downloader', 'secure-copy', 'media-converter', 'document-converter', 'pdf-to-images', 'images-to-pdf', 'merge-pdfs', 'split-pdf', 'compress-pdf', 'unlock-pdf', 'qr-generator', 'image-workshop', 'crop-image'] as const;
 export type RouteId = (typeof ROUTES)[number];
 
 /** Hash routing: "#/merge-pdfs" -> "merge-pdfs". Unknown -> "notfound". Empty -> dashboard. */

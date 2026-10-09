@@ -1,12 +1,12 @@
 import { toolPage, group, outputPanel } from '../page';
 import { h, field, input, select, filePicker, taskControls, notice, persistForm, button, option } from '../ui';
-import { encodeWithinLimit, grayscale, sepia, contrast, autoContrast, sharpen, clampCrop, rotatedSize, sizeImage, type Sizing, detectUnsupportedImage, MAX_PIXELS } from '../lib/imageops';
-import { downloadBlob, baseName, sanitizeFilename, UrlBag, formatBytes, MAX_FILE_BYTES, throwIfAborted } from '../lib/util';
+import { encodeWithinLimit, grayscale, sepia, contrast, autoContrast, sharpen, rotatedSize, sizeImage, type Sizing, detectUnsupportedImage, MAX_PIXELS } from '../lib/imageops';
+import { downloadBlob, baseName, sanitizeFilename, formatBytes, MAX_FILE_BYTES, throwIfAborted } from '../lib/util';
 
 export function mount(root: HTMLElement) {
   let file: File | null = null;
   let bmp: ImageBitmap | null = null;
-  const urls = new UrlBag();
+  let imageRequest = 0;
   const info = h('div'), canvas = h('canvas', { class: 'preview-img', 'aria-label': 'Edited image preview', role: 'img' });
   const f = (name: string, v: string, extra: Record<string, any> = {}) => input('number', name, v, extra);
   const w = f('width', '', { min: 1, placeholder: 'auto' }), hh = f('height', '', { min: 1, placeholder: 'auto' });
@@ -14,7 +14,6 @@ export function mount(root: HTMLElement) {
   const enlarge = input('checkbox', 'enlarge');
   const padding = select('padding', [['white', 'White'], ['black', 'Black'], ['transparent', 'Transparent']], 'white');
   const auto = input('checkbox', 'autoContrast');
-  const cx = f('cropX', '0', { min: 0 }), cy = f('cropY', '0', { min: 0 }), cw = f('cropW', '', { min: 1, placeholder: 'full' }), ch = f('cropH', '', { min: 1, placeholder: 'full' });
   const rot = select('rotate', [['0', '0°'], ['90', '90°'], ['180', '180°'], ['270', '270°']], '0');
   const flipH = input('checkbox', 'flipH'), flipV = input('checkbox', 'flipV'), gray = input('checkbox', 'gray'), sep = input('checkbox', 'sepia');
   const con = input('range', 'contrast', '0', { min: -100, max: 100 });
@@ -31,7 +30,7 @@ export function mount(root: HTMLElement) {
   /** Maximum sizing precedes rotation; exact sizing follows it. */
   function process(): HTMLCanvasElement {
     if (!bmp) throw new Error('Choose an image first.');
-    const crop = clampCrop({ x: Number(cx.value) || 0, y: Number(cy.value) || 0, width: Number(cw.value) || bmp.width, height: Number(ch.value) || bmp.height }, bmp.width, bmp.height);
+    const crop = { x: 0, y: 0, width: bmp.width, height: bmp.height };
     const width = w.value ? Number(w.value) : undefined, height = hh.value ? Number(hh.value) : undefined;
     const maximum = sizing.value === 'maximum';
     const before = maximum ? sizeImage(crop.width, crop.height, width, height, 'maximum', enlarge.checked) : { width: crop.width, height: crop.height };
@@ -66,18 +65,17 @@ export function mount(root: HTMLElement) {
   }
   const refresh = () => {
     if (!bmp) return;
+    info.querySelector('.err')?.remove();
     try {
       const out = process();
       const g = canvas.getContext('2d')!;
       const s = Math.min(1, 640 / out.width);
       canvas.width = Math.max(1, Math.round(out.width * s)); canvas.height = Math.max(1, Math.round(out.height * s));
       g.drawImage(out, 0, 0, canvas.width, canvas.height); out.width = out.height = 0;
-      info.querySelector('.err')?.remove();
-    } catch (e) { info.append(h('div', { class: 'err' }, notice('danger', (e as Error).message))); }
+    } catch (e) { canvas.width = canvas.height = 0; info.append(h('div', { class: 'err' }, notice('danger', (e as Error).message))); }
   };
   let t: ReturnType<typeof setTimeout>;
   const edits = h('div', { oninput: () => { clearTimeout(t); t = setTimeout(refresh, 120); }, onchange: refresh },
-    group('Crop', h('div', { class: 'option-grid' }, field('Crop width', cw), field('Crop height', ch)), h('div', { class: 'option-grid' }, field('Left offset', cx), field('Top offset', cy))),
     group('Resize', field('Sizing method', sizing), h('div', { class: 'option-grid' }, field('Width (pixels)', w), field('Height (pixels)', hh)), option('Allow enlargement', 'Used for maximum sizing. Exact sizing always fills the requested dimensions.', enlarge), field('Padding color', padding), h('p', { class: 'field-hint' }, 'Leave both dimensions blank to keep the original size. Maximum sizing happens before rotation; exact sizing happens after rotation.')),
     group('Orientation', h('div', { class: 'option-grid' }, field('Rotate clockwise', rot)), option('Flip horizontally', 'Mirror the image left to right.', flipH), option('Flip vertically', 'Mirror the image top to bottom.', flipV)),
     group('Color & detail', field('Contrast', con, '-100 to 100. Zero leaves it unchanged.'), option('Automatic contrast', 'Expand the image’s color range.', auto), option('Grayscale', 'Remove color.', gray), option('Sepia', 'Apply a warm brown tone.', sep), option('Sharpen details', 'Apply light sharpening.', sharp)));
@@ -101,20 +99,24 @@ export function mount(root: HTMLElement) {
     return `${name} (${formatBytes(blob.size)})`;
   }, { validate: () => (bmp ? null : 'Choose an image first.') });
   const picker = filePicker({ label: 'Image', accept: 'image/*', onFiles: async ([fl]) => {
-    info.replaceChildren(); bmp?.close(); bmp = null;
+    const request = ++imageRequest;
+    clearTimeout(t); info.replaceChildren(); bmp?.close(); bmp = null; file = null;
+    canvas.width = canvas.height = 0;
     const bad = detectUnsupportedImage(fl);
     if (bad) { info.append(notice('warn', bad)); return; }
     if (fl.size > MAX_FILE_BYTES) { info.append(notice('warn', `File exceeds ${formatBytes(MAX_FILE_BYTES)}.`)); return; }
     try {
-      bmp = await createImageBitmap(fl); file = fl;
+      const decoded = await createImageBitmap(fl);
+      if (request !== imageRequest) { decoded.close(); return; }
+      bmp = decoded; file = fl;
       if (bmp.width * bmp.height > MAX_PIXELS) { bmp.close(); bmp = null; throw new Error('Image is too large to process in the browser.'); }
       info.append(notice('info', `${fl.name}: ${bmp.width}×${bmp.height}. The original file is never changed.`));
       refresh();
-    } catch (e) { info.append(notice('danger', `Cannot decode this image (${(e as Error).message}). The format may be unsupported by this browser.`)); }
+    } catch (e) { if (request === imageRequest) { info.append(notice('danger', `Cannot decode this image (${(e as Error).message}). The format may be unsupported by this browser.`)); } }
   } });
-  const resetBtn = button('Reset edits', () => { root.querySelectorAll<HTMLInputElement>('[name]').forEach((e) => { if (e.type === 'checkbox') e.checked = false; else if (e.name === 'contrast') e.value = '0'; else if (e.tagName === 'SELECT' && e.name === 'sizing') e.value = 'maximum'; else if (e.tagName === 'SELECT' && e.name === 'padding') e.value = 'white'; else if (e.tagName === 'SELECT' && e.name === 'rotate') e.value = '0'; else if (e.name === 'cropX' || e.name === 'cropY') e.value = '0'; else if (['width', 'height', 'cropW', 'cropH'].includes(e.name)) e.value = ''; }); refresh(); }, { variant: 'secondary' });
+  const resetBtn = button('Reset edits', () => { root.querySelectorAll<HTMLInputElement>('[name]').forEach((e) => { if (e.type === 'checkbox') e.checked = false; else if (e.name === 'contrast') e.value = '0'; else if (e.tagName === 'SELECT' && e.name === 'sizing') e.value = 'maximum'; else if (e.tagName === 'SELECT' && e.name === 'padding') e.value = 'white'; else if (e.tagName === 'SELECT' && e.name === 'rotate') e.value = '0'; else if (['width', 'height'].includes(e.name)) e.value = ''; }); refresh(); }, { variant: 'secondary' });
   fmt.addEventListener('change', refresh);
   toolPage(root, 'image-workshop', { config: [group(null, picker, info), edits, group('Output', h('div', { class: 'option-grid' }, field('Output format', fmt), field('Quality (JPEG/WebP)', q)), option('Limit file size', 'Set a maximum size for the exported file.', limit), sizeBox, notice('info', 'Camera orientation is applied by the browser. Canvas export removes source metadata; retaining EXIF and profiles is unavailable. TIFF, GIF, BMP and AVIF encoding are unavailable in this edition.'))], actions: [task.el, resetBtn], output: [outputPanel('Preview', 'LIVE', canvas)] });
   persistForm('image-workshop', root);
-  return () => { clearTimeout(t); bmp?.close(); urls.revokeAll(); };
+  return () => { imageRequest++; clearTimeout(t); bmp?.close(); bmp = null; file = null; };
 }
