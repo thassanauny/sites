@@ -80,6 +80,7 @@ kbd { display: inline-block; padding: 5px 7px; min-width: 24px; text-align: cent
 .preview-info p + p { margin-top: 10px; }
 .privacy { display: flex; align-items: center; gap: 23px; border-top: 1px solid var(--line); padding: 30px 0 43px; }
 .privacy-mark { flex-shrink: 0; display: grid; place-items: center; width: 50px; height: 50px; font-size: 28px; border-radius: 50%; background: #e9eee3; color: var(--green); }
+.privacy-mark svg { width: 28px; height: 28px; }
 .privacy h2 { font-size: 19px; letter-spacing: -.4px; margin-bottom: 8px; }
 .privacy p { max-width: 695px; font-size: 12px; }
 footer { padding: 24px 0 30px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 20px; font-size: 11px; }
@@ -119,6 +120,7 @@ footer { padding: 24px 0 30px; border-top: 1px solid var(--line); display: flex;
   .preview-info { padding: 18px; }
   .privacy { align-items: flex-start; gap: 15px; }
   .privacy-mark { width: 39px; height: 39px; font-size: 23px; }
+  .privacy-mark svg { width: 23px; height: 23px; }
   footer { font-size: 10px; }
 }
 @media (max-width: 350px) {
