@@ -48,8 +48,9 @@ export function prepareUtility(app, target, run = execFileSync) {
     mkdirSync(join(source, 'scripts'), { recursive: true });
     cpSync(file, join(source, 'scripts/prepare-shared.mjs'));
   }
-  writeFileSync(marker, JSON.stringify({ app: 'utility-desk', version: JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version, site: 'site/utility-desk', files: collect(site, site) }, null, 2) + '\n');
-  console.log('Prepared Utility Desk Lite website.');
+  const version = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version;
+  writeFileSync(marker, JSON.stringify({ app: 'utility-desk', version, site: 'site/utility-desk', files: collect(site, site) }, null, 2) + '\n');
+  console.log(`Prepared Utility Desk Lite ${version} in ${site}.`);
 }
 
 if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(file)) {
