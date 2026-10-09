@@ -1,8 +1,8 @@
 {
   "app": "drafts",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "chrome": {
-    "version": "1.0.1",
+    "version": "1.0.3",
     "url": "https://chromewebstore.google.com/detail/drafts/gapbkcacdkhdmcgnldfbjohdeagiabhd"
   },
   "site": "site/drafts",
@@ -10,14 +10,14 @@
     ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "assets/drafts-icon.png": "0ddf38b4ca2bed16edc6c5c3f65fbd37fe3562deebbaca944c5b34dafdc0608d",
     "assets/drafts-screenshot.png": "b8d1db1e366e8ac4b6e8f70e3d0534583f13af6fa88ddff0f0ae5520da564824",
-    "index.html": "8c067614152ce2a26e3a4630aefca9e688a08dd6a9af1e7957b5234a289d162f",
+    "index.html": "40142203178a9cfbccab354f48634edfbecf2e3431b2cb6db27264235f2b3dc2",
     "styles.css": "d4ddf2768d49ceade9c096676d68cea09c5c37fd4e55c00c1d3900139f021bfe"
   },
   "mac": {
-    "version": "1.0.1",
+    "version": "1.0.3",
     "architecture": "aarch64",
-    "url": "https://github.com/thassanauny/sites/releases/download/drafts-v1.0.1/drafts_1.0.1_aarch64.dmg",
-    "sha256": "54e1b472f663e75f7befe059980464bd380a1830debfc1a31ee47022e3506622",
-    "checksumUrl": "https://github.com/thassanauny/sites/releases/download/drafts-v1.0.1/drafts_1.0.1_aarch64.dmg.sha256"
+    "url": "https://github.com/thassanauny/sites/releases/download/drafts-v1.0.3/drafts_1.0.3_aarch64.dmg",
+    "sha256": "500411af263512a25621e7b2e35f2394ca9ef07205bcdfa46d47b754bec40cf6",
+    "checksumUrl": "https://github.com/thassanauny/sites/releases/download/drafts-v1.0.3/drafts_1.0.3_aarch64.dmg.sha256"
   }
 }
