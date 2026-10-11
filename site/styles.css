@@ -30,7 +30,7 @@ h2 { margin: 0 0 8px; font-size: 27px; font-weight: 600; letter-spacing: -.8px; 
 .open-app:hover { background: #284b37; }
 .detail { margin: 12px 0 0; color: #647168; font-size: 10px; }
 .detail strong { color: #355f49; font-weight: 650; }
-.support-link { text-decoration: underline; white-space: nowrap; }
+.support-link { margin-inline-start: 16px; text-decoration: underline; white-space: nowrap; }
 .support-link:hover { color: #355f49; }
 .support-dialog { width: min(1000px, calc(100% - 48px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid #dfe5da; border-radius: 16px; color: inherit; background: #fff; overflow-y: auto; }
 .support-dialog::backdrop { background: #233a3073; }
