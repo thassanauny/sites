@@ -1,6 +1,6 @@
 # Utility Desk and Utility Desk Lite comparison
 
-Compared against the original local Utility Desk on October 10, 2026. Utility Desk Lite edition: 1.0.72. This is a browser adaptation, with explicit limits rather than a claim of complete native parity.
+Compared against the original local Utility Desk on October 10, 2026. Utility Desk Lite edition: 1.0.73. This is a browser adaptation, with explicit limits rather than a claim of complete native parity.
 
 | Tool or behavior | Static edition | Difference from the original |
 | --- | --- | --- |

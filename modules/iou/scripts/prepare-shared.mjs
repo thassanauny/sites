@@ -150,7 +150,7 @@ function snapshot(app, source) {
 }
 
 /** Builds and prepares only iou; never pushes, deploys, or changes the catalog. */
-export function prepareIou(app, target, run = execFileSync) {
+export function prepareIou(app, target, run = execFileSync, { preview = false } = {}) {
   if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('iou preparation requires Node.js 24 or newer.');
   if (!regular(app, 'directory')) throw new Error('Choose the iou application source.');
   app = realpathSync(app);
@@ -179,7 +179,7 @@ export function prepareIou(app, target, run = execFileSync) {
       cpSync(stagedSource, buildApp, { recursive: true });
     }
     const env = { ...process.env, PATH: dirname(process.execPath) + delimiter + (process.env.PATH || ''), VITE_BASE_PATH: './' };
-    run('make', ['-C', buildApp, 'check', 'build', 'NODE=' + process.execPath], { stdio: 'inherit', env });
+    run('make', ['-C', buildApp, ...(preview ? ['build'] : ['check', 'build']), 'NODE=' + process.execPath], { stdio: 'inherit', env });
     const dist = join(buildApp, 'dist');
     if (!regular(join(dist, 'index.html'), 'file')) throw new Error('The iou build did not produce dist/index.html.');
     checkCloudBuild(dist);

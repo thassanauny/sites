@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 
 const file = fileURLToPath(import.meta.url);
 
-export function prepareUtility(app, target, run = execFileSync) {
+export function prepareUtility(app, target, run = execFileSync, { preview = false } = {}) {
   if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Utility Desk preparation requires Node.js 24 or newer.');
   app = realpathSync(app);
   target = realpathSync(target);
@@ -25,7 +25,7 @@ export function prepareUtility(app, target, run = execFileSync) {
   if (previous.app !== 'utility-desk' || previous.site !== 'site/utility-desk') throw new Error('Invalid Utility Desk ownership manifest.');
   for (const path of [join(target, "site"), join(target, "modules"), site, source]) if (existsSync(path) && lstatSync(path).isSymbolicLink()) throw new Error('Refusing a symbolic-link Utility Desk folder.');
   const env = { ...process.env, PATH: dirname(process.execPath) + delimiter + (process.env.PATH || ''), BASE_PATH: './' };
-  run('make', ['-C', app, 'check', 'build', 'NODE=' + process.execPath], { stdio: 'inherit', env });
+  run('make', ['-C', app, ...(preview ? ['build'] : ['check', 'build']), 'NODE=' + process.execPath], { stdio: 'inherit', env });
   const collect = (dir, base, files = {}) => {
     for (const name of readdirSync(dir).sort()) {
       const path = join(dir, name);

@@ -188,7 +188,7 @@ function publicSettings(origin, stagedSource, name) {
 }
 
 /** Stage, check, build and replace only one owned static app; no publication. */
-export function prepareSharedApp(name, origin, target, run = execFileSync) {
+export function prepareSharedApp(name, origin, target, run = execFileSync, { preview = false } = {}) {
   const app = identity(name);
   if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Shared app preparation requires Node.js 24 or newer.');
   if (!regular(origin, 'directory')) throw new Error('Choose the ' + name + ' application source.');
@@ -216,7 +216,7 @@ export function prepareSharedApp(name, origin, target, run = execFileSync) {
     const buildApp = join(stage, 'build-app');
     cpSync(stagedSource, buildApp, { recursive: true });
     const env = { ...process.env, ...settings, PATH: dirname(process.execPath) + delimiter + (process.env.PATH || ''), VITE_BASE_PATH: './' };
-    run('make', ['-C', buildApp, 'check', 'build', 'NODE=' + process.execPath], { stdio: 'inherit', env });
+    run('make', ['-C', buildApp, ...(preview ? ['build'] : ['check', 'build']), 'NODE=' + process.execPath], { stdio: 'inherit', env });
     const dist = join(buildApp, 'dist');
     if (!regular(join(dist, 'index.html'), 'file')) throw new Error('The ' + name + ' build did not produce dist/index.html.');
     const builtFiles = collect(dist);
@@ -255,8 +255,8 @@ export function prepareSharedApp(name, origin, target, run = execFileSync) {
   } finally { if (!retainStage) rmSync(stage, { recursive: true, force: true }); }
 }
 
-export const prepareTextDrop = (app, target, run) => prepareSharedApp('textdrop', app, target, run);
-export const preparePinboard = (app, target, run) => prepareSharedApp('pinboard', app, target, run);
+export const prepareTextDrop = (app, target, run, options) => prepareSharedApp('textdrop', app, target, run, options);
+export const preparePinboard = (app, target, run, options) => prepareSharedApp('pinboard', app, target, run, options);
 
 if (process.argv[1] && stat(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(file)) {
   try {

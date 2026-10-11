@@ -2,8 +2,8 @@
 
 NPM ?= npm
 NODE ?= node
-PORT ?= 5173
-PREVIEW_PORT ?= 4173
+# Capture overrides before assigning defaults, including exported environment values.
+PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
 PUBLISH_SCRIPT ?= scripts/prepare-shared.mjs
 DEST ?=
 
@@ -14,9 +14,11 @@ all: build
 help:
 	@printf '%s\n' \
 	  'make build           Build the static app in dist/ (default)' \
-	  'make run             Start the local development server' \
+	  'make run             Start the local development server (PORT=5173)' \
 	  'make dev             Alias for make run' \
-	  'make preview         Build and serve the production app' \
+	  'make preview         Build and serve the production app (PORT=4173)' \
+	  'Port override: append PORT=9000 to run, dev, or preview.' \
+	  'Default ports advance when busy; explicit PORT stays fixed. Use the printed URL.' \
 	  'make setup           Install missing npm dependencies (Node.js 24+)' \
 	  'make check           Run TypeScript checks, lint, and tests' \
 	  'make typecheck       Check TypeScript without building assets' \
@@ -41,13 +43,15 @@ setup: runtime
 build: setup
 	$(NPM) run build
 
+run dev: PORT ?= 5173
 run: setup
-	$(NPM) run dev -- --host 127.0.0.1 --port $(PORT)
+	$(NPM) run dev -- --host 127.0.0.1 --port $(PORT) $(PORT_OPTION)
 
 dev: run
 
+preview: PORT ?= 4173
 preview: build
-	$(NPM) run preview -- --host 127.0.0.1 --port $(PREVIEW_PORT)
+	$(NPM) run preview -- --host 127.0.0.1 --port $(PORT) $(PORT_OPTION)
 
 typecheck: setup
 	$(NPM) exec tsc -- --noEmit

@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Five useful apps for everyday work. Discover Utility Desk Lite, iou, Drafts, TextDrop and Pinboard for tools, shared expenses, notes, snippets and projects.">
   <meta name="theme-color" content="#f7f8f3">
+  <meta name="application-version" content="1.0.3">
   <title>Everyday apps — Utility Desk Lite, iou, Drafts, TextDrop &amp; Pinboard</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
+  <script src="support.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -67,7 +69,52 @@
         </article>
       </div>
     </main>
-    <footer><span>Made for everyday tasks.</span></footer>
+    <footer><span>Made for everyday tasks.</span><a class="support-link" id="support-link" href="mailto:everydayapps.work@gmail.com" aria-haspopup="dialog" aria-controls="support-dialog">Contact &amp; feedback</a></footer>
   </div>
+  <dialog class="support-dialog" id="support-dialog" aria-labelledby="support-title" aria-describedby="support-description">
+    <button class="support-close" id="support-close" type="button" aria-label="Close support form">×</button>
+    <section class="support" id="support" aria-labelledby="support-title">
+        <div class="support-intro">
+          <p class="eyebrow">Here to help</p>
+          <h2 id="support-title">Need a hand?</h2>
+          <p class="description" id="support-description">Report a problem, ask a question or suggest something that would make your day easier.</p>
+          <p class="support-email">You can also email <a href="mailto:everydayapps.work@gmail.com">everydayapps.work@gmail.com</a>.</p>
+        </div>
+        <form class="support-form" id="support-form" action="mailto:everydayapps.work@gmail.com" method="post" enctype="text/plain" aria-describedby="support-email-hint">
+          <div class="support-fields">
+            <label for="support-app">App
+              <select id="support-app" name="app" required autofocus>
+                <option value="">Choose an app</option>
+                <option>Utility Desk Lite</option>
+                <option>iou</option>
+                <option>Drafts</option>
+                <option>TextDrop</option>
+                <option>Pinboard</option>
+                <option>Everyday apps website</option>
+              </select>
+            </label>
+            <label for="support-kind">How can we help?
+              <select id="support-kind" name="kind" required>
+                <option value="">Choose a topic</option>
+                <option>Report a problem</option>
+                <option>Ask a question</option>
+                <option>Suggest a feature</option>
+              </select>
+            </label>
+          </div>
+          <label for="support-summary">Summary
+            <input id="support-summary" name="summary" type="text" required maxlength="120" placeholder="A short description of your request">
+          </label>
+          <label for="support-details">Details
+            <textarea id="support-details" name="details" rows="6" required maxlength="4000" aria-describedby="support-details-hint" placeholder="What happened? What did you expect? Include steps to reproduce a problem."></textarea>
+          </label>
+          <p class="support-hint" id="support-details-hint">For problems, include your device and browser. Leave out passwords and private data.</p>
+          <p class="support-hint" id="support-email-hint">This opens a draft in your email app. Review it and press Send there to submit your request.</p>
+          <button class="support-submit" type="submit" disabled>Open email draft</button>
+          <p class="support-status" id="support-status" role="status" aria-live="polite"></p>
+          <noscript><p class="support-hint">Enable JavaScript to fill in an email draft, or use the email link above.</p></noscript>
+        </form>
+    </section>
+  </dialog>
 </body>
 </html>

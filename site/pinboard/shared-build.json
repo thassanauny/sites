@@ -1,7 +1,7 @@
 {
   "format": 1,
   "app": "pinboard",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "base": "./",
   "cloudConfigured": true,
   "publicConfig": {
@@ -10,6 +10,6 @@
     "keyKind": "publishable"
   },
   "scripts": {
-    "assets/index-1WzGrvV7.js": "e55d132328b449e9f7d998060d4963b71622a330c01d99def14891d32dd63d97"
+    "assets/index-BUcQJKP-.js": "107df7ec5198b342aee200ec26a4399b1ce4afd124448a97581dee9c57bbe8a5"
   }
 }

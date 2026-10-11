@@ -1,8 +1,8 @@
 .DEFAULT_GOAL := build
 NODE ?= node
 NPM ?= npm
-PORT ?= 5175
-PREVIEW_PORT ?= 4175
+# Capture overrides before assigning defaults, including exported environment values.
+PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
 
 .PHONY: help node-check setup build run dev preview test typecheck check
 
@@ -14,7 +14,9 @@ help:
 	  'make build      Build static files into dist/ (default; no publishing)' \
 	  'make run        Start the loopback development server (PORT=5175)' \
 	  'make dev        Alias for run' \
-	  'make preview    Build and serve dist/ on loopback (PREVIEW_PORT=4175)' \
+	  'make preview    Build and serve dist/ on loopback (PORT=4175)' \
+	  'Port override: append PORT=9000 to run, dev, or preview.' \
+	  'Default ports advance when busy; explicit PORT stays fixed. Use the printed URL.' \
 	  'make test       Run UI, client, database and public-config tests' \
 	  'make typecheck  Check TypeScript' \
 	  'make check      Run all applicable checks' \
@@ -38,13 +40,15 @@ setup: node-check
 build: setup
 	"$(NPM)" run build
 
+run dev: PORT ?= 5175
 run: setup
-	"$(NPM)" run dev -- --host 127.0.0.1 --port "$(PORT)"
+	"$(NPM)" run dev -- --host 127.0.0.1 --port "$(PORT)" $(PORT_OPTION)
 
 dev: run
 
+preview: PORT ?= 4175
 preview: build
-	"$(NPM)" run preview -- --host 127.0.0.1 --port "$(PREVIEW_PORT)"
+	"$(NPM)" run preview -- --host 127.0.0.1 --port "$(PORT)" $(PORT_OPTION)
 
 test: setup
 	"$(NPM)" test

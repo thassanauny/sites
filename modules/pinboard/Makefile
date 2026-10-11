@@ -1,8 +1,8 @@
 .DEFAULT_GOAL := build
 NODE ?= node
 NPM ?= npm
-PORT ?= 5174
-PREVIEW_PORT ?= 4174
+# Capture overrides before assigning defaults, including exported environment values.
+PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
 
 .PHONY: help node-check setup build run dev preview test test-postgres typecheck check
 
@@ -13,7 +13,9 @@ help:
 	  'make build      Build static files into dist/ (default; no publishing)' \
 	  'make run        Start the loopback development server (PORT=5174)' \
 	  'make dev        Alias for run' \
-	  'make preview    Build and serve dist/ on loopback (PREVIEW_PORT=4174)' \
+	  'make preview    Build and serve dist/ on loopback (PORT=4174)' \
+	  'Port override: append PORT=9000 to run, dev, or preview.' \
+	  'Default ports advance when busy; explicit PORT stays fixed. Use the printed URL.' \
 	  'make test       Run UI/client/config behavior and embedded Postgres tests' \
 	  'make test-postgres  Optional concurrency checks; requires running Docker and a local PostgreSQL 17 image' \
 	  '                   POSTGRES_IMAGE environment override; default postgres:17-alpine, no image download' \
@@ -39,13 +41,15 @@ setup: node-check
 build: setup
 	"$(NPM)" run build
 
+run dev: PORT ?= 5174
 run: setup
-	"$(NPM)" run dev -- --host 127.0.0.1 --port "$(PORT)"
+	"$(NPM)" run dev -- --host 127.0.0.1 --port "$(PORT)" $(PORT_OPTION)
 
 dev: run
 
+preview: PORT ?= 4174
 preview: build
-	"$(NPM)" run preview -- --host 127.0.0.1 --port "$(PREVIEW_PORT)"
+	"$(NPM)" run preview -- --host 127.0.0.1 --port "$(PORT)" $(PORT_OPTION)
 
 test: setup
 	"$(NPM)" test
