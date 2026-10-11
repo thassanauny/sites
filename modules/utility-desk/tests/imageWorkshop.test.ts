@@ -23,6 +23,11 @@ it('exports the full image after cropping moves to a separate utility, including
   try {
     expect(root.querySelector('[name="cropW"]')).toBeNull();
     expect(root.querySelector('.crop-section')).toBeNull();
+    expect(root.querySelector('.run-panel')).toBeNull();
+    expect(root.querySelector('.image-preview')!.closest('.image-workspace')).not.toBeNull();
+    expect(root.querySelector('.image-preview')!.closest('form')).not.toBeNull();
+    expect(root.querySelector<HTMLElement>('.image-frame')!.hidden).toBe(true);
+    expect(root.querySelector<HTMLCanvasElement>('.preview-img')!.width).toBe(0);
     for (const name of ['quality', 'limitSize', 'maxSize', 'sizeUnit', 'width', 'height', 'sizing', 'enlarge', 'padding']) expect(root.querySelector(`[name="${name}"]`)).toBeNull();
     const rotate = root.querySelector<HTMLSelectElement>('[name=rotate]')!;
     const flip = root.querySelector<HTMLSelectElement>('[name=flip]')!;
@@ -40,6 +45,10 @@ it('exports the full image after cropping moves to a separate utility, including
     Object.defineProperty(input, 'files', { value: [new File(['fixture'], 'sample.png', { type: 'image/png' })] });
     input.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(() => expect(root.textContent).toContain('1200×800'));
+    expect(root.querySelector<HTMLElement>('.image-frame')!.hidden).toBe(false);
+    expect(root.querySelector('.image-preview-stats')!.textContent).toBe('Original1200 × 800 pxOutput1200 × 800 px');
+    const preview = root.querySelector<HTMLCanvasElement>('.preview-img')!;
+    expect([preview.width, preview.height]).toEqual([420, 280]);
     [...root.querySelectorAll('button')].find((button) => button.textContent === 'Export image →')!.click();
     await vi.waitFor(() => expect(root.querySelector('.status')!.textContent).toContain('Done.'));
     expect(encodedSizes).toEqual([[1200, 800]]);
@@ -73,6 +82,9 @@ it.each(orientationCases)('rotates %s° with %s flip at the original dimensions 
     Object.defineProperty(input, 'files', { value: [new File(['fixture'], 'photo.png', { type: 'image/png' })] });
     input.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(() => expect(root.textContent).toContain('1200×800'));
+    expect(root.querySelector('.image-preview-stats')!.textContent).toBe(`Original1200 × 800 pxOutput${width} × ${height} px`);
+    const preview = root.querySelector<HTMLCanvasElement>('.preview-img')!;
+    expect(preview.width).toBeLessThanOrEqual(640); expect(preview.height).toBeLessThanOrEqual(280);
     [...root.querySelectorAll('button')].find(button => button.textContent === 'Export image →')!.click();
     await vi.waitFor(() => expect(root.querySelector('.status')!.textContent).toContain('Done.'));
     expect(encodedSizes).toEqual([[width, height]]);
@@ -291,6 +303,9 @@ it('clears old workshop results on source selection and keeps edit preferences w
     expect(fixture.root.querySelector('.status')!.textContent).toBe('Ready.');
     expect(fixture.root.querySelector<HTMLElement>('.progress')!.hidden).toBe(true);
     expect(fixture.source.close).toHaveBeenCalledOnce();
+    expect(fixture.root.querySelector<HTMLElement>('.image-frame')!.hidden).toBe(true);
+    expect(fixture.root.querySelector('.image-preview-stats')!.textContent).toBe('');
+    expect(fixture.root.querySelector<HTMLCanvasElement>('.preview-img')!.width).toBe(0);
     await vi.waitFor(() => expect(fixture.root.textContent).toContain('new.png: 3×3'));
     for (const [name, value] of [['format', 'image/webp'], ['rotate', '90'], ['flip', 'horizontal'], ['colorStyle', 'sepia']]) expect(fixture.root.querySelector<HTMLSelectElement>(`[name=${name}]`)!.value).toBe(value);
     await fixture.exportImage(); expect(fixture.root.querySelector('.status')!.textContent).toContain('new-edited.webp');
@@ -307,11 +322,14 @@ it('discards stale workshop decodes and closes images returned after disposal', 
     pending[1](current); await vi.waitFor(() => expect(fixture.root.textContent).toContain('current.png: 300×200'));
     pending[0](old); await vi.waitFor(() => expect(old.close).toHaveBeenCalledOnce());
     expect(fixture.root.textContent).not.toContain('old.png:');
+    expect(fixture.root.querySelector('.image-preview-stats')!.textContent).toBe('Original300 × 200 pxOutput300 × 200 px');
     fixture.choose('late.png'); fixture.cleanup();
     const late = { width: 10, height: 10, close: vi.fn() }; pending[2](late);
     await vi.waitFor(() => expect(late.close).toHaveBeenCalledOnce());
     expect(current.close).toHaveBeenCalledOnce();
     expect(fixture.root.querySelector<HTMLCanvasElement>('.preview-img')!.width).toBe(0);
+    expect(fixture.root.querySelector<HTMLElement>('.image-frame')!.hidden).toBe(true);
+    expect(fixture.root.querySelector('.image-preview-stats')!.textContent).toBe('');
     expect(fixture.root.textContent).not.toContain('late.png:');
   } finally { fixture.dispose(); }
 });
@@ -327,6 +345,8 @@ it('closes an oversized workshop decode and prevents exporting the former source
     expect(oversized.close).toHaveBeenCalledOnce(); expect(fixture.source.close).toHaveBeenCalledOnce();
     fixture.action('Export image →'); expect(fixture.root.querySelector('.status')!.textContent).toBe('Choose an image first.');
     expect(encode).not.toHaveBeenCalled(); expect(fixture.root.querySelector<HTMLCanvasElement>('.preview-img')!.width).toBe(0);
+    expect(fixture.root.querySelector<HTMLElement>('.image-frame')!.hidden).toBe(true);
+    expect(fixture.root.querySelector('.image-preview-stats')!.textContent).toBe('');
   } finally { fixture.dispose(); }
 });
 

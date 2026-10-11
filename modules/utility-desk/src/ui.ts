@@ -166,7 +166,7 @@ export function taskControls(toolId: string, label: string, run: (ctx: TaskCtx) 
   return { el: h('div', { class: 'task' }, h('div', { class: 'action-buttons' }, go, cancel, retry), prog.el, status), run: start, reset };
 }
 
-/** Persist preferences, excluding files, passwords, and source-dependent fields. */
+/** Keep page-session preferences, excluding files, passwords, and source-dependent fields. */
 export function persistForm(toolId: string, root: HTMLElement, sourceFields: string[] = []) {
   const draft = store.getDraft(toolId);
   const excluded = new Set(['outputName', 'outName', ...sourceFields]);
@@ -184,4 +184,4 @@ export function pageHeader(title: string, desc: string, ...badges: Child[]) {
   return h('header', { class: 'page-header' }, h('h1', { tabindex: -1, id: 'page-title' }, title), h('p', { class: 'muted' }, desc), badges.length ? h('div', { class: 'row' }, ...badges) : null);
 }
 
-export const privacyNote = () => notice('info', 'Everything runs in your browser. Files are never uploaded; only drafts, preferences and activity labels are stored locally.');
+export const privacyNote = () => notice('info', 'Everything runs in your browser. Files are never uploaded; drafts last until reload; navigation preferences and activity labels are stored locally.');

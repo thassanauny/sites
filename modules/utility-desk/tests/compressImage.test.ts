@@ -37,6 +37,61 @@ beforeEach(() => {
 afterEach(() => { root.dispatchEvent(new Event('utility-desk:leave')); cleanup?.(); cleanup = undefined; vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); });
 
 describe('standalone image compression', () => {
+  it('checks an edited file size limit before export and clears the warning when it becomes achievable', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback, type) => callback(new Blob(['x'.repeat(2000)], { type })));
+    cleanup = mount(root); pick(); await ready(); edit('limitSize', '1');
+    const control = root.querySelector<HTMLInputElement>('[name=maxSize]')!;
+    const liveStatus = () => root.querySelector<HTMLElement>('#compress-image-limit-status')!.textContent;
+    control.value = '1'; control.dispatchEvent(new Event('input', { bubbles: true }));
+    await vi.waitFor(() => expect(liveStatus()).toContain('Cannot reach that file size'), { timeout: 1500 });
+    expect(click).not.toHaveBeenCalled(); expect(status()).toBe('Ready.');
+    control.value = '3'; control.dispatchEvent(new Event('input', { bubbles: true }));
+    await vi.waitFor(() => expect(liveStatus()).toContain('can fit'), { timeout: 1500 });
+    edit('limitSize', '0'); expect(liveStatus()).toBe('');
+  });
+
+  it('ignores a stale live size check after another edit and releases its canvas', async () => {
+    let complete!: BlobCallback;
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (this: HTMLCanvasElement, callback, type, quality) {
+      encoded.push({ canvas: this, width: this.width, height: this.height, quality, type }); complete = callback;
+    });
+    cleanup = mount(root); pick(); await ready(); edit('limitSize', '1'); edit('maxSize', '1');
+    await vi.waitFor(() => expect(encoded).toHaveLength(1), { timeout: 1500 });
+    edit('limitSize', '0');
+    await vi.waitFor(() => expect(encoded[0].canvas.width).toBe(0));
+    complete(new Blob(['x'.repeat(2000)], { type: 'image/jpeg' }));
+    await Promise.resolve();
+    expect(root.textContent).not.toContain('Cannot reach that file size'); expect(click).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unreachable limit visible beside the field after an export fails', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback, type) => callback(new Blob(['x'.repeat(2000)], { type })));
+    cleanup = mount(root); pick(); await ready(); edit('limitSize', '1'); edit('maxSize', '1');
+    const warning = root.querySelector<HTMLElement>('#compress-image-limit-status')!;
+    await vi.waitFor(() => expect(warning.textContent).toContain('Cannot reach'), { timeout: 1500 });
+    expect(warning.classList.contains('notice-warn')).toBe(true);
+    action();
+    await vi.waitFor(() => expect(status()).toContain('Failed:'));
+    await vi.waitFor(() => expect(warning.textContent).toContain('Cannot reach'), { timeout: 1500 });
+    expect(warning.hidden).toBe(false); expect(click).not.toHaveBeenCalled();
+  });
+
+  it('initializes dimensions from each new image and preserves edits for the same source', async () => {
+    store.setDraft('compress-image', { width: '2000', height: '1000' });
+    cleanup = mount(root);
+    const dimensions = () => ['width', 'height'].map(name => root.querySelector<HTMLInputElement>(`[name=${name}]`)!.value);
+    expect(dimensions()).toEqual(['', '']);
+    pick(); await ready();
+    expect(dimensions()).toEqual(['1200', '800']);
+    edit('width', '600'); edit('height', '400');
+    pick(); await ready();
+    expect(dimensions()).toEqual(['600', '400']);
+    vi.mocked(createImageBitmap).mockResolvedValueOnce(bitmap(900, 1500) as unknown as ImageBitmap);
+    pick('portrait.png');
+    expect(dimensions()).toEqual(['', '']);
+    await vi.waitFor(() => expect(dimensions()).toEqual(['900', '1500']));
+  });
+
   it('matches the PDF configuration shell, defaults to JPEG with a quality slider at 75 and downloads with actual savings', async () => {
     cleanup = mount(root);
     expect(parseHash('#/compress-image')).toBe('compress-image');
@@ -52,7 +107,17 @@ describe('standalone image compression', () => {
     expect(root.querySelector<HTMLInputElement>('[name=resize]')!.checked).toBe(false);
     expect(root.querySelector('[name=sizing]')!.parentElement!.parentElement!.hidden).toBe(true);
     expect(root.querySelector('.image-dimensions')!.textContent).toBe('Keep original dimensions.');
+    expect(root.querySelector('.image-preview')!.closest('.image-workspace')).not.toBeNull();
+    expect(root.querySelector('.image-preview')!.closest('form')).not.toBeNull();
+    expect(root.querySelector<HTMLElement>('.image-frame')!.hidden).toBe(true);
+    expect(root.querySelector<HTMLCanvasElement>('.image-frame canvas')!.width).toBe(0);
     pick(); await ready();
+    expect(root.querySelector<HTMLElement>('.image-frame')!.hidden).toBe(false);
+    expect(root.querySelector('.image-preview-stats')!.textContent).toBe('Original1200 × 800 pxOutput1200 × 800 px');
+    const preview = root.querySelector<HTMLCanvasElement>('.image-frame canvas')!;
+    expect([preview.width, preview.height]).toEqual([420, 280]);
+    expect(root.querySelector('.image-preview')!.textContent).toContain('Compression quality and final file size are checked when you export.');
+    expect(encoded).toHaveLength(0);
     expect(vi.mocked(createImageBitmap)).toHaveBeenCalledWith(expect.any(File), { imageOrientation: 'from-image' });
     expect(root.querySelector<HTMLInputElement>('[name=outName]')!.value).toBe('photo_compressed');
     action(); await vi.waitFor(() => expect(status()).toContain('Done.'));
@@ -71,6 +136,7 @@ describe('standalone image compression', () => {
     edit('format', 'image/webp'); edit('quality', '42'); edit('outName', 'finished/name.JPEG');
     expect(root.querySelector<HTMLElement>('.quality-slider')!.hidden).toBe(false);
     expect(root.querySelector('output')!.value).toBe('42');
+    fillRect.mockClear();
     action(); await vi.waitFor(() => expect(click).toHaveBeenCalledOnce());
     expect(encoded[0].quality).toBe(0.42);
     expect(fillRect).not.toHaveBeenCalled();
@@ -138,6 +204,7 @@ describe('standalone image compression', () => {
     expect(root.querySelector<HTMLInputElement>('[name=quality]')!.disabled).toBe(true);
     expect(root.querySelector<HTMLElement>('.quality-slider')!.hidden).toBe(false);
     expect(root.textContent).toContain('PNG is lossless');
+    fillRect.mockClear();
     action(); await vi.waitFor(() => expect(status()).not.toBe('Working…'));
     expect(encoded).toHaveLength(1); expect(fillRect).not.toHaveBeenCalled();
     expect(encoded[0].quality).toBe(0.9);
@@ -204,6 +271,20 @@ describe('standalone image compression', () => {
     await Promise.resolve(); expect(click).not.toHaveBeenCalled();
   });
 
+  it('clears the preview during same-source reselection while preserving the custom name', async () => {
+    cleanup = mount(root); pick(); await ready(); edit('outName', 'Custom name');
+    let decoded!: (image: ReturnType<typeof bitmap>) => void;
+    vi.stubGlobal('createImageBitmap', vi.fn(() => new Promise(resolve => { decoded = resolve; })));
+    pick();
+    expect(root.querySelector<HTMLElement>('.image-frame')!.hidden).toBe(true);
+    expect(root.querySelector('.image-preview-stats')!.textContent).toBe('');
+    expect(root.querySelector<HTMLCanvasElement>('.image-frame canvas')!.width).toBe(0);
+    expect(encoded).toHaveLength(0);
+    decoded(bitmap()); await ready();
+    expect(root.querySelector<HTMLInputElement>('[name=outName]')!.value).toBe('Custom name');
+    expect(root.querySelector<HTMLElement>('.image-frame')!.hidden).toBe(false);
+  });
+
   it('ignores obsolete decoded images and closes images returned after disposal', async () => {
     const pending: ((image: ReturnType<typeof bitmap>) => void)[] = [];
     vi.stubGlobal('createImageBitmap', vi.fn(() => new Promise(resolve => pending.push(resolve))));
@@ -212,9 +293,13 @@ describe('standalone image compression', () => {
     await vi.waitFor(() => expect(root.textContent).toContain('300 × 200 pixels'));
     pending[0](older); await vi.waitFor(() => expect(older.close).toHaveBeenCalledOnce());
     expect(root.querySelector<HTMLInputElement>('[name=outName]')!.value).toBe('new_compressed');
+    expect(root.querySelector('.image-preview-stats')!.textContent).toBe('Original300 × 200 pxOutput300 × 200 px');
     pick('late.png'); cleanup(); cleanup = undefined;
     const late = bitmap(); pending[2](late); await vi.waitFor(() => expect(late.close).toHaveBeenCalledOnce());
     expect(newer.close).toHaveBeenCalledOnce();
+    expect(root.querySelector<HTMLElement>('.image-frame')!.hidden).toBe(true);
+    expect(root.querySelector('.image-preview-stats')!.textContent).toBe('');
+    expect(root.querySelector<HTMLCanvasElement>('.image-frame canvas')!.width).toBe(0);
   });
 
   it.each(['Typed while loading', ''])('keeps the output name %j entered during decoding, including after an obsolete image finishes', async (chosenName) => {
@@ -254,7 +339,7 @@ describe('standalone image compression', () => {
 describe('optional image resizing', () => {
   it('ignores saved sizing values while resizing is off', async () => {
     store.setDraft('compress-image', { resize: '0', sizing: 'contain', width: '20000', height: '20000', enlarge: '1', padding: 'black' });
-    cleanup = mount(root); pick(); await ready(); action();
+    cleanup = mount(root); pick(); await ready(); fillRect.mockClear(); action();
     await vi.waitFor(() => expect(status()).toContain('Done.'));
     expect(encoded[0]).toMatchObject({ width: 1200, height: 800 });
     expect(drawImage).toHaveBeenCalledWith(expect.any(Object), 0, 0, 1200, 800);
@@ -282,6 +367,10 @@ describe('optional image resizing', () => {
     expect(root.textContent).toContain(hint);
     expect(root.querySelector<HTMLInputElement>('[name=enlarge]')!.closest<HTMLElement>('.option')!.hidden).toBe(true);
     expect(root.querySelector('[name=padding]')!.parentElement!.hidden).toBe(mode !== 'contain');
+    expect(root.querySelector('.image-preview-stats')!.textContent).toBe('Original1200 × 800 pxOutput300 × 300 px');
+    const preview = root.querySelector<HTMLCanvasElement>('.image-frame canvas')!;
+    expect([preview.width, preview.height]).toEqual([280, 280]);
+    expect(drawImage).toHaveBeenLastCalledWith(expect.any(Object), x * 280 / 300, y * 280 / 300, drawWidth * 280 / 300, drawHeight * 280 / 300);
     action(); await vi.waitFor(() => expect(status()).toContain('Done.'));
     expect(encoded[0]).toMatchObject({ width: 300, height: 300 });
     expect(drawImage).toHaveBeenCalledWith(expect.any(Object), x, y, drawWidth, drawHeight);
@@ -298,6 +387,9 @@ describe('optional image resizing', () => {
   ])('blocks invalid %s dimensions %s × %s before encoding', async (mode, width, height, error) => {
     cleanup = mount(root); pick(); await ready(); edit('resize', '1'); edit('sizing', mode); edit('width', width); edit('height', height);
     expect(root.querySelector('.image-dimensions')!.textContent).toContain(error);
+    expect(root.querySelector<HTMLElement>('.image-frame')!.hidden).toBe(true);
+    expect(root.querySelector<HTMLCanvasElement>('.image-frame canvas')!.width).toBe(0);
+    expect(root.querySelector('.image-preview-stats')!.textContent).toContain(error);
     action(); expect(status()).toContain(error); expect(encoded).toHaveLength(0); expect(click).not.toHaveBeenCalled();
   });
 
@@ -331,7 +423,7 @@ describe('optional image resizing', () => {
     cleanup = mount(root); pick(); await vi.waitFor(() => expect(root.textContent).toContain('2 × 1 pixels'));
     edit('resize', '1'); edit('sizing', 'contain'); edit('width', '4'); edit('height', '4'); edit('format', format);
     for (const color of ['black', 'white', 'transparent']) {
-      edit('padding', color); action(); await vi.waitFor(() => expect(status()).toContain('Done.'));
+      edit('padding', color); const previewPixels = pixels.slice(); action(); await vi.waitFor(() => expect(status()).toContain('Done.'));
       const margin = color === 'transparent' ? format === 'image/jpeg' ? 'white' : undefined : color;
       const sourceTransparent = format === 'image/jpeg' ? 'white' : undefined;
       expect(pixels).toEqual([
@@ -340,6 +432,7 @@ describe('optional image resizing', () => {
         sourceTransparent, sourceTransparent, 'red', 'red',
         margin, margin, margin, margin,
       ]);
+      expect(previewPixels).toEqual(pixels);
       expect(context.imageSmoothingQuality).toBe('high');
     }
   });

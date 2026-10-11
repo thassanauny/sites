@@ -1,4 +1,4 @@
-/** Local-only persistence: drafts, preferences and recent activity. No file contents are stored. */
+/** Page-session drafts; local-only preferences and activity. No file contents are stored. */
 export interface Activity { id: string; tool: string; message: string; status: 'done' | 'failed' | 'cancelled'; ts: number }
 export interface Prefs { lastTool?: string }
 
@@ -6,6 +6,7 @@ const PREFIX = 'utility-desk:v1:';
 export const MAX_ACTIVITY = 30;
 
 export class Store {
+  private drafts = new Map<string, Record<string, string>>();
   constructor(private kv: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null) {}
 
   private read<T>(key: string, fallback: T): T {
@@ -21,9 +22,18 @@ export class Store {
   getPrefs(): Prefs { return { ...this.read<Partial<Prefs>>('prefs', {}) }; }
   setPrefs(p: Partial<Prefs>) { this.write('prefs', { ...this.getPrefs(), ...p }); }
 
-  getDraft(tool: string): Record<string, string> { return this.read(`draft:${tool}`, {}); }
-  setDraft(tool: string, draft: Record<string, string>) { this.write(`draft:${tool}`, draft); }
-  clearDraft(tool: string) { try { this.kv?.removeItem(`${PREFIX}draft:${tool}`); } catch { /* ignore */ } }
+  getDraft(tool: string): Record<string, string> {
+    this.removeSavedDraft(tool);
+    return { ...this.drafts.get(tool) };
+  }
+  setDraft(tool: string, draft: Record<string, string>) { this.removeSavedDraft(tool); this.drafts.set(tool, { ...draft }); }
+  clearDraft(tool?: string) {
+    if (tool) { this.drafts.delete(tool); this.removeSavedDraft(tool); }
+    else this.drafts.clear();
+  }
+  private removeSavedDraft(tool: string) {
+    try { this.kv?.removeItem(`${PREFIX}draft:${tool}`); } catch { /* ignore */ }
+  }
 
   getActivity(): Activity[] { return this.read<Activity[]>('activity', []); }
   addActivity(a: Omit<Activity, 'id' | 'ts'>): Activity {

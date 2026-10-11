@@ -1,4 +1,4 @@
-import { toolPage, group, outputPanel } from '../page';
+import { toolPage, group } from '../page';
 import { h, field, input, select, filePicker, taskControls, notice, persistForm, button, option } from '../ui';
 import { encodeCanvas, grayscale, sepia, contrast, autoContrast, sharpen, rotatedSize, detectUnsupportedImage, MAX_PIXELS, IMAGE_ACCEPT } from '../lib/imageops';
 import { downloadBlob, baseName, sanitizeFilename, formatBytes, MAX_FILE_BYTES, throwIfAborted } from '../lib/util';
@@ -8,12 +8,23 @@ export function mount(root: HTMLElement) {
   let bmp: ImageBitmap | null = null;
   let imageRequest = 0, disposed = false;
   let operationController: AbortController | null = null;
-  const info = h('div'), canvas = h('canvas', { class: 'preview-img', 'aria-label': 'Edited image preview', role: 'img' });
+  const info = h('div'), canvas = h('canvas', { class: 'preview-img', 'aria-label': 'Edited image preview', role: 'img', width: 0, height: 0 });
+  const previewFrame = h('div', { class: 'image-frame', hidden: true }, canvas);
+  const previewEmpty = h('p', { class: 'image-empty' }, 'Choose an image to preview your edits.');
+  const previewStats = h('div', { class: 'image-preview-stats', 'aria-live': 'polite' });
+  const preview = h('div', { class: 'image-preview' }, h('strong', {}, 'Edited preview'), previewEmpty, previewFrame, previewStats);
   const auto = input('checkbox', 'autoContrast');
   const rot = select('rotate', [['0', 'No rotation'], ['90', '90°'], ['180', '180°'], ['270', '270°']], '0');
   const flip = select('flip', [['none', 'No flip'], ['horizontal', 'Horizontal'], ['vertical', 'Vertical'], ['both', 'Both']], 'none');
   const colorStyle = select('colorStyle', [['original', 'Original colors'], ['grayscale', 'Grayscale'], ['sepia', 'Sepia']], 'original');
-  const con = input('range', 'contrast', '0', { min: -100, max: 100 });
+  const con = input('range', 'contrast', '0', { id: 'workshop-contrast', min: -100, max: 100 });
+  const contrastValue = h('output', {}, con.value);
+  contrastValue.htmlFor.add(con.id);
+  const updateContrast = () => { contrastValue.value = con.value; };
+  con.addEventListener('input', updateContrast); con.addEventListener('change', updateContrast);
+  const contrastField = h('div', { class: 'field quality-slider' },
+    h('div', { class: 'quality-label' }, h('label', { class: 'field-label', for: con.id }, 'Contrast'), contrastValue),
+    con, h('p', { class: 'field-hint' }, '-100 to 100. Zero leaves it unchanged.'));
   const sharp = input('checkbox', 'sharpen');
   const fmt = select('format', [['image/png', 'PNG'], ['image/jpeg', 'JPEG'], ['image/webp', 'WebP']], 'image/png');
   function process(): HTMLCanvasElement {
@@ -48,24 +59,37 @@ export function mount(root: HTMLElement) {
       return output;
     } catch (error) { output.width = output.height = 0; throw error; }
   }
+  function clearPreview() {
+    canvas.width = canvas.height = 0;
+    previewFrame.hidden = true; previewEmpty.hidden = false;
+    previewStats.replaceChildren();
+  }
   const refresh = () => {
+    if (disposed) return;
     if (!bmp) return;
     info.querySelector('.err')?.remove();
+    previewStats.replaceChildren();
+    previewEmpty.hidden = true;
     let out: HTMLCanvasElement | undefined;
     try {
       out = process();
       const g = canvas.getContext('2d');
       if (!g) throw new Error('This browser cannot preview images.');
-      const s = Math.min(1, 640 / out.width);
+      const s = Math.min(1, 640 / out.width, 280 / out.height);
       canvas.width = Math.max(1, Math.round(out.width * s)); canvas.height = Math.max(1, Math.round(out.height * s));
       g.drawImage(out, 0, 0, canvas.width, canvas.height);
-    } catch (e) { canvas.width = canvas.height = 0; info.append(h('div', { class: 'err' }, notice('danger', (e as Error).message))); }
+      previewFrame.style.maxWidth = `${canvas.width}px`; previewFrame.hidden = false;
+      canvas.setAttribute('aria-label', `Edited output ${out.width} by ${out.height} pixels. Original ${bmp.width} by ${bmp.height} pixels.`);
+      previewStats.append(h('div', { class: 'image-preview-dimensions' },
+        h('div', {}, h('span', {}, 'Original'), h('strong', {}, `${bmp.width} × ${bmp.height} px`)),
+        h('div', {}, h('span', {}, 'Output'), h('strong', {}, `${out.width} × ${out.height} px`))));
+    } catch (e) { canvas.width = canvas.height = 0; previewFrame.hidden = true; previewStats.append(notice('danger', (e as Error).message)); }
     finally { if (out) out.width = out.height = 0; }
   };
   let t: ReturnType<typeof setTimeout>;
-  const edits = h('div', { oninput: () => { clearTimeout(t); t = setTimeout(refresh, 120); }, onchange: () => { clearTimeout(t); refresh(); } },
+  const edits = h('div', { class: 'image-controls', oninput: () => { clearTimeout(t); t = setTimeout(refresh, 120); }, onchange: () => { clearTimeout(t); refresh(); } },
     group('Orientation', h('p', { class: 'field-hint' }, 'Camera orientation is corrected automatically.'), h('div', { class: 'option-grid' }, field('Rotate clockwise', rot), field('Flip', flip))),
-    group('Color & detail', field('Color style', colorStyle), field('Contrast', con, '-100 to 100. Zero leaves it unchanged.'), option('Automatic contrast', 'Expand the image’s color range.', auto), option('Sharpen details', 'Apply light sharpening.', sharp)));
+    group('Color & detail', field('Color style', colorStyle), contrastField, option('Automatic contrast', 'Expand the image’s color range.', auto), option('Sharpen details', 'Apply light sharpening.', sharp)));
   const task = taskControls('image-workshop', 'Export image', async ({ signal }) => {
     const request = imageRequest;
     const stem = sanitizeFilename(baseName(file!.name), 'image');
@@ -94,8 +118,8 @@ export function mount(root: HTMLElement) {
   const picker = filePicker({ label: 'Image', accept: IMAGE_ACCEPT, onFiles: async ([fl]) => {
     if (disposed) return;
     const request = ++imageRequest;
-    clearTimeout(t); task.reset(); info.replaceChildren(); bmp?.close(); bmp = null; file = null;
-    canvas.width = canvas.height = 0;
+    clearTimeout(t); operationController?.abort(); task.reset(); info.replaceChildren(); bmp?.close(); bmp = null; file = null;
+    clearPreview();
     const bad = detectUnsupportedImage(fl);
     if (bad) { info.append(notice('warn', bad)); return; }
     if (fl.size > MAX_FILE_BYTES) { info.append(notice('warn', `File exceeds ${formatBytes(MAX_FILE_BYTES)}.`)); return; }
@@ -110,7 +134,11 @@ export function mount(root: HTMLElement) {
   } });
   const resetBtn = button('Reset edits', () => { clearTimeout(t); root.querySelectorAll<HTMLInputElement>('[name]').forEach((e) => { if (e.type === 'checkbox') e.checked = false; else if (e.name === 'contrast') e.value = '0'; else if (e.tagName === 'SELECT' && e.name === 'rotate') e.value = '0'; else if (e.name === 'flip') e.value = 'none'; else if (e.name === 'colorStyle') e.value = 'original'; }); root.dispatchEvent(new Event('change', { bubbles: true })); refresh(); }, { variant: 'secondary' });
   fmt.addEventListener('change', refresh);
-  toolPage(root, 'image-workshop', { config: [group(null, picker, info), edits, group('Output', field('Output format', fmt), h('p', { class: 'field-hint' }, 'JPEG/WebP export uses high quality. Use ', h('a', { href: '#/compress-image' }, 'Compress Image'), ' to resize, choose compression quality or set a maximum file size.'), notice('info', 'Camera orientation is applied by the browser. Canvas export removes source metadata; retaining EXIF and profiles is unavailable. TIFF, GIF, BMP and AVIF encoding are unavailable in this edition.'))], actions: [task.el, resetBtn], output: [outputPanel('Preview', 'LIVE', canvas)] });
+  const workspace = group('Image edits', h('div', { class: 'image-workspace' }, edits, preview));
+  workspace.classList.add('image-section');
+  toolPage(root, 'image-workshop', { config: [group(null, picker, info), workspace, group('Output', field('Output format', fmt), h('p', { class: 'field-hint' }, 'JPEG/WebP export uses high quality. Use ', h('a', { href: '#/compress-image' }, 'Compress Image'), ' to resize, choose compression quality or set a maximum file size.'), notice('info', 'Camera orientation is applied by the browser. Canvas export removes source metadata; retaining EXIF and profiles is unavailable. TIFF, GIF, BMP and AVIF encoding are unavailable in this edition.'))], actions: [task.el, resetBtn] });
   persistForm('image-workshop', root);
-  return () => { disposed = true; imageRequest++; clearTimeout(t); operationController?.abort(); bmp?.close(); bmp = null; file = null; canvas.width = canvas.height = 0; };
+  root.addEventListener('change', updateContrast);
+  updateContrast();
+  return () => { disposed = true; imageRequest++; clearTimeout(t); operationController?.abort(); bmp?.close(); bmp = null; file = null; clearPreview(); };
 }

@@ -16,7 +16,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'compress-pdf', title: 'Compress PDF', icon: 'compress-pdf', sub: 'Reduce PDF file size', desc: 'Reduce PDF file size with lossless or image-based compression.', load: () => import('./tools/compressPdf') },
   { id: 'unlock-pdf', title: 'Unlock PDF', icon: 'unlock-pdf', sub: 'Remove PDF password', desc: 'Use a known password to save an unlocked copy of a PDF.', load: () => import('./tools/unlockPdf') },
   { id: 'qr-generator', title: 'QR generator', icon: 'qr-generator', sub: 'Create QR codes', desc: 'Create a QR code for text, Wi-Fi, email, phone, SMS, or a contact.', load: () => import('./tools/qrGenerator') },
-  { id: 'image-workshop', title: 'Image workshop', icon: 'image-workshop', sub: 'Rotate & edit images', desc: 'Rotate, filter and convert images.', load: () => import('./tools/imageWorkshop') },
+  { id: 'image-workshop', title: 'Image workshop', icon: 'image-workshop', sub: 'Rotate, flip & adjust colors', desc: 'Rotate, filter and convert images.', load: () => import('./tools/imageWorkshop') },
   { id: 'crop-image', title: 'Crop Image', icon: 'crop-image', sub: 'Crop to exact dimensions', desc: 'Crop an image with a preview and exact pixel measurements.', load: () => import('./tools/cropImage') },
   { id: 'compress-image', title: 'Compress Image', icon: 'compress-image', sub: 'Reduce & resize images', desc: 'Reduce image file size, with optional resizing.', load: () => import('./tools/compressImage') },
 ];

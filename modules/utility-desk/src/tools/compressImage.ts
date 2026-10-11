@@ -8,7 +8,16 @@ export function mount(root: HTMLElement) {
   let imageRequest = 0, disposed = false;
   let sourceKey = '';
   let operationController: AbortController | null = null;
+  let limitTimer: ReturnType<typeof setTimeout> | undefined;
+  let limitController: AbortController | null = null;
+  let limitGeneration = 0;
   const info = h('div', {}, emptyState('No image selected', 'Choose an image to compress.'));
+  const previewCanvas = h('canvas', { role: 'img', 'aria-label': 'Image sizing preview', width: 0, height: 0 });
+  const previewFrame = h('div', { class: 'image-frame', hidden: true }, previewCanvas);
+  const previewEmpty = h('p', { class: 'image-empty' }, 'Choose an image to preview its size and padding.');
+  const previewStats = h('div', { class: 'image-preview-stats', 'aria-live': 'polite' });
+  const previewHint = h('p', { class: 'field-hint', hidden: true }, 'Shows sizing and transparency. Compression quality and final file size are checked when you export.');
+  const preview = h('div', { class: 'image-preview' }, h('strong', {}, 'Image preview'), previewEmpty, previewFrame, previewStats, previewHint);
   const resize = input('checkbox', 'resize');
   const sizing = select('sizing', [['maximum', 'Maximum size · keep proportions'], ['cover', 'Exact size · crop to fit'], ['contain', 'Exact size · add padding'], ['stretch', 'Exact size · stretch']], 'maximum');
   const width = input('number', 'width', '', { min: 1, max: 20000, step: 1, placeholder: 'auto' });
@@ -30,8 +39,9 @@ export function mount(root: HTMLElement) {
   const limit = input('checkbox', 'limitSize');
   const maxSize = input('number', 'maxSize', '500', { min: 1, step: 'any' });
   const sizeUnit = select('sizeUnit', [['kb', 'KB'], ['mb', 'MB']], 'kb');
+  const limitStatus = h('p', { id: 'compress-image-limit-status', class: 'field-hint', 'aria-live': 'polite', hidden: true });
   const sizeBox = h('div', {}, h('div', { class: 'option-grid' }, field('Maximum file size', maxSize), field('Size unit', sizeUnit)),
-    h('p', { class: 'field-hint' }, '1 KB = 1,000 bytes. JPEG/WebP quality is lowered within your chosen output dimensions. PNG must meet the limit with lossless encoding. If the limit cannot be met, no file is saved.'));
+    h('p', { class: 'field-hint' }, '1 KB = 1,000 bytes. JPEG/WebP quality is lowered within your chosen output dimensions. PNG must meet the limit with lossless encoding. If the limit cannot be met, no file is saved.'), limitStatus);
   const tradeoff = h('div');
   const name = input('text', 'outName', '', { placeholder: 'Choose a file to suggest a name' });
   const suggestName = suggestOutputName(name, 'compressed');
@@ -52,10 +62,14 @@ export function mount(root: HTMLElement) {
       : `${format.value === 'image/jpeg' ? 'JPEG makes transparent areas white.' : 'WebP keeps transparency.'} Lower quality can reduce fine detail. Dimensions stay unchanged unless Resize image is enabled; already compressed images may not shrink.`;
     tradeoff.replaceChildren(notice(format.value === 'image/png' ? 'warn' : 'info', message));
     updateDimensions();
+    updatePreview();
+    scheduleLimitCheck();
   };
   for (const control of [format, quality, limit, resize, sizing, width, height, enlarge, padding]) control.addEventListener('change', updateSettings);
   quality.addEventListener('input', updateSettings);
   width.addEventListener('input', updateSettings); height.addEventListener('input', updateSettings);
+  maxSize.addEventListener('input', updateSettings);
+  maxSize.addEventListener('change', updateSettings); sizeUnit.addEventListener('change', updateSettings);
   updateSettings();
 
   function selectedLayout(source = bitmap) {
@@ -75,6 +89,46 @@ export function mount(root: HTMLElement) {
     try { const layout = selectedLayout(); dimensions.textContent = `Output dimensions: ${layout.width} × ${layout.height} pixels · Original: ${bitmap.width} × ${bitmap.height} pixels.`; }
     catch (error) { dimensions.textContent = (error as Error).message; }
   }
+  function drawLayout(canvas: HTMLCanvasElement, source: ImageBitmap, layout: ReturnType<typeof sizeImage>, type: string) {
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('This browser cannot process images.');
+    const sx = canvas.width / layout.width, sy = canvas.height / layout.height;
+    const x = layout.x * sx, y = layout.y * sy, drawWidth = layout.drawWidth * sx, drawHeight = layout.drawHeight * sy;
+    context.imageSmoothingQuality = 'high';
+    if (type === 'image/jpeg') { context.fillStyle = 'white'; context.fillRect(0, 0, canvas.width, canvas.height); }
+    if (resize.checked && sizing.value === 'contain' && padding.value !== 'transparent') {
+      // Paint only the padding bands, leaving source transparency intact.
+      context.fillStyle = padding.value;
+      context.fillRect(0, 0, canvas.width, y);
+      context.fillRect(0, y + drawHeight, canvas.width, canvas.height - y - drawHeight);
+      context.fillRect(0, y, x, drawHeight);
+      context.fillRect(x + drawWidth, y, canvas.width - x - drawWidth, drawHeight);
+    }
+    context.drawImage(source, x, y, drawWidth, drawHeight);
+  }
+  function updatePreview() {
+    previewCanvas.width = previewCanvas.height = 0;
+    previewFrame.hidden = previewHint.hidden = true;
+    previewEmpty.hidden = !!bitmap;
+    previewStats.replaceChildren();
+    if (!bitmap) return;
+    try {
+      const layout = selectedLayout();
+      const scale = Math.min(1, 640 / layout.width, 280 / layout.height);
+      previewCanvas.width = Math.max(1, Math.round(layout.width * scale));
+      previewCanvas.height = Math.max(1, Math.round(layout.height * scale));
+      drawLayout(previewCanvas, bitmap, layout, format.value);
+      previewFrame.style.maxWidth = `${previewCanvas.width}px`;
+      previewFrame.hidden = previewHint.hidden = false;
+      previewCanvas.setAttribute('aria-label', `Output ${layout.width} by ${layout.height} pixels. Original ${bitmap.width} by ${bitmap.height} pixels.`);
+      previewStats.append(h('div', { class: 'image-preview-dimensions' },
+        h('div', {}, h('span', {}, 'Original'), h('strong', {}, `${bitmap.width} × ${bitmap.height} px`)),
+        h('div', {}, h('span', {}, 'Output'), h('strong', {}, `${layout.width} × ${layout.height} px`))));
+    } catch (error) {
+      previewCanvas.width = previewCanvas.height = 0;
+      previewStats.append(notice('warn', (error as Error).message));
+    }
+  }
 
   function selectedQuality() {
     if (format.value === 'image/png') return 0.9;
@@ -88,7 +142,46 @@ export function mount(root: HTMLElement) {
     if (!(bytes >= 1000 && bytes <= 1_000_000_000)) throw new Error('Enter a size from 1 KB to 1,000 MB.');
     return bytes;
   }
+  function cancelLimitCheck(clear = true) {
+    clearTimeout(limitTimer); limitController?.abort(); limitController = null; limitGeneration++;
+    if (clear) { limitStatus.hidden = true; limitStatus.textContent = ''; limitStatus.className = 'field-hint'; }
+  }
+  function scheduleLimitCheck() {
+    cancelLimitCheck();
+    if (!limit.checked || !bitmap || disposed || operationController) return;
+    limitStatus.hidden = false;
+    let layout: ReturnType<typeof selectedLayout>, bytes: number, startQuality: number;
+    try { layout = selectedLayout(); bytes = maximumBytes()!; startQuality = selectedQuality(); }
+    catch (error) { limitStatus.className = 'notice notice-warn'; limitStatus.textContent = (error as Error).message; return; }
+    limitStatus.textContent = 'Checking file size limit…';
+    const generation = limitGeneration, source = bitmap, type = format.value;
+    limitTimer = setTimeout(async () => {
+      const controller = new AbortController(); limitController = controller;
+      const canvas = document.createElement('canvas');
+      const current = () => !disposed && generation === limitGeneration && !controller.signal.aborted;
+      try {
+        canvas.width = layout.width; canvas.height = layout.height;
+        drawLayout(canvas, source, layout, type);
+        const encode = async (value: number) => {
+          const blob = await encodeCanvas(canvas, type, value, controller.signal);
+          throwIfAborted(controller.signal);
+          if (!blob || blob.type !== type) throw new Error('This browser cannot encode the selected format. Pick another format.');
+          return blob;
+        };
+        const first = await encode(startQuality);
+        if (first.size > bytes) {
+          if (type === 'image/png') throw new Error('PNG is lossless and exceeds the file size limit. Choose JPEG or WebP, or raise the limit. Nothing was saved.');
+          const floor = await encode(0.01);
+          if (floor.size > bytes) throw new Error('Cannot reach that file size by lowering quality. Reduce the dimensions or raise the limit. Nothing was saved.');
+        }
+        if (current()) limitStatus.textContent = 'This image can fit the selected file size limit.';
+      } catch (error) { if (current()) { limitStatus.className = 'notice notice-warn'; limitStatus.textContent = (error as Error).message; } }
+      finally { canvas.width = canvas.height = 0; if (limitController === controller) limitController = null; }
+    }, 350);
+  }
+  root.addEventListener('utility-desk:leave', () => cancelLimitCheck(), { once: true });
   const task = taskControls('compress-image', 'Compress Image', async ({ signal, progress }) => {
+    cancelLimitCheck(false);
     const source = file!, decoded = bitmap!, request = imageRequest;
     const type = format.value, startQuality = selectedQuality(), maxBytes = maximumBytes();
     const layout = selectedLayout(decoded);
@@ -108,19 +201,7 @@ export function mount(root: HTMLElement) {
       checkCurrent();
       progress(0.1, 'Preparing image…');
       canvas.width = layout.width; canvas.height = layout.height;
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('This browser cannot process images.');
-      context.imageSmoothingQuality = 'high';
-      if (type === 'image/jpeg') { context.fillStyle = 'white'; context.fillRect(0, 0, canvas.width, canvas.height); }
-      if (resize.checked && sizing.value === 'contain' && padding.value !== 'transparent') {
-        // Paint only the padding bands, so source transparency remains white in JPEG and transparent in PNG/WebP.
-        context.fillStyle = padding.value;
-        context.fillRect(0, 0, layout.width, layout.y);
-        context.fillRect(0, layout.y + layout.drawHeight, layout.width, layout.height - layout.y - layout.drawHeight);
-        context.fillRect(0, layout.y, layout.x, layout.drawHeight);
-        context.fillRect(layout.x + layout.drawWidth, layout.y, layout.width - layout.x - layout.drawWidth, layout.drawHeight);
-      }
-      context.drawImage(decoded, layout.x, layout.y, layout.drawWidth, layout.drawHeight);
+      drawLayout(canvas, decoded, layout, type);
       let encodes = 0;
       const encode = async (value: number) => {
         checkCurrent();
@@ -140,7 +221,7 @@ export function mount(root: HTMLElement) {
         ? `Saved ${formatBytes(saved)} (${(saved / source.size * 100).toFixed(1)}%). Image downloaded.`
         : saved === 0 ? 'No size reduction with these settings. Image downloaded.' : `Output is ${formatBytes(-saved)} larger with these settings. Image downloaded.`;
       return `${message} Original: ${formatBytes(source.size)} → Output: ${formatBytes(blob.size)} · Dimensions: ${decoded.width} × ${decoded.height} → ${layout.width} × ${layout.height} pixels`;
-    } finally { signal.removeEventListener('abort', abort); operationController = null; canvas.width = canvas.height = 0; }
+    } finally { signal.removeEventListener('abort', abort); operationController = null; canvas.width = canvas.height = 0; scheduleLimitCheck(); }
   }, { validate: () => {
     if (!file || !bitmap) return 'Choose an image first.';
     if (!name.value.trim()) return 'Enter an output filename.';
@@ -149,11 +230,14 @@ export function mount(root: HTMLElement) {
     return null;
   } });
   const picker = filePicker({ label: 'Image file', accept: IMAGE_ACCEPT, onFiles: async ([selected]) => {
+    if (disposed) return;
     const request = ++imageRequest;
     const key = fileSourceKey(selected);
     const sameSource = sourceKey === key;
-    bitmap?.close(); bitmap = null; file = null;
-    updateDimensions();
+    cancelLimitCheck();
+    operationController?.abort(); bitmap?.close(); bitmap = null; file = null;
+    if (!sameSource) { width.value = ''; height.value = ''; }
+    updateDimensions(); updatePreview();
     if (!sameSource) { suggestName(); task.reset(); }
     info.replaceChildren();
     const bad = detectUnsupportedImage(selected);
@@ -167,15 +251,19 @@ export function mount(root: HTMLElement) {
       if (disposed || request !== imageRequest) { decoded.close(); return; }
       if (decoded.width * decoded.height > MAX_PIXELS) { decoded.close(); throw new Error('Image is too large to process in the browser.'); }
       bitmap = decoded; file = selected;
+      if (!sameSource) { width.value = String(decoded.width); height.value = String(decoded.height); }
       info.replaceChildren(notice('info', `${selected.name} · ${formatBytes(selected.size)} · ${decoded.width} × ${decoded.height} pixels. The source stays untouched.`));
-      updateDimensions();
+      updateDimensions(); updatePreview(); scheduleLimitCheck();
     } catch (error) {
       if (!disposed && request === imageRequest) { sourceKey = ''; suggestName(); task.reset(); info.replaceChildren(notice('danger', `Cannot decode this image (${(error as Error).message}). The format may be unsupported by this browser.`)); }
     }
   } });
-  toolPage(root, 'compress-image', { config: [group(null, picker, info), group(null, option('Resize image', 'Choose smaller bounds or an exact output size.', resize), resizeBox, dimensions), group(null, field('Output format', format), qualityField, tradeoff,
+  const sizingSection = group('Image size', h('div', { class: 'image-workspace' },
+    h('div', { class: 'image-controls' }, option('Resize image', 'Choose smaller bounds or an exact output size.', resize), resizeBox, dimensions), preview));
+  sizingSection.classList.add('image-section');
+  toolPage(root, 'compress-image', { config: [group(null, picker, info), sizingSection, group(null, field('Output format', format), qualityField, tradeoff,
     option('Limit file size', 'Set a maximum size for the compressed file.', limit), sizeBox, field('Output filename (without extension)', name),
     h('p', { class: 'field-hint' }, 'Saved camera rotation is applied automatically. The saved copy removes camera details, location and comments; your original stays unchanged.'))], actions: [task.el] });
-  persistForm('compress-image', root);
-  return () => { disposed = true; imageRequest++; operationController?.abort(); bitmap?.close(); bitmap = null; file = null; };
+  persistForm('compress-image', root, ['width', 'height']);
+  return () => { disposed = true; imageRequest++; cancelLimitCheck(); operationController?.abort(); bitmap?.close(); bitmap = null; file = null; updatePreview(); };
 }

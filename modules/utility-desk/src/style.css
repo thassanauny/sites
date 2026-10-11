@@ -106,24 +106,24 @@ progress { flex: 1; height: 8px; accent-color: var(--green); }
 .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
 .preview-grid figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: #fafcf8; font-size: 11px; }
 .preview-grid img, .preview-grid canvas, .preview-img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-.crop-section { container-type: inline-size; container-name: crop-section; }
+.crop-section, .image-section { container-type: inline-size; container-name: image-section; }
 .crop-intro { margin: 0 0 18px; color: var(--muted); font-size: 12px; }
-.crop-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 20px; align-items: start; }
-.crop-controls { min-width: 0; }
-.crop-controls .field { margin-bottom: 18px; }
+.crop-workspace, .image-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 20px; align-items: start; }
+.crop-controls, .image-controls { min-width: 0; }
+.crop-controls .field, .image-controls .field { margin-bottom: 18px; }
 .crop-controls > .btn { margin-top: 14px; }
-.crop-preview { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #fafcf8; font-size: 12px; }
-.crop-preview > strong { display: block; margin-bottom: 12px; }
-.crop-empty { padding: 24px 6px; margin: 0; text-align: center; color: var(--muted); }
-.crop-frame { position: relative; width: 100%; margin: 0 auto; overflow: hidden; background: repeating-conic-gradient(#edf1eb 0% 25%, white 0% 50%) 50% / 16px 16px; }
-.crop-frame canvas { display: block; width: 100%; height: auto; }
+.crop-preview, .image-preview { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #fafcf8; font-size: 12px; }
+.crop-preview > strong, .image-preview > strong { display: block; margin-bottom: 12px; }
+.crop-empty, .image-empty { padding: 24px 6px; margin: 0; text-align: center; color: var(--muted); }
+.crop-frame, .image-frame { position: relative; width: 100%; margin: 0 auto; overflow: hidden; background: repeating-conic-gradient(#edf1eb 0% 25%, white 0% 50%) 50% / 16px 16px; }
+.crop-frame canvas, .image-frame canvas { display: block; width: 100%; height: auto; }
 .crop-outline { position: absolute; outline: 2px solid #3c7753; outline-offset: -2px; box-shadow: 0 0 0 2000px #20372bd0; pointer-events: none; }
-.crop-dimensions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
-.crop-dimensions span { display: block; margin-bottom: 3px; color: var(--muted); font-size: 11px; }
-.crop-dimensions strong { font-size: 12px; font-variant-numeric: tabular-nums; }
+.crop-dimensions, .image-preview-dimensions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.crop-dimensions span, .image-preview-dimensions span { display: block; margin-bottom: 3px; color: var(--muted); font-size: 11px; }
+.crop-dimensions strong, .image-preview-dimensions strong { font-size: 12px; font-variant-numeric: tabular-nums; }
 .crop-removal { margin: 12px 0 5px; color: var(--green); font-weight: 550; }
 .crop-edges { margin: 0; color: var(--muted); font-size: 11px; }
-@container crop-section (max-width: 520px) { .crop-workspace { grid-template-columns: minmax(0, 1fr); } }
+@container image-section (max-width: 520px) { .crop-workspace, .image-workspace { grid-template-columns: minmax(0, 1fr); } }
 pre.report { background: #fafcf8; color: #526c58; border: 1px solid var(--line); padding: 16px; border-radius: 8px; overflow: auto; max-height: 20rem; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; line-height: 1.8; }
 table { border-collapse: collapse; width: 100%; font-size: 12px; } th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); } th { font-weight: 550; }
 .big-out { font-size: 18px; font-weight: 550; font-variant-numeric: tabular-nums; margin: 10px 0; }

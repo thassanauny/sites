@@ -32,5 +32,5 @@ export default defineConfig({
   optimizeDeps: { exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'] },
   build: { target: 'es2022', chunkSizeWarningLimit: 2000 },
   worker: { format: 'es' },
-  test: { environment: 'jsdom', include: ['tests/**/*.test.ts'] },
+  test: { environment: 'jsdom', include: ['tests/**/*.test.ts'], setupFiles: ['tests/setup.ts'] },
 } as import('vite').UserConfig & { test: unknown });
