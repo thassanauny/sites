@@ -5,9 +5,9 @@ import { pathToFileURL } from 'node:url';
 import { PDFDocument } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import * as pdfjs from 'pdfjs-dist';
-import { convertDocumentAsync, pdfText } from '../src/lib/documentPipeline';
-import { htmlBlocks, documentToPdf } from '../src/lib/documentPdf';
-import { buildEpub, epubToHtml, OUTPUTS } from '../src/lib/docconv';
+import { convertDocumentAsync, pdfText } from '../src/domain/documents/pipeline';
+import { htmlBlocks, documentToPdf } from '../src/domain/documents/pdf';
+import { buildEpub, epubToHtml, OUTPUTS } from '../src/domain/documents/conversion';
 
 const fonts = {
   regular: new Uint8Array(readFileSync('node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf')),

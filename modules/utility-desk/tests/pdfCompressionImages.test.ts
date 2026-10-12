@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
-import { compressPdf } from '../src/lib/pdfCompression';
+import { compressPdf } from '../src/domain/pdf/compression';
 
 const pdf = vi.hoisted(() => ({ load: vi.fn() }));
 vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, AnnotationMode: { ENABLE: 1 }, getDocument: pdf.load }));

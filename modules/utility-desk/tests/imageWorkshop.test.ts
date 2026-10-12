@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { mount } from '../src/tools/imageWorkshop';
-import { store } from '../src/lib/storage';
+import { mount } from '../src/features/images/imageWorkshop';
+import { store } from '../src/infrastructure/storage';
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); });
 

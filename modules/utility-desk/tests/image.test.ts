@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encodeWithinLimit, grayscale, sepia, contrast, sharpen, clampCrop, rotatedSize, sizeImage, detectUnsupportedImage } from '../src/lib/imageops';
+import { encodeWithinLimit, grayscale, sepia, contrast, sharpen, clampCrop, rotatedSize, sizeImage, detectUnsupportedImage } from '../src/domain/images/operations';
 
 const px = (...v: number[]) => new Uint8ClampedArray(v);
 

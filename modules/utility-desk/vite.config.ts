@@ -1,5 +1,5 @@
 import { defineConfig, type Plugin } from 'vite';
-import { resolveBase } from './src/lib/base';
+import { resolveBase } from './src/shared/base';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';

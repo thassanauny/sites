@@ -1,10 +1,9 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TOOLS } from '../src/registry';
+import { TOOLS } from '../src/application/registry';
 
 const expectedSections = [
   ['Media, documents & images', ['media-converter', 'document-converter', 'image-workshop', 'crop-image', 'compress-image']],
   ['PDFs', ['pdf-to-images', 'images-to-pdf', 'merge-pdfs', 'split-pdf', 'compress-pdf', 'unlock-pdf']],
-  ['Command planners', ['folder-sync', 'media-downloader', 'secure-copy']],
   ['Miscellaneous', ['date-time', 'qr-generator']],
 ];
 
@@ -41,13 +40,13 @@ describe('grouped utility navigation', () => {
     expect(document.querySelector('.sidebar a[aria-current="page"]')?.getAttribute('href')).toBe('#/');
   });
 
-  it('finds command planners by their section name and hides empty sections', () => {
-    search('command planners');
+  it('finds PDF tools by their section name and hides empty sections', () => {
+    search('PDFs');
     const visible = homeSections().filter((section) => !section.hidden);
     expect(visible).toHaveLength(1);
-    expect(links(visible[0])).toEqual(['folder-sync', 'media-downloader', 'secure-copy']);
-    expect(document.getElementById('utility-count')?.textContent).toBe('3 of 16 utilities');
-    expect(document.querySelectorAll('.sidebar .nav-section')).toHaveLength(4);
+    expect(links(visible[0])).toEqual(expectedSections[1][1]);
+    expect(document.getElementById('utility-count')?.textContent).toBe('6 of 13 utilities');
+    expect(document.querySelectorAll('.sidebar .nav-section')).toHaveLength(3);
   });
 
   it('finds Compress Image when searching for resize', () => {
@@ -64,7 +63,7 @@ describe('grouped utility navigation', () => {
     clear.click();
     expect(homeSections().every((section) => !section.hidden)).toBe(true);
     expect((document.querySelector('.empty-note') as HTMLElement).hidden).toBe(true);
-    expect(document.getElementById('utility-count')?.textContent).toBe('16 of 16 utilities');
+    expect(document.getElementById('utility-count')?.textContent).toBe('13 of 13 utilities');
     expect(document.activeElement?.id).toBe('utility-search');
   });
 });

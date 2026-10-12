@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { suggestOutputName } from '../src/lib/util';
+import { suggestOutputName } from '../src/shared/util';
 
 describe('output name suggestions', () => {
   it('follows source changes and resets when a collection is emptied', () => {

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { store } from '../src/lib/storage';
-import { mount as split } from '../src/tools/splitPdf';
-import { mount as pages } from '../src/tools/pdfToImages';
-import { mount as media } from '../src/tools/mediaConverter';
-import { mount as crop } from '../src/tools/cropImage';
-import { mount as documentConverter } from '../src/tools/documentConverter';
+import { store } from '../src/infrastructure/storage';
+import { mount as split } from '../src/features/pdf/splitPdf';
+import { mount as pages } from '../src/features/pdf/pdfToImages';
+import { mount as media } from '../src/features/media/mediaConverter';
+import { mount as crop } from '../src/features/images/cropImage';
+import { mount as documentConverter } from '../src/features/documents/documentConverter';
 
-vi.mock('../src/lib/caps', () => ({ detectCapabilities: () => [
+vi.mock('../src/infrastructure/capabilities', () => ({ detectCapabilities: () => [
   { id: 'ffmpeg', label: 'FFmpeg', state: 'Supported', detail: 'Test environment' },
 ] }));
 let root: HTMLElement;

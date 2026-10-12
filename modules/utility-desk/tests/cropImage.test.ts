@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mount } from '../src/tools/cropImage';
+import { mount } from '../src/features/images/cropImage';
 
 const drawImage = vi.fn();
 const encodedSizes: number[][] = [];

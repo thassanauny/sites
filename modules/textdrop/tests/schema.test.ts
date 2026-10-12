@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MAX_TEXT_BYTES, readPage, type TextDropPage } from '../src/lib/model';
+import { MAX_TEXT_BYTES, readPage, type TextDropPage } from '../src/domain/snippets/model';
 
 const creator = randomUUID();
 const collaborator = randomUUID();

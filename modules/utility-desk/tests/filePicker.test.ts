@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { filePicker } from '../src/ui';
-import { mount as mountMedia } from '../src/tools/mediaConverter';
-import { mount as mountImages } from '../src/tools/imagesToPdf';
+import { filePicker } from '../src/ui/elements';
+import { mount as mountMedia } from '../src/features/media/mediaConverter';
+import { mount as mountImages } from '../src/features/pdf/imagesToPdf';
 
 function choose(picker: HTMLElement, files: File[]) {
   const input = picker.querySelector<HTMLInputElement>('input[type=file]')!;

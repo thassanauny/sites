@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mount } from '../src/tools/compressImage';
-import { store } from '../src/lib/storage';
-import { parseHash } from '../src/lib/router';
+import { mount } from '../src/features/images/compressImage';
+import { store } from '../src/infrastructure/storage';
+import { parseHash } from '../src/application/router';
 
 let root: HTMLElement, cleanup: (() => void) | undefined;
 const drawImage = vi.fn(), fillRect = vi.fn();

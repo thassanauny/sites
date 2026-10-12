@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
-import { mount } from '../src/tools/mergePdfs';
+import { mount } from '../src/features/pdf/mergePdfs';
 
 let root: HTMLElement;
 let cleanup: (() => void) | undefined;

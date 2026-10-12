@@ -1,12 +1,12 @@
 import './style.css';
-import { icon } from './icons';
-import { parseHash, hrefFor } from './lib/router';
-import { TOOLS } from './registry';
-import { h, badge, emptyState, button, pageHeader, input, toast, notice } from './ui';
-import { sideTitle } from './page';
-import { PRESENTATION, GROUPS } from './presentation';
-import { store } from './lib/storage';
-import { detectCapabilities, type CapState } from './lib/caps';
+import { icon } from './ui/icons';
+import { parseHash, hrefFor } from './application/router';
+import { TOOLS } from './application/registry';
+import { h, badge, emptyState, button, pageHeader, input, toast, notice } from './ui/elements';
+import { sideTitle } from './application/page';
+import { PRESENTATION, GROUPS } from './ui/presentation';
+import { store } from './infrastructure/storage';
+import { detectCapabilities, type CapState } from './infrastructure/capabilities';
 
 const app = document.getElementById('app')!;
 let cleanup: void | (() => void);
@@ -30,8 +30,7 @@ function dashboard(root: HTMLElement) {
     const cards = ids.map((id) => {
       const t = TOOLS.find((x) => x.id === id)!;
       const p = PRESENTATION[id];
-      const a = h('a', { class: 'utility-card', href: hrefFor(id) }, h('span', { class: 'utility-card-icon', 'aria-hidden': 'true' }, icon(t.icon)), t.unavailable ? h('span', { class: 'utility-card-category' }, 'Local app') : null, h('h3', {}, t.title), h('p', {}, p.summary), h('span', { class: 'utility-card-arrow', 'aria-hidden': 'true' }, '→'));
-      if (t.unavailable) a.dataset.unavailable = 'true';
+      const a = h('a', { class: 'utility-card', href: hrefFor(id) }, h('span', { class: 'utility-card-icon', 'aria-hidden': 'true' }, icon(t.icon)), h('h3', {}, t.title), h('p', {}, p.summary), h('span', { class: 'utility-card-arrow', 'aria-hidden': 'true' }, '→'));
       a.dataset.search = `${t.title} ${t.desc} ${t.sub} ${p.summary} ${cat}`.toLowerCase();
       return a;
     });
@@ -112,7 +111,7 @@ function shell() {
     h('div', { class: 'workspace' },
       h('header', { class: 'topbar' }, h('span', {}, h('a', { href: '#/' }, 'Home'), h('span', { class: 'breadcrumb-separator' }, '/'), h('strong', { id: 'breadcrumb' }, 'Home')), topbarActions),
       h('main', { id: 'main', tabindex: -1 }),
-      h('footer', {}, h('span', {}, 'Made for everyday tasks. Runs in your browser.'), h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, 'Utility Desk Lite · 1.0.80'))));
+      h('footer', {}, h('span', {}, 'Made for everyday tasks. Runs in your browser.'), h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, 'Utility Desk Lite · 1.0.81'))));
 }
 
 let renderRevision = 0;

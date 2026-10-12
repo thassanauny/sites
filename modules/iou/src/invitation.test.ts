@@ -2,12 +2,12 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import App from './App'
-import { emptyStore, loadStore, removeGroupFromDevice, saveStore, STORE_KEY } from './lib/storage'
-import type { Group } from './types'
+import App from './application/App'
+import { emptyStore, loadStore, removeGroupFromDevice, saveStore, STORE_KEY } from './infrastructure/storage/store'
+import type { Group } from './domain/groups/types'
 
 const mocks = vi.hoisted(() => ({ join: vi.fn(), load: vi.fn() }))
-vi.mock('./lib/cloud', () => ({ cloudConfigured: true, joinCloudGroup: mocks.join, loadCloudGroups: mocks.load, createCloudGroup: vi.fn(), saveCloudGroup: vi.fn() }))
+vi.mock('./infrastructure/cloud/groups', () => ({ cloudConfigured: true, joinCloudGroup: mocks.join, loadCloudGroups: mocks.load, createCloudGroup: vi.fn(), saveCloudGroup: vi.fn() }))
 vi.mock('virtual:pwa-register/react', () => ({ useRegisterSW: () => ({ needRefresh: [false, vi.fn()], offlineReady: [false, vi.fn()], updateServiceWorker: vi.fn() }) }))
 const codeA = 'a'.repeat(32), codeB = 'b'.repeat(32)
 const group = (code = codeA): Group => ({ id: code[0]!, name: `Group ${code[0]}`, description: '', currency: 'THB', icon: 'trip', color: '#10b981', inviteCode: code, createdAt: '2026-10-08T00:00:00Z', updatedAt: '2026-10-08T00:00:00Z', members: [{ id: 'amy', name: 'Amy' }], transactions: [] })

@@ -1,17 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
-import { parsePageRanges } from '../src/lib/ranges';
-import { extractPages, splitEachPage } from '../src/lib/pdfops';
-import { dateToTimestamp } from '../src/lib/dates';
-import { sizeImage } from '../src/lib/imageops';
-import { mediaArgs, mediaSeconds } from '../src/tools/mediaConverter';
-import { scpCommand } from '../src/tools/secureCopy';
-import { persistForm, input, taskControls } from '../src/ui';
-import { store } from '../src/lib/storage';
-import { convertDocument, epubToHtml } from '../src/lib/docconv';
-import { readZip } from '../src/lib/zip';
+import { parsePageRanges } from '../src/domain/pdf/ranges';
+import { extractPages, splitEachPage } from '../src/domain/pdf/operations';
+import { dateToTimestamp } from '../src/domain/datetime/dates';
+import { sizeImage } from '../src/domain/images/operations';
+import { mediaArgs, mediaSeconds } from '../src/features/media/mediaConverter';
+import { persistForm, input, taskControls } from '../src/ui/elements';
+import { store } from '../src/infrastructure/storage';
+import { convertDocument, epubToHtml } from '../src/domain/documents/conversion';
+import { readZip } from '../src/shared/zip';
 import { strFromU8 } from 'fflate';
-import { downloadBlob } from '../src/lib/util';
+import { downloadBlob } from '../src/shared/util';
 
 describe('original functionality parity', () => {
   it('preserves ordered/repeated extraction and separate page selection', async () => {
@@ -46,13 +45,6 @@ describe('original functionality parity', () => {
     expect(mediaArgs('webm', 'balanced', '', '128', '', '')).toContain('libvpx-vp9');
     expect(mediaArgs('wav', 'balanced', '', '128', '', '')).not.toContain('-b:a');
     expect(() => mediaArgs('mp4', 'balanced', '', '128', '10', '5')).toThrow();
-  });
-  it('quotes local paths and refuses unsupported remote syntax', () => {
-    const o = { direction: 'upload', folder: true, preserve: true, host: 'example.org', user: 'user', port: '22', local: "/tmp/a'b $(echo hello)", remote: '/data' };
-    expect(scpCommand(o)).toContain("'/tmp/a'\\''b $(echo hello)'");
-    expect(scpCommand(o)).toContain('StrictHostKeyChecking=yes');
-    expect(() => scpCommand({ ...o, host: '-oProxyCommand=bad' })).toThrow();
-    expect(() => scpCommand({ ...o, remote: '/bad path' })).toThrow();
   });
   it('overrides EPUB title and author with escaped metadata', () => {
     const out = convertDocument({ format: 'txt', text: 'Hello', title: 'Original', titleOverride: 'New & book', author: 'A < B' }, 'epub') as Uint8Array;

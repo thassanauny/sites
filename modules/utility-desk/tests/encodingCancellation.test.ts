@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
 import * as pdfjs from 'pdfjs-dist';
-import { mount as crop } from '../src/tools/cropImage';
-import { mount as images } from '../src/tools/imagesToPdf';
-import { mount as pages } from '../src/tools/pdfToImages';
-import { mount as compress } from '../src/tools/compressPdf';
-import { taskControls } from '../src/ui';
+import { mount as crop } from '../src/features/images/cropImage';
+import { mount as images } from '../src/features/pdf/imagesToPdf';
+import { mount as pages } from '../src/features/pdf/pdfToImages';
+import { mount as compress } from '../src/features/pdf/compressPdf';
+import { taskControls } from '../src/ui/elements';
 
 vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, AnnotationMode: { ENABLE: 1, DISABLE: 0 }, getDocument: vi.fn() }));
 let root: HTMLElement;

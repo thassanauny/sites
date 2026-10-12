@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { unlockPdf } from '../src/lib/pdfUnlock';
+import { unlockPdf } from '../src/domain/pdf/unlock';
 
 async function sourcePdf() {
   const pdf = await PDFDocument.create(); pdf.setTitle('Original title');

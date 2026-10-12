@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
-import { mount as mountCompress } from '../src/tools/compressPdf';
-import { mount as mountImages } from '../src/tools/pdfToImages';
-import { mount as mountSplit } from '../src/tools/splitPdf';
-import { mount as mountMerge } from '../src/tools/mergePdfs';
-import { compressPdf } from '../src/lib/pdfCompression';
+import { mount as mountCompress } from '../src/features/pdf/compressPdf';
+import { mount as mountImages } from '../src/features/pdf/pdfToImages';
+import { mount as mountSplit } from '../src/features/pdf/splitPdf';
+import { mount as mountMerge } from '../src/features/pdf/mergePdfs';
+import { compressPdf } from '../src/domain/pdf/compression';
 
 vi.mock('pdfjs-dist', () => ({
   GlobalWorkerOptions: {}, AnnotationMode: { DISABLE: 0, ENABLE: 1 },
   getDocument: () => ({ promise: Promise.resolve({ numPages: 2, destroy: vi.fn(), getPage: async () => ({ getViewport: () => ({ width: 100, height: 100 }), render: () => ({ promise: Promise.resolve() }), cleanup: vi.fn() }) }) }),
 }));
-vi.mock('../src/lib/pdfCompression', () => ({ compressPdf: vi.fn() }));
+vi.mock('../src/domain/pdf/compression', () => ({ compressPdf: vi.fn() }));
 let click: ReturnType<typeof vi.spyOn>;
 let root: HTMLElement;
 beforeEach(() => {

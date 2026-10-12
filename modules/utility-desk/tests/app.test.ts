@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Store, MAX_ACTIVITY } from '../src/lib/storage';
-import { detectCapabilities } from '../src/lib/caps';
-import { parseHash, hrefFor, ROUTES } from '../src/lib/router';
-import { resolveBase } from '../src/lib/base';
-import { convertDocument, markdownToHtml } from '../src/lib/docconv';
+import { Store, MAX_ACTIVITY } from '../src/infrastructure/storage';
+import { detectCapabilities } from '../src/infrastructure/capabilities';
+import { parseHash, hrefFor, ROUTES } from '../src/application/router';
+import { resolveBase } from '../src/shared/base';
+import { convertDocument, markdownToHtml } from '../src/domain/documents/conversion';
 import { strFromU8 } from 'fflate';
 
 const mem = () => { const m = new Map<string, string>(); return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) }; };
@@ -59,16 +59,12 @@ describe('unsupported browser states', () => {
     expect(state(c2, 'ffmpeg')).toBe('Limited');
     expect(state(detectCapabilities({ ...full, Worker: undefined }), 'pdfjs')).toBe('Limited');
   });
-  it('keeps the folder command planner available without folder-picker APIs', () => {
-    for (const environment of [{}, { showDirectoryPicker() {} }, { HTMLInputElement: { prototype: { webkitdirectory: '' } } }]) {
-      const caps = detectCapabilities(environment);
-      expect(caps.find(cap => cap.id === 'folder-sync')).toMatchObject({ state: 'Supported', detail: expect.stringContaining('no browser folder access') });
-      expect(caps.some(cap => cap.id === 'fsa')).toBe(false);
-    }
-  });
 });
 
 describe('GitHub Pages routing', () => {
+  it.each(['folder-sync', 'media-downloader', 'secure-copy'])('rejects the removed %s route', (route) => {
+    expect(parseHash(`#/${route}`)).toBe('notfound');
+  });
   it('parses hash routes', () => {
     expect(parseHash('')).toBe('dashboard'); expect(parseHash('#/')).toBe('dashboard');
     expect(parseHash('#/merge-pdfs')).toBe('merge-pdfs'); expect(parseHash('#/split-pdf?x=1')).toBe('split-pdf');
@@ -94,7 +90,7 @@ describe('document conversion', () => {
   });
 });
 
-import { palmDocDecompress, buildMobi, mobiToHtml } from '../src/lib/mobi';
+import { palmDocDecompress, buildMobi, mobiToHtml } from '../src/domain/documents/mobi';
 describe('MOBI', () => {
   it('decompresses PalmDOC', () => {
     expect(new TextDecoder().decode(palmDocDecompress(Uint8Array.from([0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x80, 0x32])))).toBe('hello hello');

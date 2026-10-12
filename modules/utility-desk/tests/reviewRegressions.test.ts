@@ -1,14 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { zipSync, strToU8 } from 'fflate';
-import { persistForm, input, filePicker, taskControls } from '../src/ui';
-import { store } from '../src/lib/storage';
-import { epubToHtml } from '../src/lib/docconv';
-import { mount as mountMedia } from '../src/tools/mediaConverter';
-import { mount as mountImages } from '../src/tools/imagesToPdf';
-import { mount as mountMerge } from '../src/tools/mergePdfs';
-import { mount as mountSync } from '../src/tools/folderSync';
-import { mount as mountScp } from '../src/tools/secureCopy';
-import { mount as mountDownloader } from '../src/tools/mediaDownloader';
+import { persistForm, input, filePicker, taskControls } from '../src/ui/elements';
+import { store } from '../src/infrastructure/storage';
+import { epubToHtml } from '../src/domain/documents/conversion';
+import { mount as mountMedia } from '../src/features/media/mediaConverter';
+import { mount as mountImages } from '../src/features/pdf/imagesToPdf';
+import { mount as mountMerge } from '../src/features/pdf/mergePdfs';
 
 const ffmpeg = vi.hoisted(() => ({
   load: vi.fn(async () => {}), writeFile: vi.fn<(path: string, data: Uint8Array) => Promise<void>>(async () => {}), exec: vi.fn<(command: string[]) => Promise<number>>(async () => 0),
@@ -48,7 +45,7 @@ describe('reviewed file and draft lifecycle', () => {
     expect(bar.parentElement?.hidden).toBe(true);
   });
   for (const [id, mount] of [['images-to-pdf', mountImages], ['merge-pdfs', mountMerge]] as const) {
-    it(`does not save planner fields in the previous ${id} draft`, () => {
+    it(`does not save the output filename in the ${id} draft`, () => {
       vi.useFakeTimers();
       const root = main();
       mount(root);
@@ -57,18 +54,6 @@ describe('reviewed file and draft lifecycle', () => {
       root.dispatchEvent(new Event('utility-desk:leave'));
       const expected = store.getDraft(id);
       expect(expected.outName).toBeUndefined();
-      for (const planner of [mountSync, mountScp, mountDownloader]) {
-        root.replaceChildren(); planner(root);
-        root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input:not([type="checkbox"]), textarea').forEach((control) => {
-          control.value = 'private fixture';
-          control.dispatchEvent(new Event('input', { bubbles: true }));
-          control.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-        vi.advanceTimersByTime(500);
-        root.dispatchEvent(new Event('utility-desk:leave'));
-        expect(store.getDraft(id)).toEqual(expected);
-        expect(JSON.stringify(localStorage)).not.toContain('private fixture');
-      }
     });
   }
   it('keeps consecutive tool drafts independent and flushes pending edits once', () => {

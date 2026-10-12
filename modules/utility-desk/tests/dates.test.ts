@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shiftDate, diffDates, timestampToDate, dateToTimestamp, worldClock } from '../src/lib/dates';
+import { shiftDate, diffDates, timestampToDate, dateToTimestamp, worldClock } from '../src/domain/datetime/dates';
 
 describe('dates', () => {
   it('adds and subtracts with month-end clamping', () => {

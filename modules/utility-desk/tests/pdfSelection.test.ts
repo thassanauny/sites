@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as pdfjs from 'pdfjs-dist';
-import { pageCount } from '../src/lib/pdfops';
-import { mount as mountImages } from '../src/tools/pdfToImages';
-import { mount as mountSplit } from '../src/tools/splitPdf';
+import { pageCount } from '../src/domain/pdf/operations';
+import { mount as mountImages } from '../src/features/pdf/pdfToImages';
+import { mount as mountSplit } from '../src/features/pdf/splitPdf';
 
 vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, AnnotationMode: { DISABLE: 0, ENABLE: 1 }, getDocument: vi.fn() }));
-vi.mock('../src/lib/pdfops', () => ({ pageCount: vi.fn(), splitEachPage: vi.fn(), extractPages: vi.fn() }));
+vi.mock('../src/domain/pdf/operations', () => ({ pageCount: vi.fn(), splitEachPage: vi.fn(), extractPages: vi.fn() }));
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

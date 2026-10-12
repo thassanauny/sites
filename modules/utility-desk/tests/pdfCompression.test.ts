@@ -4,7 +4,7 @@ import { zlibSync, unzlibSync } from 'fflate';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import * as pdfjs from 'pdfjs-dist';
-import { compressPdf, compressionResult } from '../src/lib/pdfCompression';
+import { compressPdf, compressionResult } from '../src/domain/pdf/compression';
 
 beforeAll(() => { pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(resolve('node_modules/pdfjs-dist/build/pdf.worker.min.mjs')).href; });
 afterEach(() => { vi.restoreAllMocks(); });

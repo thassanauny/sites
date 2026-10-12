@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { PDFArray, PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import { zlibSync, unzlibSync } from 'fflate';
-import { restoreStreamLengths } from '../src/lib/pdfStreams';
-import { compressPdf } from '../src/lib/pdfCompression';
-import { extractPages, mergePdfs, splitEachPage } from '../src/lib/pdfops';
+import { restoreStreamLengths } from '../src/domain/pdf/streams';
+import { compressPdf } from '../src/domain/pdf/compression';
+import { extractPages, mergePdfs, splitEachPage } from '../src/domain/pdf/operations';
 
 function fixture() {
   const encoder = new TextEncoder();

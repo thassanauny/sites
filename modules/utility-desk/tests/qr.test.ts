@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
-import { buildQrPayload, qrOptions } from '../src/lib/qr';
+import { buildQrPayload, qrOptions } from '../src/domain/qr/qr';
 
 const payloads = [
   buildQrPayload('wifi', { ssid: 'บ้าน;Guest,"\\:Net', password: '  p;ass,"\\:word  ', security: 'WPA', hidden: true }),

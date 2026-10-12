@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PDFDocument } from 'pdf-lib';
 import * as pdfjs from 'pdfjs-dist';
-import { parsePageRanges } from '../src/lib/ranges';
-import { mergePdfs, splitEachPage, extractPages, pageCount, layoutImage, pageDimensions, imagesToPdf } from '../src/lib/pdfops';
+import { parsePageRanges } from '../src/domain/pdf/ranges';
+import { mergePdfs, splitEachPage, extractPages, pageCount, layoutImage, pageDimensions, imagesToPdf } from '../src/domain/pdf/operations';
 
 beforeAll(() => { pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(resolve('node_modules/pdfjs-dist/build/pdf.worker.min.mjs')).href; });
 

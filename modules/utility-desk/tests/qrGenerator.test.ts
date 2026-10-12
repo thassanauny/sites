@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mount } from '../src/tools/qrGenerator';
-import { generateQr } from '../src/lib/qr';
+import { mount } from '../src/features/qr/qrGenerator';
+import { generateQr } from '../src/domain/qr/qr';
 
-vi.mock('../src/lib/qr', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../src/lib/qr')>(),
+vi.mock('../src/domain/qr/qr', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../src/domain/qr/qr')>(),
   generateQr: vi.fn(async () => ({ png: 'data:image/png;base64,AA==', svg: '<svg></svg>' })),
 }));
 

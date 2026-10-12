@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { mount } from '../src/tools/documentConverter';
-import { convertDocumentAsync } from '../src/lib/documentPipeline';
-import { store } from '../src/lib/storage';
+import { mount } from '../src/features/documents/documentConverter';
+import { convertDocumentAsync } from '../src/domain/documents/pipeline';
+import { store } from '../src/infrastructure/storage';
 
-vi.mock('../src/lib/documentPipeline', () => ({ convertDocumentAsync: vi.fn().mockResolvedValue('converted fixture'), pdfText: vi.fn() }));
+vi.mock('../src/domain/documents/pipeline', () => ({ convertDocumentAsync: vi.fn().mockResolvedValue('converted fixture'), pdfText: vi.fn() }));
 let root: HTMLElement;
 beforeEach(() => {
   localStorage.clear(); vi.clearAllMocks();

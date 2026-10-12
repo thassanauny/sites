@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { makeZip, readZip, uniqueNames, safeZipPath } from '../src/lib/zip';
-import { sanitizeFilename } from '../src/lib/util';
+import { makeZip, readZip, uniqueNames, safeZipPath } from '../src/shared/zip';
+import { sanitizeFilename } from '../src/shared/util';
 
 describe('zip', () => {
   it('round-trips and dedupes names', () => {

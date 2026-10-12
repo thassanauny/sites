@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { store } from '../src/lib/storage';
-import { mount as document } from '../src/tools/documentConverter';
-import { mount as media } from '../src/tools/mediaConverter';
-import { mount as compress } from '../src/tools/compressPdf';
-import { mount as unlock } from '../src/tools/unlockPdf';
-import { mount as images } from '../src/tools/imagesToPdf';
-import { mount as merge } from '../src/tools/mergePdfs';
-import { mount as crop } from '../src/tools/cropImage';
-import { mount as compressImage } from '../src/tools/compressImage';
-vi.mock('../src/lib/caps', () => ({ detectCapabilities: () => [
+import { store } from '../src/infrastructure/storage';
+import { mount as document } from '../src/features/documents/documentConverter';
+import { mount as media } from '../src/features/media/mediaConverter';
+import { mount as compress } from '../src/features/pdf/compressPdf';
+import { mount as unlock } from '../src/features/pdf/unlockPdf';
+import { mount as images } from '../src/features/pdf/imagesToPdf';
+import { mount as merge } from '../src/features/pdf/mergePdfs';
+import { mount as crop } from '../src/features/images/cropImage';
+import { mount as compressImage } from '../src/features/images/compressImage';
+vi.mock('../src/infrastructure/capabilities', () => ({ detectCapabilities: () => [
   { id: 'ffmpeg', label: 'FFmpeg', state: 'Supported', detail: 'Test environment' },
 ] }));
 let root: HTMLElement;
