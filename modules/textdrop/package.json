@@ -1,7 +1,7 @@
 {
   "name": "textdrop",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -10,12 +10,15 @@
     "dev": "vite --host 127.0.0.1 --port 5175",
     "build": "tsc -b && vite build",
     "test": "vitest run",
+    "lint": "biome check .",
+    "format": "biome check --write .",
     "preview": "vite preview --host 127.0.0.1 --port 4175"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.14",
     "@electric-sql/pglite": "0.5.8",
     "@types/node": "24.19.1",
     "jsdom": "26.1.0",

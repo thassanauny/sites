@@ -1,25 +1,33 @@
-import { icon } from '../ui/icons';
-import { shell } from '../ui/shell';
-import type { Cloud } from '../infrastructure/cloud/snippets';
-import { DEVICE_SNIPPETS_KEY, DeviceSnippets, type DeviceSnippet } from '../infrastructure/storage/deviceSnippets';
-import { MAX_TEXT_BYTES } from '../domain/snippets/model';
+import { renderDeviceList } from '../ui/deviceList';
+import { shell, shellElements } from '../ui/shell';
+import { countLines, exceedsLimit, exportFileName, type DeviceSnippet } from '../domain/snippets/model';
+import { DialogController } from './dialogs';
+import { errorMessage } from './errorMessage';
 import { PageSession } from './PageSession';
+import type { Cloud, DeviceList } from './ports';
+import { RefreshScheduler } from './refreshScheduler';
 import { invitationLink, joinCode, pageHash, readRoute } from './routes';
 
-export function mountTextDrop(root: HTMLElement, cloud: Cloud, options: { configured: boolean; version: string }): () => void {
+const DEVICE_READ_FAILED = 'Could not read snippets saved on this device.';
+
+/** Redrawing happens at every keystroke, so text that did not change is left alone. */
+function setText(element: HTMLElement, text: string): void {
+  if (element.textContent !== text) element.textContent = text;
+}
+
+export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: DeviceList, options: { configured: boolean; version: string }): () => void {
   const lifecycle = new AbortController();
   const { signal } = lifecycle;
   root.innerHTML = shell();
-
-  function element<T extends HTMLElement = HTMLElement>(id: string): T {
-    return root.querySelector<T>(`#${id}`)!;
-  }
-
-  const editor = element<HTMLTextAreaElement>('editor');
-  const codeInput = element<HTMLInputElement>('join-code');
+  const ui = shellElements(root);
+  const editor = ui.editor;
+  const codeInput = ui.joinCode;
   const { configured, version } = options;
   const session = new PageSession(cloud);
-  const deviceSnippets = new DeviceSnippets();
+  const refreshes = new RefreshScheduler(
+    () => session.refresh(),
+    () => document.visibilityState === 'visible',
+  );
   let rememberedSnippets: DeviceSnippet[] = [];
   let deviceReadError = '';
   let deviceWriteError = '';
@@ -27,87 +35,40 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, options: { config
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   let currentHash = location.hash;
   let loadingLink = false;
-  let modal: 'create' | 'join' | 'invite' | 'settings' | 'remove' | 'rename' | null = null;
-  let removingCode = '';
-  let dialogError = '';
-  let copyAttempt = 0;
-  let returnFocus: HTMLElement | null = null;
-  const dialog = element<HTMLDialogElement>('snippet-dialog');
+  const dialog = ui.dialog;
+  const dialogs = new DialogController({
+    ui,
+    root,
+    session,
+    nameOf: code => rememberedSnippets.find(snippet => snippet.code === code)?.name ?? '',
+    render: () => {
+      render();
+    },
+    clearNotice: () => {
+      uiError = '';
+    },
+    showHomeAddress,
+  });
 
-  element('version').textContent = `v${version}`;
+  ui.version.textContent = `v${version}`;
+
+  /** Puts Home in the address bar without adding a history entry. */
+  function showHomeAddress(): void {
+    currentHash = '#/';
+    history.replaceState(null, '', currentHash);
+  }
 
   function showToast(message: string): void {
     clearTimeout(toastTimer);
-    element('toast').textContent = message;
-    element('toast').hidden = false;
-    toastTimer = setTimeout(() => { element('toast').hidden = true; }, 2400);
+    ui.toast.textContent = message;
+    ui.toast.hidden = false;
+    toastTimer = setTimeout(() => {
+      ui.toast.hidden = true;
+    }, 2400);
   }
 
   function renderDeviceSnippets(): void {
-    const list = element('device-list');
-    const focused = document.activeElement instanceof HTMLElement && list.contains(document.activeElement) ? document.activeElement : null;
-    const focusedAction = focused?.classList.contains('snippet-open') ? 'snippet-open' : focused?.classList.contains('snippet-rename') ? 'snippet-rename' : 'snippet-remove';
-    const focusedIndex = focused ? [...list.children].findIndex(row => row.contains(focused)) : -1;
-    list.replaceChildren();
-    element('device-empty').hidden = rememberedSnippets.length > 0;
-    element('device-count').textContent = rememberedSnippets.length ? String(rememberedSnippets.length) : '';
-    for (const snippet of rememberedSnippets) {
-      const row = document.createElement('li');
-      row.className = 'device-row';
-      const mark = document.createElement('span');
-      mark.className = 'snippet-mark';
-      mark.innerHTML = icon('document');
-      const details = document.createElement('div');
-      details.className = 'snippet-details';
-      const name = document.createElement('span');
-      name.className = 'snippet-name';
-      name.textContent = snippet.name || 'Untitled snippet';
-      name.title = name.textContent;
-      const code = document.createElement('code');
-      code.textContent = `${snippet.code.slice(0, 6)}…${snippet.code.slice(-6)}`;
-      code.title = snippet.code;
-      const opened = document.createElement('time');
-      opened.dateTime = snippet.openedAt;
-      opened.textContent = `Last opened ${new Date(snippet.openedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
-      const metadata = document.createElement('span');
-      metadata.className = 'snippet-metadata';
-      metadata.append(code, opened);
-      details.append(name, metadata);
-      const open = document.createElement('a');
-      open.className = 'snippet-open';
-      open.href = pageHash(snippet.code);
-      open.dataset.code = snippet.code;
-      open.title = `Open snippet ${snippet.code}`;
-      open.setAttribute('aria-label', snippet.name ? `Open ${snippet.name}, snippet ${snippet.code}` : `Open snippet ${snippet.code}`);
-      const action = document.createElement('span');
-      action.className = 'snippet-cta';
-      action.innerHTML = `Open ${icon('arrow')}`;
-      open.append(mark, details, action);
-      const rename = document.createElement('button');
-      rename.type = 'button';
-      rename.className = 'icon-button snippet-rename';
-      rename.dataset.code = snippet.code;
-      rename.innerHTML = icon('rename');
-      rename.title = 'Name on this device';
-      rename.setAttribute('aria-label', `Rename ${snippet.name || 'snippet'}, code ${snippet.code}`);
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'icon-button snippet-remove';
-      remove.dataset.code = snippet.code;
-      remove.innerHTML = icon('remove');
-      remove.title = 'Remove from this device';
-      remove.setAttribute('aria-label', `Remove snippet ${snippet.code} from this device`);
-      const actions = document.createElement('div');
-      actions.className = 'snippet-actions';
-      actions.append(rename, remove);
-      row.append(open, actions);
-      list.append(row);
-    }
-    if (focused) {
-      const actions = [...list.querySelectorAll<HTMLElement>(`.${focusedAction}`)];
-      const matching = actions.find(action => action.dataset.code === focused.dataset.code);
-      (matching ?? actions[Math.min(focusedIndex, actions.length - 1)] ?? element('device-heading')).focus();
-    }
+    renderDeviceList(ui, rememberedSnippets, pageHash);
   }
 
   function updateDeviceSnippets(action: () => DeviceSnippet[], writing = false): boolean {
@@ -122,7 +83,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, options: { config
       render();
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'This browser could not update your snippet list.';
+      const message = errorMessage(error, 'This browser could not update your snippet list.');
       if (writing) deviceWriteError = `${message} Keep the snippet code to open it again.`;
       else deviceReadError = message;
       render();
@@ -135,106 +96,93 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, options: { config
     return page ? updateDeviceSnippets(() => deviceSnippets.remember(page.code, expected), true) : false;
   }
 
-  function closeDialog(force = false, restoreFocus = true): void {
-    const openingDialog = modal === 'create' || modal === 'join';
-    if (!force && openingDialog && session.state.phase === 'opening') return;
-    if (!force && modal === 'join' && readRoute(location.hash).kind === 'join') {
-      currentHash = '#/';
-      history.replaceState(null, '', currentHash);
-    }
-    ++copyAttempt;
-    modal = null;
-    dialogError = '';
-    dialog.close();
-    if (!force && openingDialog && !session.state.page) session.home();
-    if (!restoreFocus) return;
-    if (returnFocus?.isConnected) returnFocus.focus();
-    else {
-      const action = returnFocus?.classList.contains('snippet-open') ? '.snippet-open' : returnFocus?.classList.contains('snippet-rename') ? '.snippet-rename' : '.snippet-remove';
-      const replacement = [...root.querySelectorAll<HTMLElement>(action)].find(item => item.dataset.code === returnFocus?.dataset.code);
-      const fallback = element('home').hidden ? element('settings') : element('device-heading');
-      (replacement ?? fallback).focus();
-    }
+  /** Counting is O(text), so remember the result until the text changes. */
+  let measured: { text: string; lines: number; tooLarge: boolean } | undefined;
+  function measure(text: string): { lines: number; tooLarge: boolean } {
+    if (measured?.text !== text) measured = { text, lines: countLines(text), tooLarge: exceedsLimit(text) };
+    return measured;
   }
 
-  function showDialog(kind: NonNullable<typeof modal>, code = session.state.page?.code ?? ''): void {
-    if (kind !== 'create' && kind !== 'join' && !code) return;
-    ++copyAttempt;
-    if (!dialog.open) returnFocus = kind === 'create' ? element('create') : kind === 'join' ? element('join') : document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    modal = kind;
-    removingCode = code;
-    dialogError = '';
-    uiError = '';
-    element<HTMLInputElement>('remove-discard').checked = false;
-    if (kind === 'rename') element<HTMLInputElement>('snippet-name-input').value = rememberedSnippets.find(snippet => snippet.code === code)?.name ?? '';
-    render();
-    if (!dialog.open) dialog.showModal();
-    (kind === 'create' ? element('create-confirm') : kind === 'join' ? codeInput : kind === 'invite' ? element('invite-code') : kind === 'remove' ? element('remove-code') : kind === 'rename' ? element('snippet-name-input') : element('settings-rename')).focus();
+  /**
+   * The visible status changes at every step, so it is not a live region. Screen readers hear
+   * only a finished save here; failures reach them through the alert notice.
+   */
+  let lastStatus = '';
+  function announceSave(status: string): void {
+    const announcement = ui.saveAnnouncement;
+    if (status !== 'All changes saved') {
+      if (announcement.textContent) announcement.textContent = '';
+    } else if (lastStatus === 'Saving…') {
+      announcement.textContent = status;
+    }
+    lastStatus = status;
+  }
+
+  /** Formatting a time is slow next to the rest of a redraw, so keep the label until the page is saved again. */
+  let savedLabel: { updatedAt: string; text: string } | undefined;
+  function lastSaved(updatedAt: string): string {
+    if (savedLabel?.updatedAt !== updatedAt) {
+      savedLabel = { updatedAt, text: `Last saved ${new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` };
+    }
+    return savedLabel.text;
   }
 
   function render(): void {
-    const { page, draft, phase, dirty, error, online } = session.state;
+    const { page, draft, phase, dirty, error, online, sessionDamaged } = session.state;
     const opening = phase === 'opening';
-    element('home').hidden = Boolean(page);
-    element('workspace').hidden = !page;
-    element('connection').classList.toggle('disconnected', !online);
-    element('connection-label').textContent = online ? 'Online' : 'Offline';
-    element<HTMLButtonElement>('create').disabled = opening || !online || !configured;
-    element<HTMLButtonElement>('join').disabled = opening || !online || !configured;
-    const openingDialog = modal === 'create' || modal === 'join';
+    ui.home.hidden = Boolean(page);
+    ui.workspace.hidden = !page;
+    ui.connection.classList.toggle('disconnected', !online);
+    setText(ui.connectionLabel, online ? 'Online' : 'Offline');
+    ui.create.disabled = opening || !online || !configured;
+    ui.join.disabled = opening || !online || !configured;
+    const openingDialog = dialogs.opening;
     codeInput.disabled = opening;
-    for (const id of ['create-confirm', 'join-confirm']) element<HTMLButtonElement>(id).disabled = opening || !online || !configured;
-    for (const id of ['create-cancel', 'join-cancel', 'dialog-close']) element<HTMLButtonElement>(id).disabled = openingDialog && opening;
-    element('create-label').textContent = opening && !loadingLink ? 'Creating…' : 'Create snippet';
-    element('join-label').textContent = opening && loadingLink ? 'Opening…' : 'Open snippet';
-    for (const open of root.querySelectorAll<HTMLAnchorElement>('.snippet-open')) {
-      const disabled = opening || !online || !configured;
-      open.setAttribute('aria-disabled', String(disabled));
-      open.tabIndex = disabled ? -1 : 0;
+    for (const button of [ui.createConfirm, ui.joinConfirm]) button.disabled = opening || !online || !configured;
+    for (const button of [ui.createCancel, ui.joinCancel, ui.dialogClose]) button.disabled = openingDialog && opening;
+    setText(ui.createLabel, opening && !loadingLink ? 'Creating…' : 'Create snippet');
+    setText(ui.joinLabel, opening && loadingLink ? 'Opening…' : 'Open snippet');
+    if (!page) {
+      // The snippet list is hidden while a snippet is open; showing Home draws again.
+      for (const open of root.querySelectorAll<HTMLAnchorElement>('.snippet-open')) {
+        const disabled = opening || !online || !configured;
+        open.setAttribute('aria-disabled', String(disabled));
+        open.tabIndex = disabled ? -1 : 0;
+      }
+      for (const action of root.querySelectorAll<HTMLButtonElement>('.snippet-remove, .snippet-rename')) action.disabled = opening;
     }
-    for (const action of root.querySelectorAll<HTMLButtonElement>('.snippet-remove, .snippet-rename')) action.disabled = opening;
 
     if (page) {
       const name = rememberedSnippets.find(snippet => snippet.code === page.code)?.name || 'Shared snippet';
-      element('page-name').textContent = name;
-      document.title = `${name} — TextDrop`;
-      element('page-code').textContent = page.code;
+      setText(ui.pageName, name);
+      if (document.title !== `${name} — TextDrop`) document.title = `${name} — TextDrop`;
+      setText(ui.pageCode, page.code);
       if (editor.value !== draft) editor.value = draft;
       editor.disabled = !online;
-      const bytes = new TextEncoder().encode(draft).byteLength;
-      const tooLarge = bytes > MAX_TEXT_BYTES;
-      element('text-count').textContent = `${draft.length.toLocaleString()} characters · ${draft.split('\n').length.toLocaleString()} lines${tooLarge ? ' · over 1 MiB limit' : ''}`;
-      element('text-count').classList.toggle('over-limit', tooLarge);
-      const status = !online ? 'Offline · editing paused' : phase === 'saving' ? 'Saving…' : dirty ? error ? 'Not saved' : 'Unsaved changes…' : error ? 'Sync unavailable' : 'All changes saved';
-      element('save-status').textContent = status;
-      element('save-status').classList.toggle('unsaved', dirty || Boolean(error) || !online);
-      element('updated-at').textContent = `Last saved ${new Date(page.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      const { lines, tooLarge } = measure(draft);
+      setText(ui.textCount, `${draft.length.toLocaleString()} characters · ${lines.toLocaleString()} lines${tooLarge ? ' · over 1 MiB limit' : ''}`);
+      ui.textCount.classList.toggle('over-limit', tooLarge);
+      const status = !online ? 'Offline · editing paused' : phase === 'saving' ? 'Saving…' : dirty ? (error ? 'Not saved' : 'Unsaved changes…') : error ? 'Sync unavailable' : 'All changes saved';
+      setText(ui.saveStatus, status);
+      announceSave(status);
+      ui.saveStatus.classList.toggle('unsaved', dirty || Boolean(error) || !online);
+      setText(ui.updatedAt, lastSaved(page.updatedAt));
     } else {
-      document.title = 'TextDrop — share text';
+      if (document.title !== 'TextDrop — share text') document.title = 'TextDrop — share text';
+      announceSave('');
     }
-    const notice = uiError || (!openingDialog ? error : '') || deviceWriteError || deviceReadError || (!configured ? 'Sharing needs Supabase settings. Add the public project settings, then restart this app.' : '') || (!online ? 'Reconnect to create, open, or edit a page. Text is not stored on this device.' : '');
-    element('notice').hidden = !notice;
-    element('notice-message').textContent = notice;
-    element('retry').hidden = !page || !dirty || !online || phase === 'saving' || new TextEncoder().encode(draft).byteLength > MAX_TEXT_BYTES;
-    if (modal) {
-      element('dialog-title').textContent = modal === 'create' ? 'Create a snippet' : modal === 'join' ? 'Open a snippet' : modal === 'invite' ? 'Invite to snippet' : modal === 'settings' ? 'Snippet settings' : modal === 'rename' ? 'Name this snippet' : 'Remove from this device?';
-      element('create-form').hidden = modal !== 'create';
-      element('join-form').hidden = modal !== 'join';
-      element('invite-panel').hidden = modal !== 'invite';
-      element('settings-panel').hidden = modal !== 'settings';
-      element('rename-form').hidden = modal !== 'rename';
-      element('remove-form').hidden = modal !== 'remove';
-      element<HTMLInputElement>('invite-code').value = removingCode;
-      element<HTMLInputElement>('remove-code').value = removingCode;
-      const removingCurrent = page?.code === removingCode;
-      element('remove-unsaved').hidden = !removingCurrent || !dirty;
-      const saving = removingCurrent && phase === 'saving';
-      element('remove-saving').hidden = !saving;
-      element<HTMLButtonElement>('remove-confirm').disabled = saving || (removingCurrent && dirty && !element<HTMLInputElement>('remove-discard').checked);
-      const message = dialogError || (openingDialog ? error || (!configured ? 'Sharing is unavailable. Please try again later.' : !online ? 'Reconnect to create or open a snippet.' : '') : '');
-      element('dialog-error').textContent = message;
-      element('dialog-error').hidden = !message;
-    }
+    const notice =
+      uiError ||
+      (!openingDialog ? error : '') ||
+      deviceWriteError ||
+      deviceReadError ||
+      (!configured ? 'Sharing needs Supabase settings. Add the public project settings, then restart this app.' : '') ||
+      (!online ? 'Reconnect to create, open, or edit a page. Text is not stored on this device.' : '');
+    ui.notice.hidden = !notice;
+    ui.noticeMessage.textContent = notice;
+    ui.retry.hidden = !page || !dirty || !online || phase === 'saving' || measure(draft).tooLarge;
+    ui.newSession.hidden = !(sessionDamaged && notice === error);
+    dialogs.render({ page, dirty, phase, sessionError: error, sessionDamaged, online, configured });
   }
 
   renderDeviceSnippets();
@@ -244,97 +192,162 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, options: { config
 
   function navigateToPage(expected?: string | null): void {
     if (!session.state.page) return;
-    if (modal === 'create' || modal === 'join') closeDialog(true, false);
+    if (dialogs.opening) dialogs.close(true, false);
     const remembered = rememberCurrentSnippet(expected);
     try {
       if (deviceSnippets.isRemoved(session.state.page.code)) {
         codeInput.value = session.state.page.code;
         session.home();
-        currentHash = '#/';
-        history.replaceState(null, '', currentHash);
-        uiError = remembered
-          ? 'This snippet was removed from this device while opening. Choose Open a snippet to open it again.'
-          : deviceWriteError || deviceReadError;
+        showHomeAddress();
+        uiError = remembered ? 'This snippet was removed from this device while opening. Choose Open a snippet to open it again.' : deviceWriteError || deviceReadError;
         render();
-        element('join').focus();
+        ui.join.focus();
         return;
       }
     } catch (error) {
-      deviceReadError = error instanceof Error ? error.message : 'Could not read snippets saved on this device.';
+      deviceReadError = errorMessage(error, DEVICE_READ_FAILED);
       render();
     }
+    // Create and Open add a history entry so Back returns to the list. Links and invitations already have one.
+    const fromHome = readRoute(currentHash).kind === 'home';
     currentHash = pageHash(session.state.page.code);
-    history.replaceState(null, '', currentHash);
+    if (fromHome) history.pushState(null, '', currentHash);
+    else history.replaceState(null, '', currentHash);
+    refreshes.activity();
     editor.focus();
   }
 
-  element('create').addEventListener('click', () => { showDialog('create'); }, { signal });
-  element('join').addEventListener('click', () => { showDialog('join'); }, { signal });
-  element('create-form').addEventListener('submit', event => {
-    event.preventDefault();
-    if (modal !== 'create' || session.state.phase === 'opening' || !session.state.online || !configured) return;
-    uiError = '';
-    dialogError = '';
-    loadingLink = false;
-    void session.create().then(opened => { if (opened) navigateToPage(); });
-  }, { signal });
-
-  element('join-form').addEventListener('submit', event => {
-    event.preventDefault();
-    if (modal !== 'join' || session.state.phase === 'opening' || !session.state.online || !configured) return;
-    uiError = '';
-    dialogError = '';
-    try {
-      const code = joinCode(codeInput.value);
-      const expected = deviceSnippets.snapshot(code);
-      loadingLink = true;
-      void session.join(code).then(opened => { if (opened) navigateToPage(expected); });
-    } catch (error) {
-      dialogError = error instanceof Error ? error.message : 'Check the invitation code and try again.';
-      render();
-      codeInput.focus();
-    }
-  }, { signal });
-
-  element('device-list').addEventListener('click', event => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    const rename = target.closest<HTMLButtonElement>('.snippet-rename');
-    if (rename?.dataset.code && !rename.disabled) {
-      showDialog('rename', rename.dataset.code);
-      return;
-    }
-    const open = target.closest<HTMLAnchorElement>('.snippet-open');
-    if (open && (session.state.phase === 'opening' || !session.state.online || !configured)) {
+  ui.create.addEventListener(
+    'click',
+    () => {
+      dialogs.show('create');
+    },
+    { signal },
+  );
+  ui.join.addEventListener(
+    'click',
+    () => {
+      dialogs.show('join');
+    },
+    { signal },
+  );
+  ui.createForm.addEventListener(
+    'submit',
+    event => {
       event.preventDefault();
-      return;
-    }
-    if (open && new URL(open.href).hash === location.hash && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-      event.preventDefault();
-      void route();
-      return;
-    }
-    const remove = target.closest<HTMLButtonElement>('.snippet-remove');
-    const code = remove?.dataset.code;
-    if (!code) return;
-    showDialog('remove', code);
-  }, { signal });
+      if (dialogs.kind !== 'create' || session.state.phase === 'opening' || !session.state.online || !configured) return;
+      uiError = '';
+      dialogs.error = '';
+      loadingLink = false;
+      void session.create().then(opened => {
+        if (opened) navigateToPage();
+      });
+    },
+    { signal },
+  );
 
-  editor.addEventListener('input', () => { uiError = ''; session.edit(editor.value); }, { signal });
-  editor.addEventListener('keydown', event => {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+  ui.joinForm.addEventListener(
+    'submit',
+    event => {
       event.preventDefault();
+      if (dialogs.kind !== 'join' || session.state.phase === 'opening' || !session.state.online || !configured) return;
+      uiError = '';
+      dialogs.error = '';
+      try {
+        const code = joinCode(codeInput.value);
+        const expected = deviceSnippets.snapshot(code);
+        loadingLink = true;
+        void session.join(code).then(opened => {
+          if (opened) navigateToPage(expected);
+        });
+      } catch (error) {
+        dialogs.error = errorMessage(error, 'Check the invitation code and try again.');
+        render();
+        codeInput.focus();
+      }
+    },
+    { signal },
+  );
+
+  ui.deviceList.addEventListener(
+    'click',
+    event => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const rename = target.closest<HTMLButtonElement>('.snippet-rename');
+      if (rename?.dataset.code && !rename.disabled) {
+        dialogs.show('rename', rename.dataset.code);
+        return;
+      }
+      const open = target.closest<HTMLAnchorElement>('.snippet-open');
+      if (open && (session.state.phase === 'opening' || !session.state.online || !configured)) {
+        event.preventDefault();
+        return;
+      }
+      if (open && new URL(open.href).hash === location.hash && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        void route();
+        return;
+      }
+      const remove = target.closest<HTMLButtonElement>('.snippet-remove');
+      const code = remove?.dataset.code;
+      if (!code) return;
+      dialogs.show('remove', code);
+    },
+    { signal },
+  );
+
+  editor.addEventListener(
+    'input',
+    () => {
+      uiError = '';
+      refreshes.activity();
+      session.edit(editor.value);
+    },
+    { signal },
+  );
+  editor.addEventListener(
+    'keydown',
+    event => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void session.save();
+      }
+    },
+    { signal },
+  );
+  ui.retry.addEventListener(
+    'click',
+    () => {
+      uiError = '';
       void session.save();
-    }
-  }, { signal });
-  element('retry').addEventListener('click', () => { uiError = ''; void session.save(); }, { signal });
+    },
+    { signal },
+  );
+  for (const button of [ui.newSession, ui.dialogNewSession]) {
+    button.addEventListener(
+      'click',
+      () => {
+        void session.startNewSession().then(started => {
+          if (signal.aborted) return;
+          if (!started) {
+            (dialogs.opening ? ui.dialogNewSession : ui.newSession).focus();
+            return;
+          }
+          showToast('New session ready. Try again.');
+          (dialogs.kind === 'join' ? codeInput : dialogs.kind === 'create' ? ui.createConfirm : session.state.page ? editor : ui.create).focus();
+        });
+      },
+      { signal },
+    );
+  }
 
   async function copy(value: string, message: string): Promise<void> {
-    const attempt = ++copyAttempt;
+    const attempt = dialogs.startCopy();
     const pageId = session.state.page?.id;
-    const current = () => !signal.aborted && attempt === copyAttempt && pageId === session.state.page?.id;
+    const current = () => !signal.aborted && dialogs.isCurrentCopy(attempt) && pageId === session.state.page?.id;
     uiError = '';
-    dialogError = '';
+    dialogs.error = '';
     render();
     try {
       await navigator.clipboard.writeText(value);
@@ -342,71 +355,162 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, options: { config
     } catch {
       if (!current()) return;
       uiError = 'Your browser could not copy automatically. Select the text or snippet code and copy it manually.';
-      if (modal) dialogError = uiError;
+      if (dialogs.kind) dialogs.error = uiError;
       render();
     }
   }
-  element('share').addEventListener('click', () => { showDialog('invite'); }, { signal });
-  element('settings').addEventListener('click', () => { showDialog('settings'); }, { signal });
-  element('settings-rename').addEventListener('click', () => { showDialog('rename'); }, { signal });
-  element('settings-remove').addEventListener('click', () => { showDialog('remove'); }, { signal });
-  element('rename-form').addEventListener('submit', event => {
-    event.preventDefault();
-    if (modal !== 'rename') return;
-    if (!updateDeviceSnippets(() => deviceSnippets.rename(removingCode, element<HTMLInputElement>('snippet-name-input').value), true)) {
-      dialogError = deviceWriteError;
-      render();
-      return;
-    }
-    closeDialog();
-    showToast('Name saved on this device');
-  }, { signal });
-  for (const id of ['dialog-close', 'create-cancel', 'join-cancel', 'remove-cancel', 'rename-cancel']) element(id).addEventListener('click', () => { closeDialog(); }, { signal });
-  dialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(); }, { signal });
-  dialog.addEventListener('click', event => {
-    if (event.target !== dialog) return;
-    const bounds = dialog.getBoundingClientRect();
-    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeDialog();
-  }, { signal });
-  for (const id of ['invite-code', 'remove-code']) element<HTMLInputElement>(id).addEventListener('focus', event => { (event.currentTarget as HTMLInputElement).select(); }, { signal });
-  for (const id of ['invite-copy-code', 'remove-copy-code']) element(id).addEventListener('click', () => { void copy(removingCode, 'Invitation code copied'); }, { signal });
-  element('invite-copy-link').addEventListener('click', () => { void copy(invitationLink(removingCode, location.href), 'Invite link copied'); }, { signal });
-  element('remove-copy-text').addEventListener('click', () => { void copy(session.state.draft, 'Text copied'); }, { signal });
-  element('remove-discard').addEventListener('change', render, { signal });
-  element('remove-form').addEventListener('submit', event => {
-    event.preventDefault();
-    if (modal !== 'remove' || element<HTMLButtonElement>('remove-confirm').disabled) return;
-    const index = rememberedSnippets.findIndex(snippet => snippet.code === removingCode);
-    if (!updateDeviceSnippets(() => deviceSnippets.remove(removingCode), true)) {
-      dialogError = deviceWriteError;
-      render();
-      return;
-    }
-    const removingCurrent = session.state.page?.code === removingCode;
-    closeDialog();
-    if (removingCurrent) {
-      currentHash = '#/';
-      history.replaceState(null, '', currentHash);
-      session.home();
-    }
-    const remaining = element('device-list').querySelectorAll<HTMLButtonElement>('.snippet-remove');
-    (remaining[Math.min(index, remaining.length - 1)] ?? element('device-heading')).focus();
-    showToast('Snippet removed from this device');
-  }, { signal });
-  element('copy-code').addEventListener('click', () => {
-    if (session.state.page) void copy(session.state.page.code, 'Snippet code copied');
-  }, { signal });
-  element('copy-text').addEventListener('click', () => { void copy(session.state.draft, 'Text copied'); }, { signal });
-  element('download').addEventListener('click', () => {
-    const page = session.state.page;
-    if (!page) return;
-    const url = URL.createObjectURL(new Blob([session.state.draft], { type: 'text/plain;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `textdrop-${page.code.slice(0, 8)}.txt`;
-    anchor.click();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 1000);
-  }, { signal });
+  ui.share.addEventListener(
+    'click',
+    () => {
+      dialogs.show('invite');
+    },
+    { signal },
+  );
+  ui.settings.addEventListener(
+    'click',
+    () => {
+      dialogs.show('settings');
+    },
+    { signal },
+  );
+  ui.settingsRename.addEventListener(
+    'click',
+    () => {
+      dialogs.show('rename');
+    },
+    { signal },
+  );
+  ui.settingsRemove.addEventListener(
+    'click',
+    () => {
+      dialogs.show('remove');
+    },
+    { signal },
+  );
+  ui.renameForm.addEventListener(
+    'submit',
+    event => {
+      event.preventDefault();
+      if (dialogs.kind !== 'rename') return;
+      if (!updateDeviceSnippets(() => deviceSnippets.rename(dialogs.code, ui.snippetNameInput.value), true)) {
+        dialogs.error = deviceWriteError;
+        render();
+        return;
+      }
+      dialogs.close();
+      showToast('Name saved on this device');
+    },
+    { signal },
+  );
+  for (const button of [ui.dialogClose, ui.createCancel, ui.joinCancel, ui.removeCancel, ui.renameCancel])
+    button.addEventListener(
+      'click',
+      () => {
+        dialogs.close();
+      },
+      { signal },
+    );
+  dialog.addEventListener(
+    'cancel',
+    event => {
+      event.preventDefault();
+      dialogs.close();
+    },
+    { signal },
+  );
+  dialog.addEventListener(
+    'click',
+    event => {
+      if (event.target !== dialog) return;
+      const bounds = dialog.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialogs.close();
+    },
+    { signal },
+  );
+  for (const input of [ui.inviteCode, ui.removeCode])
+    input.addEventListener(
+      'focus',
+      event => {
+        (event.currentTarget as HTMLInputElement).select();
+      },
+      { signal },
+    );
+  for (const button of [ui.inviteCopyCode, ui.removeCopyCode])
+    button.addEventListener(
+      'click',
+      () => {
+        void copy(dialogs.code, 'Invitation code copied');
+      },
+      { signal },
+    );
+  ui.inviteCopyLink.addEventListener(
+    'click',
+    () => {
+      void copy(invitationLink(dialogs.code, location.href), 'Invite link copied');
+    },
+    { signal },
+  );
+  ui.removeCopyText.addEventListener(
+    'click',
+    () => {
+      void copy(session.state.draft, 'Text copied');
+    },
+    { signal },
+  );
+  ui.removeDiscard.addEventListener('change', render, { signal });
+  ui.removeForm.addEventListener(
+    'submit',
+    event => {
+      event.preventDefault();
+      if (dialogs.kind !== 'remove' || ui.removeConfirm.disabled) return;
+      const index = rememberedSnippets.findIndex(snippet => snippet.code === dialogs.code);
+      if (!updateDeviceSnippets(() => deviceSnippets.remove(dialogs.code), true)) {
+        dialogs.error = deviceWriteError;
+        render();
+        return;
+      }
+      const removingCurrent = session.state.page?.code === dialogs.code;
+      dialogs.close();
+      if (removingCurrent) {
+        showHomeAddress();
+        session.home();
+      }
+      const remaining = ui.deviceList.querySelectorAll<HTMLButtonElement>('.snippet-remove');
+      (remaining[Math.min(index, remaining.length - 1)] ?? ui.deviceHeading).focus();
+      showToast('Snippet removed from this device');
+    },
+    { signal },
+  );
+  ui.copyCode.addEventListener(
+    'click',
+    () => {
+      if (session.state.page) void copy(session.state.page.code, 'Snippet code copied');
+    },
+    { signal },
+  );
+  ui.copyText.addEventListener(
+    'click',
+    () => {
+      void copy(session.state.draft, 'Text copied');
+    },
+    { signal },
+  );
+  ui.download.addEventListener(
+    'click',
+    () => {
+      const page = session.state.page;
+      if (!page) return;
+      const url = URL.createObjectURL(new Blob([session.state.draft], { type: 'text/plain;charset=utf-8' }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = exportFileName(rememberedSnippets.find(snippet => snippet.code === page.code)?.name, new Date());
+      anchor.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 1000);
+    },
+    { signal },
+  );
 
   async function route(): Promise<void> {
     const nextHash = location.hash;
@@ -418,12 +522,12 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, options: { config
     }
     currentHash = nextHash;
     uiError = '';
-    if (modal) closeDialog(true, false);
+    if (dialogs.kind) dialogs.close(true, false);
     const next = readRoute(nextHash);
     if (next.kind === 'home') {
       updateDeviceSnippets(() => deviceSnippets.list());
       session.home();
-      element('create').focus();
+      ui.create.focus();
     } else if (next.kind === 'page') {
       let expected: string | null;
       try {
@@ -433,12 +537,12 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, options: { config
           codeInput.value = next.code;
           uiError = 'This snippet was removed from this device. Choose Open a snippet to open it again with its code.';
           render();
-          element('join').focus();
+          ui.join.focus();
           return;
         }
       } catch (error) {
         session.home();
-        uiError = error instanceof Error ? error.message : 'Could not read snippets saved on this device.';
+        uiError = errorMessage(error, DEVICE_READ_FAILED);
         render();
         return;
       }
@@ -450,7 +554,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, options: { config
     } else if (next.kind === 'join') {
       session.home();
       codeInput.value = next.code;
-      showDialog('join');
+      dialogs.show('join');
     } else {
       session.home();
       uiError = 'That invitation link is invalid. Paste a complete snippet code to open it.';
@@ -458,9 +562,28 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, options: { config
     }
   }
 
-  window.addEventListener('hashchange', () => { void route(); }, { signal });
-  window.addEventListener('offline', () => { session.setOnline(false); }, { signal });
-  window.addEventListener('online', () => { session.setOnline(true); void session.refresh(); }, { signal });
+  window.addEventListener(
+    'hashchange',
+    () => {
+      void route();
+    },
+    { signal },
+  );
+  window.addEventListener(
+    'offline',
+    () => {
+      session.setOnline(false);
+    },
+    { signal },
+  );
+  window.addEventListener(
+    'online',
+    () => {
+      session.setOnline(true);
+      void refreshes.wake();
+    },
+    { signal },
+  );
   function refreshDeviceSnippets(): void {
     if (!updateDeviceSnippets(() => deviceSnippets.list())) return;
     const page = session.state.page;
@@ -471,36 +594,67 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, options: { config
         uiError = 'This snippet was removed from this device in another tab. Your unsaved text stays in this open page; copy or save it before leaving.';
         render();
       } else {
-        if (modal) closeDialog();
+        if (dialogs.kind) dialogs.close();
         session.home();
-        currentHash = '#/';
-        history.replaceState(null, '', currentHash);
-        element('join').focus();
+        showHomeAddress();
+        ui.join.focus();
       }
     } catch (error) {
-      deviceReadError = error instanceof Error ? error.message : 'Could not read snippets saved on this device.';
+      deviceReadError = errorMessage(error, DEVICE_READ_FAILED);
       render();
     }
   }
-  window.addEventListener('focus', () => { refreshDeviceSnippets(); void session.refresh(); }, { signal });
-  window.addEventListener('storage', event => {
-    if (event.key?.startsWith(`${DEVICE_SNIPPETS_KEY}:`) || event.key === null) refreshDeviceSnippets();
-  }, { signal });
-  window.addEventListener('beforeunload', event => {
-    if (session.state.dirty) { event.preventDefault(); event.returnValue = ''; }
-  }, { signal });
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
+  window.addEventListener(
+    'focus',
+    () => {
       refreshDeviceSnippets();
-      void session.refresh();
-    }
-  }, { signal });
-  const pollTimer = setInterval(() => { if (document.visibilityState === 'visible') void session.refresh(); }, 3000);
+      void refreshes.wake();
+    },
+    { signal },
+  );
+  window.addEventListener(
+    'storage',
+    event => {
+      if (deviceSnippets.changedBy(event.key)) refreshDeviceSnippets();
+    },
+    { signal },
+  );
+  window.addEventListener(
+    'beforeunload',
+    event => {
+      if (session.state.dirty) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    },
+    { signal },
+  );
+  document.addEventListener(
+    'visibilitychange',
+    () => {
+      if (document.visibilityState === 'visible') {
+        refreshDeviceSnippets();
+        void refreshes.wake();
+      } else {
+        void session.flush();
+      }
+    },
+    { signal },
+  );
+  // Phones often skip `beforeunload`; send what is still waiting for the autosave timer.
+  window.addEventListener(
+    'pagehide',
+    () => {
+      void session.flush();
+    },
+    { signal },
+  );
+  refreshes.start();
   void route();
 
   return () => {
     lifecycle.abort();
-    clearInterval(pollTimer);
+    refreshes.stop();
     clearTimeout(toastTimer);
     session.dispose();
     if (dialog.open) dialog.close();

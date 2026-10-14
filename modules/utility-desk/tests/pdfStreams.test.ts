@@ -9,7 +9,7 @@ function fixture() {
   const encoder = new TextEncoder();
   let plain!: Uint8Array, compressed!: Uint8Array;
   for (let i = 0; i < 256; i++) {
-    plain = encoder.encode('% ' + 'padding '.repeat(1000) + 'a'.repeat(i) + '\n');
+    plain = encoder.encode(`% ${'padding '.repeat(1000)}${'a'.repeat(i)}\n`);
     compressed = zlibSync(plain);
     if (compressed.at(-1) === 13) break;
   }
@@ -20,7 +20,8 @@ function fixture() {
   const add = (number: number, content: Uint8Array) => {
     offsets[number] = size;
     const bytes = [encoder.encode(`${number} 0 obj\n`), content, encoder.encode('\nendobj\n')];
-    parts.push(...bytes); size += bytes.reduce((total, bytes) => total + bytes.length, 0);
+    parts.push(...bytes);
+    size += bytes.reduce((total, bytes) => total + bytes.length, 0);
   };
   add(1, encoder.encode('<< /Type /Catalog /Pages 2 0 R >>'));
   add(2, encoder.encode('<< /Type /Pages /Kids [3 0 R] /Count 1 >>'));
@@ -28,14 +29,27 @@ function fixture() {
   const header = encoder.encode('<< /Filter /FlateDecode /Length 5 0 R >>\nstream\n');
   const tail = encoder.encode('\nendstream');
   const stream = new Uint8Array(header.length + compressed.length + tail.length);
-  stream.set(header); stream.set(compressed, header.length); stream.set(tail, header.length + compressed.length);
-  add(4, stream); add(5, encoder.encode(String(compressed.length)));
+  stream.set(header);
+  stream.set(compressed, header.length);
+  stream.set(tail, header.length + compressed.length);
+  add(4, stream);
+  add(5, encoder.encode(String(compressed.length)));
   const padding = 'unused padding '.repeat(1000);
   add(6, encoder.encode(`<< /Length ${padding.length} >>\nstream\n${padding}\nendstream`));
-  parts.push(encoder.encode(`xref\n0 7\n0000000000 65535 f \n${offsets.slice(1).map(offset => String(offset).padStart(10, '0') + ' 00000 n \n').join('')}trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n${size}\n%%EOF\n`));
+  parts.push(
+    encoder.encode(
+      `xref\n0 7\n0000000000 65535 f \n${offsets
+        .slice(1)
+        .map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`)
+        .join('')}trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n${size}\n%%EOF\n`,
+    ),
+  );
   const original = new Uint8Array(parts.reduce((total, bytes) => total + bytes.length, 0));
   let offset = 0;
-  for (const part of parts) { original.set(part, offset); offset += part.length; }
+  for (const part of parts) {
+    original.set(part, offset);
+    offset += part.length;
+  }
   return { original, plain, compressed };
 }
 
@@ -61,7 +75,8 @@ describe('forward stream lengths', () => {
     const { original } = fixture();
     const doc = await PDFDocument.load(original);
     await expect(restoreStreamLengths(doc, new Uint8Array())).rejects.toThrow(/complete PDF stream/);
-    const controller = new AbortController(); controller.abort();
+    const controller = new AbortController();
+    controller.abort();
     await expect(restoreStreamLengths(doc, original, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
   });
 
@@ -72,7 +87,7 @@ describe('forward stream lengths', () => {
     for (const bytes of outputs) {
       const document = await PDFDocument.load(bytes);
       const contents = document.getPage(0).node.Contents();
-      const stream = contents instanceof PDFArray ? contents.lookup(0, PDFRawStream) : contents as PDFRawStream;
+      const stream = contents instanceof PDFArray ? contents.lookup(0, PDFRawStream) : (contents as PDFRawStream);
       expect(stream.getContents()).toEqual(compressed);
     }
     expect(original).toEqual(before);

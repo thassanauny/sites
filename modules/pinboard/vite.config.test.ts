@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserConfigFnObject } from 'vite';
 
@@ -8,23 +8,30 @@ const settings = vi.hoisted(() => ({
   shared: {} as Record<string, string>,
   local: {} as Record<string, string>,
   real: false,
+  folders: [] as string[],
 }));
 
 vi.mock('vite', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vite')>();
   return {
     ...actual,
-    loadEnv: (mode: string, path: string, prefixes: string) => settings.real
-      ? actual.loadEnv(mode, path, prefixes)
-      : path.endsWith('/publishing') ? settings.shared : settings.local,
+    loadEnv: (mode: string, path: string, prefixes: string) => {
+      settings.folders.push(path);
+      return settings.real
+        ? actual.loadEnv(mode, path, prefixes)
+        : path.endsWith('/publishing')
+          ? settings.shared
+          : settings.local;
+    },
   };
 });
 
-import viteConfig from './vite.config';
-const configure = viteConfig as UserConfigFnObject;
+import viteConfig, { createConfig } from './vite.config';
+const configure = createConfig('/workspace/apps/pinboard') as UserConfigFnObject;
 
 beforeEach(() => {
   settings.real = false;
+  settings.folders = [];
   vi.stubEnv('VITE_SUPABASE_URL', undefined);
   vi.stubEnv('VITE_SUPABASE_ANON_KEY', undefined);
   settings.shared = {
@@ -33,7 +40,10 @@ beforeEach(() => {
   };
   settings.local = {};
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 describe('Pinboard static configuration', () => {
   it('uses publishing public settings, relative assets and loopback servers', () => {
@@ -66,13 +76,18 @@ describe('Pinboard static configuration', () => {
     for (const missing of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY']) {
       const previous = settings.shared[missing];
       delete settings.shared[missing];
-      expect(() => configure({ mode: 'production', command: 'build' })).toThrow(/Set VITE_SUPABASE/);
+      expect(() => configure({ mode: 'production', command: 'build' })).toThrow(
+        /Set VITE_SUPABASE/,
+      );
       settings.shared[missing] = previous;
     }
   });
 
   it('rejects private settings before serving or building', () => {
-    for (const key of ['sb_secret_private', `header.${Buffer.from('{"role":"service_role"}').toString('base64url')}.signature`]) {
+    for (const key of [
+      'sb_secret_private',
+      `header.${Buffer.from('{"role":"service_role"}').toString('base64url')}.signature`,
+    ]) {
       settings.local.VITE_SUPABASE_ANON_KEY = key;
       for (const command of ['build', 'serve'] as const) {
         expect(() => configure({ mode: 'development', command })).toThrow(/public Supabase/);
@@ -98,6 +113,18 @@ describe('Pinboard static configuration', () => {
     expect(() => configure({ mode: 'test', command: 'build' })).toThrow(/public Supabase/);
   });
 
+  it('looks for settings next to the config file, not in the working directory', () => {
+    vi.spyOn(process, 'cwd').mockReturnValue('/somewhere/else');
+    (viteConfig as UserConfigFnObject)({
+      mode: 'production',
+      command: 'build',
+    });
+    expect(settings.folders).toEqual([
+      resolve(import.meta.dirname, '../../publishing'),
+      import.meta.dirname,
+    ]);
+  });
+
   it('does not mistake manually served test mode for isolated unit tests', () => {
     vi.stubEnv('VITEST', undefined);
     settings.local.VITE_SUPABASE_ANON_KEY = 'sb_secret_private';
@@ -113,9 +140,12 @@ describe('pinboard publishing settings from real env files', () => {
   let temporary: string;
   let appDirectory: string;
   let publishingDirectory: string;
-  const sharedValues = 'VITE_SUPABASE_URL=https://shared.supabase.co\nVITE_SUPABASE_ANON_KEY=sb_publishable_shared\n';
-  const definitions = () => configure({ mode: 'production', command: 'build' }).define;
-  const write = (directory: string, filename: string, values: string) => writeFileSync(join(directory, filename), values);
+  const sharedValues =
+    'VITE_SUPABASE_URL=https://shared.supabase.co\nVITE_SUPABASE_ANON_KEY=sb_publishable_shared\n';
+  const definitions = () =>
+    createConfig(appDirectory)({ mode: 'production', command: 'build' }).define;
+  const write = (directory: string, filename: string, values: string) =>
+    writeFileSync(join(directory, filename), values);
 
   beforeEach(() => {
     settings.real = true;
@@ -124,7 +154,6 @@ describe('pinboard publishing settings from real env files', () => {
     publishingDirectory = join(temporary, 'publishing');
     mkdirSync(appDirectory, { recursive: true });
     mkdirSync(publishingDirectory);
-    vi.spyOn(process, 'cwd').mockReturnValue(appDirectory);
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -135,7 +164,11 @@ describe('pinboard publishing settings from real env files', () => {
     write(publishingDirectory, '.env.local', sharedValues);
     const iou = join(temporary, 'apps', 'iou');
     mkdirSync(iou);
-    write(iou, '.env.local', 'VITE_SUPABASE_URL=https://other.supabase.co\nVITE_SUPABASE_ANON_KEY=sb_publishable_other\n');
+    write(
+      iou,
+      '.env.local',
+      'VITE_SUPABASE_URL=https://other.supabase.co\nVITE_SUPABASE_ANON_KEY=sb_publishable_other\n',
+    );
     expect(definitions()).toMatchObject({
       'import.meta.env.VITE_SUPABASE_URL': '"https://shared.supabase.co"',
       'import.meta.env.VITE_SUPABASE_ANON_KEY': '"sb_publishable_shared"',
@@ -144,12 +177,20 @@ describe('pinboard publishing settings from real env files', () => {
 
   it('overrides each setting locally, falling back for blank app values', () => {
     write(publishingDirectory, '.env.local', sharedValues);
-    write(appDirectory, '.env.local', 'VITE_SUPABASE_URL= https://local.supabase.co \nVITE_SUPABASE_ANON_KEY=   \n');
+    write(
+      appDirectory,
+      '.env.local',
+      'VITE_SUPABASE_URL= https://local.supabase.co \nVITE_SUPABASE_ANON_KEY=   \n',
+    );
     expect(definitions()).toMatchObject({
       'import.meta.env.VITE_SUPABASE_URL': '"https://local.supabase.co"',
       'import.meta.env.VITE_SUPABASE_ANON_KEY': '"sb_publishable_shared"',
     });
-    write(appDirectory, '.env.local', 'VITE_SUPABASE_URL=https://local.supabase.co\nVITE_SUPABASE_ANON_KEY=sb_publishable_local\n');
+    write(
+      appDirectory,
+      '.env.local',
+      'VITE_SUPABASE_URL=https://local.supabase.co\nVITE_SUPABASE_ANON_KEY=sb_publishable_local\n',
+    );
     expect(definitions()).toMatchObject({
       'import.meta.env.VITE_SUPABASE_URL': '"https://local.supabase.co"',
       'import.meta.env.VITE_SUPABASE_ANON_KEY': '"sb_publishable_local"',
@@ -178,17 +219,37 @@ describe('pinboard publishing settings from real env files', () => {
 
   it('honors production file precedence while preferring app values over shared values', () => {
     write(publishingDirectory, '.env', sharedValues);
-    write(publishingDirectory, '.env.local', 'VITE_SUPABASE_ANON_KEY=sb_publishable_shared_local\n');
-    write(publishingDirectory, '.env.production', 'VITE_SUPABASE_ANON_KEY=sb_publishable_shared_production\n');
-    write(publishingDirectory, '.env.production.local', 'VITE_SUPABASE_ANON_KEY=sb_publishable_shared_production_local\n');
+    write(
+      publishingDirectory,
+      '.env.local',
+      'VITE_SUPABASE_ANON_KEY=sb_publishable_shared_local\n',
+    );
+    write(
+      publishingDirectory,
+      '.env.production',
+      'VITE_SUPABASE_ANON_KEY=sb_publishable_shared_production\n',
+    );
+    write(
+      publishingDirectory,
+      '.env.production.local',
+      'VITE_SUPABASE_ANON_KEY=sb_publishable_shared_production_local\n',
+    );
     write(appDirectory, '.env', 'VITE_SUPABASE_URL=https://app.supabase.co\n');
     expect(definitions()).toMatchObject({
       'import.meta.env.VITE_SUPABASE_URL': '"https://app.supabase.co"',
       'import.meta.env.VITE_SUPABASE_ANON_KEY': '"sb_publishable_shared_production_local"',
     });
     write(appDirectory, '.env.local', 'VITE_SUPABASE_URL=https://app-local.supabase.co\n');
-    write(appDirectory, '.env.production', 'VITE_SUPABASE_URL=https://app-production.supabase.co\n');
-    write(appDirectory, '.env.production.local', 'VITE_SUPABASE_URL=https://app-production-local.supabase.co\n');
+    write(
+      appDirectory,
+      '.env.production',
+      'VITE_SUPABASE_URL=https://app-production.supabase.co\n',
+    );
+    write(
+      appDirectory,
+      '.env.production.local',
+      'VITE_SUPABASE_URL=https://app-production-local.supabase.co\n',
+    );
     expect(definitions()).toMatchObject({
       'import.meta.env.VITE_SUPABASE_URL': '"https://app-production-local.supabase.co"',
     });

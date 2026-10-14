@@ -1,14 +1,17 @@
-import { cpSync, existsSync, mkdirSync, realpathSync, readFileSync, readdirSync, lstatSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, isAbsolute, sep } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
+import {
+  assertOutsideRepository, collect, isShipped, manifestName, replacePaths, requireNode24, shipHelper, stat,
+  validateManagedDestination, withStage,
+} from './snapshot-lib.mjs';
 
 const file = fileURLToPath(import.meta.url);
-
-function stat(path) {
-  try { return lstatSync(path); }
-  catch (error) { if (error.code === 'ENOENT') return undefined; throw error; }
-}
+const label = 'Drafts';
+const siteName = 'site/drafts';
+const sourceName = 'modules/drafts';
+const scriptName = 'scripts/prepare-site.mjs';
+const pages = ['index.html', 'styles.css', 'assets'];
 
 const versionPattern = /^\d+\.\d+\.\d+$/;
 function validateRelease(release) {
@@ -19,20 +22,31 @@ function validateRelease(release) {
   if (store.protocol !== 'https:' || store.hostname !== 'chromewebstore.google.com' || !/^\/detail\/drafts\/[a-p]{32}$/.test(store.pathname) || store.port || store.username || store.password || store.search || store.hash) throw new Error('Invalid Drafts Chrome Web Store URL.');
 }
 
+/** The release the website advertises: the package version, which must match the extension and the native app. */
 export function releaseForApp(app, target, releaseFile) {
-  const manifest = JSON.parse(readFileSync(releaseFile ?? join(target, 'modules/drafts/publish-manifest.json'), 'utf8'));
+  const manifest = JSON.parse(readFileSync(releaseFile ?? join(target, sourceName, manifestName), 'utf8'));
   const version = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version;
   const extension = JSON.parse(readFileSync(join(app, 'extension/manifest.json'), 'utf8')).version;
-  if (!versionPattern.test(version) || extension !== version) throw new Error('Drafts package and Chrome extension versions must match before preparing its website.');
+  const native = readFileSync(join(app, 'native/Info.plist'), 'utf8').match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]*)<\/string>/)?.[1];
+  if (!versionPattern.test(version) || extension !== version || native !== version) throw new Error('Drafts package, Chrome extension and native app versions must match before preparing its website.');
   validateRelease(manifest);
   return { version, chrome: { version, url: manifest.chrome.url } };
+}
+
+/** A notice when the website advertises a version the recorded Chrome Web Store release does not match. */
+export function storeLagNotice(app, releaseFile) {
+  const recorded = JSON.parse(readFileSync(releaseFile, 'utf8'));
+  const { version } = releaseForApp(app, undefined, releaseFile);
+  if (recorded.chrome.version === version) return undefined;
+  return `Notice: the Drafts website now advertises ${version}, but releases/drafts.json records Chrome Web Store release ${recorded.chrome.version}. `
+    + `Confirm that ${version} is live in the store before running Publish websites, then record it in releases/drafts.json.`;
 }
 
 function renderRelease(html, release) {
   validateRelease(release);
   const escape = value => value.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
-  const replace = (pattern, value, label) => {
-    if ([...html.matchAll(pattern)].length !== 1) throw new Error('Missing or ambiguous Drafts website release field: ' + label);
+  const replace = (pattern, value, field) => {
+    if ([...html.matchAll(pattern)].length !== 1) throw new Error('Missing or ambiguous Drafts website release field: ' + field);
     html = html.replace(pattern, (_, before, after) => before + value + after);
   };
   replace(/(<a class="download" href=")[^"]+(">)/g, escape(release.chrome.url), 'Chrome download');
@@ -40,20 +54,6 @@ function renderRelease(html, release) {
   replace(/(<p class="download-meta">Version )[\d.]+( <span[^>]*>·<\/span> Free)/g, release.chrome.version, 'Chrome version');
   replace(/(<span class="footer-version">Drafts · )[\d.]+(<\/span>)/g, release.version, 'footer version');
   return html;
-}
-
-function collect(dir, base, files = {}) {
-  for (const name of readdirSync(dir).sort()) {
-    const path = join(dir, name);
-    const entry = lstatSync(path);
-    if (entry.isSymbolicLink()) throw new Error('Symbolic links are not published: ' + path);
-    if (entry.isDirectory()) collect(path, base, files);
-    else {
-      if (!entry.isFile()) throw new Error('Only regular Drafts website files are published: ' + path);
-      files[relative(base, path).replaceAll('\\', '/')] = createHash('sha256').update(readFileSync(path)).digest('hex');
-    }
-  }
-  return files;
 }
 
 /** Validate the complete website source and render release fields without writing. */
@@ -65,57 +65,65 @@ export function validateDraftsSources(input, release) {
     if (entry.isSymbolicLink()) throw new Error('Symbolic links are not published: ' + join(input, name));
     if (!(kind === 'file' ? entry.isFile() : entry.isDirectory())) throw new Error('Invalid Drafts website input: ' + name);
   }
-  collect(input, input);
+  collect(input);
   return renderRelease(readFileSync(join(input, 'index.html'), 'utf8'), release);
 }
 
+/** Read-only ownership check; the first run after an upgrade also accepts a manifest without source hashes. */
+export function validateDraftsDestination(target) {
+  return validateManagedDestination(target, {
+    label, app: 'drafts', site: siteName, source: sourceName, bootstrap: false, legacy: true,
+    required: { files: ['index.html', '.nojekyll'], sourceFiles: ['site/index.html', scriptName] },
+  });
+}
+
+/** Render the website from `website` (or the module's own copy) and replace the page, its source and the manifest together. */
 export function prepareDrafts(target, release, website) {
-  if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Drafts preparation requires Node.js 24 or newer.');
+  requireNode24('Drafts preparation');
   target = realpathSync(target);
-  if (website) {
-    const repository = resolve(dirname(file), '../../..');
-    const nested = relative(realpathSync(repository), target);
-    if (!nested || (!isAbsolute(nested) && nested !== '..' && !nested.startsWith('..' + sep))) throw new Error('Choose a separate Sites checkout outside the development repository.');
-  }
-  const module = join(target, 'modules/drafts');
-  const input = join(module, 'site');
-  const output = join(target, 'site/drafts');
-  const marker = join(module, 'publish-manifest.json');
-  if (!existsSync(join(target, '.git')) || !existsSync(join(target, 'site/index.html'))) throw new Error('Choose the existing shared Sites checkout.');
-  const manifest = JSON.parse(readFileSync(marker, 'utf8'));
-  if (manifest.app !== 'drafts' || manifest.site !== 'site/drafts') throw new Error('Invalid Drafts ownership manifest.');
-  for (const path of [join(target, "site"), join(target, 'site/index.html'), join(target, "modules"), module, marker, input, join(module, "scripts"), output, ...(website ? [website, dirname(website)] : [])]) if (stat(path)?.isSymbolicLink()) throw new Error('Refusing a symbolic-link Drafts folder.');
-  const origin = website ?? input;
-  if (website && existsSync(input)) collect(input, input);
+  assertOutsideRepository(file, target);
+  target = validateDraftsDestination(target);
+  const module = join(target, sourceName);
+  const output = join(target, siteName);
+  const manifest = JSON.parse(readFileSync(join(module, manifestName), 'utf8'));
+  for (const path of website ? [website, dirname(website)] : []) if (stat(path)?.isSymbolicLink()) throw new Error('Refusing a symbolic-link Drafts folder.');
+  const origin = website ?? join(module, 'site');
   const current = release ?? manifest;
-  const metadata = { app: manifest.app, version: current.version, chrome: { version: current.chrome?.version, url: current.chrome?.url }, site: manifest.site };
+  const metadata = { app: 'drafts', version: current.version, chrome: { version: current.chrome?.version, url: current.chrome?.url }, site: siteName };
   const html = validateDraftsSources(origin, metadata);
-  if (website) {
-    rmSync(input, { recursive: true, force: true });
-    mkdirSync(input, { recursive: true });
-    for (const name of ['index.html', 'styles.css', 'assets']) cpSync(join(origin, name), join(input, name), { recursive: true });
-  }
-  writeFileSync(join(input, 'index.html'), html);
-  rmSync(output, { recursive: true, force: true });
-  mkdirSync(output, { recursive: true });
-  for (const name of ['index.html', 'styles.css', 'assets']) cpSync(join(input, name), join(output, name), { recursive: true });
-  writeFileSync(join(output, '.nojekyll'), '');
-  writeFileSync(marker, JSON.stringify({ ...metadata, files: collect(output, output) }, null, 2) + '\n');
-  if (file !== join(module, 'scripts/prepare-site.mjs')) {
-    mkdirSync(join(module, 'scripts'), { recursive: true });
-    cpSync(file, join(module, 'scripts/prepare-site.mjs'));
-  }
+  withStage(target, '.drafts-prepare-', stage => {
+    const stagedSite = join(stage, 'site');
+    const stagedSource = join(stage, 'source');
+    const stagedInput = join(stagedSource, 'site');
+    mkdirSync(stagedInput, { recursive: true });
+    for (const name of pages) cpSync(join(origin, name), join(stagedInput, name), { recursive: true });
+    writeFileSync(join(stagedInput, 'index.html'), html);
+    mkdirSync(stagedSite);
+    for (const name of pages) cpSync(join(stagedInput, name), join(stagedSite, name), { recursive: true });
+    writeFileSync(join(stagedSite, '.nojekyll'), '');
+    shipHelper(file, stagedSource, scriptName);
+    const record = { format: 1, ...metadata, source: sourceName, files: collect(stagedSite), sourceFiles: collect(stagedSource) };
+    writeFileSync(join(stagedSource, manifestName), JSON.stringify(record, null, 2) + '\n');
+    // Detect edits or links introduced meanwhile before replacing anything.
+    validateDraftsDestination(target);
+    replacePaths([[stagedSite, output], [stagedSource, module]], stage, label);
+  });
   console.log(`Prepared Drafts ${metadata.version} (Chrome ${metadata.chrome.version}) in ${output}.`);
 }
 
 if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(file)) {
-  const standalone = file.endsWith('/scripts/prepare-site.mjs');
-  const target = process.argv[2] ? resolve(process.argv[2]) : resolve(dirname(file), standalone ? '../../..' : '../../../../sites');
   try {
-    if (standalone) prepareDrafts(target, process.argv[3] ? releaseForApp(resolve(process.argv[3]), target) : undefined);
-    else {
+    if (isShipped(file)) {
+      const target = resolve(process.argv[2] ?? join(dirname(file), '../../..'));
+      prepareDrafts(target, process.argv[3] ? releaseForApp(resolve(process.argv[3]), target) : undefined);
+    } else {
+      if (!process.argv[2]) throw new Error('Use make -C webapps/everydayapps/publishing publish-drafts from the development repository root.');
+      const target = resolve(process.argv[2]);
       const app = process.argv[3] ? resolve(process.argv[3]) : resolve(dirname(file), '../apps/drafts');
-      prepareDrafts(target, releaseForApp(app, target, join(dirname(file), 'releases/drafts.json')), join(dirname(file), 'templates/drafts'));
+      const releaseFile = join(dirname(file), 'releases/drafts.json');
+      prepareDrafts(target, releaseForApp(app, target, releaseFile), join(dirname(file), 'templates/drafts'));
+      const notice = storeLagNotice(app, releaseFile);
+      if (notice) console.log(notice);
     }
   }
   catch (error) { console.error(error.message); process.exitCode = 1; }

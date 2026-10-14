@@ -1,6 +1,11 @@
 import { Temporal } from '@js-temporal/polyfill';
 
-export interface Delta { years?: number; months?: number; weeks?: number; days?: number }
+export interface Delta {
+  years?: number;
+  months?: number;
+  weeks?: number;
+  days?: number;
+}
 
 export function shiftDate(iso: string, delta: Delta, sign: 1 | -1): string {
   const d = Temporal.PlainDate.from(iso);
@@ -15,6 +20,15 @@ export function diffDates(a: string, b: string) {
   const ymd = from.until(to, { largestUnit: 'years' });
   const totalDays = from.until(to, { largestUnit: 'days' }).days;
   return { years: ymd.years, months: ymd.months, days: ymd.days, totalDays, weeks: Math.trunc(totalDays / 7), remDays: totalDays % 7 };
+}
+
+/** A Unix timestamp as typed by the user. Blank or non-numeric text is an error, not 0 (which would show 1970-01-01). */
+export function parseTimestamp(raw: string): number {
+  const text = raw.trim();
+  if (!text) throw new Error('Enter a Unix timestamp.');
+  const value = Number(text);
+  if (!Number.isFinite(value)) throw new Error('Enter a valid number');
+  return value;
 }
 
 /** Accepts seconds or milliseconds (auto-detected by magnitude unless unit is given). */

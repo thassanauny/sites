@@ -7,7 +7,7 @@ PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
 PUBLISH_SCRIPT ?= scripts/prepare-shared.mjs
 DEST ?=
 
-.PHONY: all help runtime setup build run dev preview typecheck lint test test-js check prepare-shared
+.PHONY: all help runtime setup build run dev preview typecheck lint format test test-js check prepare-shared
 
 all: build
 
@@ -20,9 +20,10 @@ help:
 	  'Port override: append PORT=9000 to run, dev, or preview.' \
 	  'Default ports advance when busy; explicit PORT stays fixed. Use the printed URL.' \
 	  'make setup           Install missing npm dependencies (Node.js 24+)' \
-	  'make check           Run TypeScript checks, lint, and tests' \
+	  'make check           Run TypeScript checks, lint, format check, and tests' \
 	  'make typecheck       Check TypeScript without building assets' \
-	  'make lint            Run lint only' \
+	  'make lint            Run ESLint only' \
+	  'make format          Run the Biome format and lint check (no changes written)' \
 	  'make test            Run tests only' \
 	  'Publishing: run make -C webapps/everydayapps/publishing publish from the development repository root'
 
@@ -59,14 +60,18 @@ typecheck: setup
 lint: setup
 	$(NPM) run lint
 
+format: setup
+	$(NPM) run format
+
 test: setup
 	$(NPM) test
 
 test-js: test
 
-check: typecheck lint test
+check: typecheck lint format test
 
-# Compatibility entry point for prepared public source snapshots.
-prepare-shared: setup
+# Standalone entry point of the publishing flow: prepare the public source snapshot in an existing Sites checkout
+# (make prepare-shared DEST=<Sites checkout>). The publishing script retargets PUBLISH_SCRIPT and this target in its copy.
+prepare-shared: runtime
 	@test -n "$(DEST)" || { printf '%s\n' 'Set DEST to an existing shared Sites repository.' >&2; exit 1; }
 	$(NODE) "$(PUBLISH_SCRIPT)" "$(DEST)" "$(CURDIR)"

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Cloud, TextDropPage } from '../infrastructure/cloud/snippets';
+import { SessionDamagedError, type TextDropPage } from '../domain/snippets/model';
 import { PageSession } from './PageSession';
+import type { Cloud } from './ports';
 
 const id = '11111111-1111-4111-8111-111111111111';
 const code = '0123456789abcdef0123456789abcdef';
@@ -10,20 +11,27 @@ function page(text = '', version = 1): TextDropPage {
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: Error) => void;
-  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
   return { promise, resolve, reject };
 }
-function setup() {
+function setup(maxWait?: number) {
   const cloud: Cloud = {
     createPage: vi.fn(async () => page()),
     joinPage: vi.fn(async () => page()),
     loadPage: vi.fn(async () => page()),
     savePage: vi.fn(async (_id: string, text: string) => page(text, 2)),
+    startNewSession: vi.fn(async () => {}),
   };
-  const session = new PageSession(cloud, 50);
+  const session = new PageSession(cloud, 50, maxWait);
   return { cloud, session };
 }
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('online page session', () => {
   it('debounces edits and confirms text only after a successful save', async () => {
@@ -113,6 +121,53 @@ describe('online page session', () => {
     await session.refresh();
     expect(cloud.loadPage).toHaveBeenCalledTimes(2);
     expect(session.state.draft).toBe('Latest shared text');
+    expect(session.state.error).toBe('');
+    session.dispose();
+  });
+
+  it('reports what a refresh found and notifies listeners only when something changed', async () => {
+    const { cloud, session } = setup();
+    await session.join(code);
+    const listener = vi.fn();
+    session.subscribe(listener);
+    listener.mockClear();
+    await expect(session.refresh()).resolves.toBe('unchanged');
+    await expect(session.refresh()).resolves.toBe('unchanged');
+    expect(listener).not.toHaveBeenCalled();
+
+    vi.mocked(cloud.loadPage).mockResolvedValueOnce(page('Newer text', 2));
+    await expect(session.refresh()).resolves.toBe('changed');
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(session.state.draft).toBe('Newer text');
+
+    vi.mocked(cloud.loadPage).mockRejectedValueOnce(new Error('Connection lost'));
+    await expect(session.refresh()).resolves.toBe('failed');
+    expect(session.state.error).toBe('Connection lost');
+    listener.mockClear();
+    vi.mocked(cloud.loadPage).mockResolvedValueOnce(page('Newer text', 2));
+    await expect(session.refresh()).resolves.toBe('unchanged');
+    expect(session.state.error).toBe('');
+    expect(listener).toHaveBeenCalledTimes(1);
+    await session.refresh();
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    session.setOnline(false);
+    await expect(session.refresh()).resolves.toBe('skipped');
+    session.home();
+    await expect(session.refresh()).resolves.toBe('skipped');
+    session.dispose();
+  });
+
+  it('does not report a result for a poll that a newer page replaced', async () => {
+    const { cloud, session } = setup();
+    const slow = deferred<TextDropPage>();
+    vi.mocked(cloud.loadPage).mockReturnValueOnce(slow.promise);
+    await session.join(code);
+    const polling = session.refresh();
+    await Promise.resolve();
+    session.home();
+    slow.reject(new Error('Too late'));
+    await expect(polling).resolves.toBe('skipped');
     expect(session.state.error).toBe('');
     session.dispose();
   });
@@ -284,7 +339,11 @@ describe('online page session', () => {
   });
 
   it('reports a thrown UUID generator without sending a create request and permits a later retry', async () => {
-    vi.stubGlobal('crypto', { randomUUID: () => { throw new Error('Random generator failed'); } });
+    vi.stubGlobal('crypto', {
+      randomUUID: () => {
+        throw new Error('Random generator failed');
+      },
+    });
     const { cloud, session } = setup();
     expect(await session.create()).toBe(false);
     expect(cloud.createPage).not.toHaveBeenCalled();
@@ -297,7 +356,15 @@ describe('online page session', () => {
   });
 
   it('reports missing or denied secure random bytes without contacting Supabase', async () => {
-    for (const randomness of [undefined, {}, { getRandomValues: () => { throw new Error('Random bytes unavailable'); } }]) {
+    for (const randomness of [
+      undefined,
+      {},
+      {
+        getRandomValues: () => {
+          throw new Error('Random bytes unavailable');
+        },
+      },
+    ]) {
       vi.stubGlobal('crypto', randomness);
       const { cloud, session } = setup();
       expect(await session.create()).toBe(false);
@@ -319,9 +386,70 @@ describe('online page session', () => {
     session.dispose();
   });
 
+  it('saves during continuous typing at the latest after the maximum wait', async () => {
+    vi.useFakeTimers();
+    const { cloud, session } = setup(200);
+    await session.join(code);
+    for (let elapsed = 0; elapsed < 500; elapsed += 20) {
+      session.edit(`typing ${elapsed}`);
+      await vi.advanceTimersByTimeAsync(20);
+    }
+    // Keystrokes arrive faster than the 50 ms debounce, yet each 200 ms burst is sent.
+    expect(vi.mocked(cloud.savePage).mock.calls.map(([, text]) => text)).toEqual(['typing 180', 'typing 380']);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(cloud.savePage).toHaveBeenLastCalledWith(id, 'typing 480');
+    expect(session.state.dirty).toBe(false);
+    session.dispose();
+  });
+
+  it('flushes the pending edit at once but never retries a failed save on its own', async () => {
+    vi.useFakeTimers();
+    const { cloud, session } = setup();
+    await session.join(code);
+    await session.flush();
+    expect(cloud.savePage).not.toHaveBeenCalled();
+    session.edit('typed just before hiding');
+    await session.flush();
+    expect(cloud.savePage).toHaveBeenCalledExactlyOnceWith(id, 'typed just before hiding');
+    expect(session.state.dirty).toBe(false);
+    await session.flush();
+    expect(cloud.savePage).toHaveBeenCalledTimes(1);
+    vi.mocked(cloud.savePage).mockRejectedValueOnce(new Error('Connection lost'));
+    session.edit('keep this');
+    await session.save();
+    await session.flush();
+    expect(cloud.savePage).toHaveBeenCalledTimes(2);
+    expect(session.state.error).toBe('Connection lost');
+    expect(session.state.dirty).toBe(true);
+    session.dispose();
+  });
+
+  it('sends an edit made during a save right after that save when the page is hidden', async () => {
+    vi.useFakeTimers();
+    const { cloud, session } = setup();
+    const saving = deferred<TextDropPage>();
+    vi.mocked(cloud.savePage).mockReturnValueOnce(saving.promise);
+    await session.join(code);
+    session.edit('first');
+    void session.save();
+    await vi.advanceTimersByTimeAsync(0);
+    session.edit('second');
+    const flushed = session.flush();
+    saving.resolve(page('first', 2));
+    await flushed;
+    // No debounce wait: the hidden page may be frozen before another timer could fire.
+    expect(vi.mocked(cloud.savePage).mock.calls.map(([, text]) => text)).toEqual(['first', 'second']);
+    expect(session.state.dirty).toBe(false);
+    await session.flush();
+    expect(cloud.savePage).toHaveBeenCalledTimes(2);
+    session.dispose();
+  });
+
   it('allows retry after a synchronous service failure', async () => {
     const { cloud, session } = setup();
-    vi.mocked(cloud.savePage).mockImplementationOnce(() => { throw new Error('Failed immediately'); });
+    vi.mocked(cloud.savePage).mockImplementationOnce(() => {
+      throw new Error('Failed immediately');
+    });
     await session.join(code);
     session.edit('retry me');
     await session.save();
@@ -329,6 +457,45 @@ describe('online page session', () => {
     await session.save();
     expect(cloud.savePage).toHaveBeenCalledTimes(2);
     expect(session.state.dirty).toBe(false);
+    session.dispose();
+  });
+
+  it('polls with the known version when the cloud supports it, and treats null as unchanged', async () => {
+    const { cloud, session } = setup();
+    cloud.pollPage = vi.fn(async () => null);
+    await session.join(code);
+    await expect(session.refresh()).resolves.toBe('unchanged');
+    expect(cloud.pollPage).toHaveBeenCalledWith(id, 1);
+    expect(cloud.loadPage).not.toHaveBeenCalled();
+    vi.mocked(cloud.pollPage).mockResolvedValueOnce(page('Newer', 2));
+    await expect(session.refresh()).resolves.toBe('changed');
+    expect(session.state.draft).toBe('Newer');
+    await session.refresh();
+    expect(cloud.pollPage).toHaveBeenLastCalledWith(id, 2);
+    session.dispose();
+  });
+
+  it('flags a damaged saved session until the error changes, and starts a new one on request', async () => {
+    const { cloud, session } = setup();
+    vi.mocked(cloud.joinPage).mockRejectedValueOnce(new SessionDamagedError('Session is damaged.'));
+    await session.join(code);
+    expect(session.state).toMatchObject({ error: 'Session is damaged.', sessionDamaged: true });
+    await expect(session.startNewSession()).resolves.toBe(true);
+    expect(cloud.startNewSession).toHaveBeenCalledTimes(1);
+    expect(session.state).toMatchObject({ error: '', sessionDamaged: false });
+    vi.mocked(cloud.joinPage).mockRejectedValueOnce(new Error('Other failure'));
+    await session.join(code);
+    expect(session.state).toMatchObject({ error: 'Other failure', sessionDamaged: false });
+    session.dispose();
+  });
+
+  it('keeps offering a new session when starting one fails', async () => {
+    const { cloud, session } = setup();
+    vi.mocked(cloud.joinPage).mockRejectedValueOnce(new SessionDamagedError('Session is damaged.'));
+    await session.join(code);
+    vi.mocked(cloud.startNewSession).mockRejectedValueOnce(new Error('Storage is full'));
+    await expect(session.startNewSession()).resolves.toBe(false);
+    expect(session.state).toMatchObject({ error: 'Storage is full', sessionDamaged: true });
     session.dispose();
   });
 });

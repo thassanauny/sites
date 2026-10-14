@@ -1,20 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCloud } from './snippets';
-import { MAX_TEXT_BYTES } from '../../domain/snippets/model';
+import { MAX_TEXT_BYTES, SessionDamagedError } from '../../domain/snippets/model';
 import { TEXTDROP_AUTH_KEY } from '../auth/sessionStorage';
 
 const mock = vi.hoisted(() => {
   const getSession = vi.fn();
   const signInAnonymously = vi.fn();
   const rpc = vi.fn();
-  const client = { auth: { getSession, signInAnonymously }, rpc };
-  return { getSession, signInAnonymously, rpc, createClient: vi.fn(() => client) };
+  const stopAutoRefresh = vi.fn();
+  const client = { auth: { getSession, signInAnonymously, stopAutoRefresh }, rpc };
+  return { getSession, signInAnonymously, stopAutoRefresh, rpc, createClient: vi.fn(() => client) };
 });
-vi.mock('@supabase/supabase-js', async (original) => ({ ...await original<object>(), createClient: mock.createClient }));
+vi.mock('@supabase/supabase-js', async original => ({ ...(await original<object>()), createClient: mock.createClient }));
 
 const page = {
-  id: '22222222-2222-4222-8222-222222222222', code: 'a'.repeat(32),
-  text: 'Shared text', version: 1, updatedAt: '2026-10-10T01:00:00.123456+00:00',
+  id: '22222222-2222-4222-8222-222222222222',
+  code: 'a'.repeat(32),
+  text: 'Shared text',
+  version: 1,
+  updatedAt: '2026-10-10T01:00:00.123456+00:00',
 };
 
 function cloud() {
@@ -43,14 +47,21 @@ describe('online snippet sharing', () => {
     // This is a browser-session migration fixture, so it retains the old key.
     const legacyKey = 'paste-auth';
     const credentials = JSON.stringify({ access_token: 'old-access', refresh_token: 'old-refresh', expires_at: 1 });
-    const values = new Map([[legacyKey, credentials], [TEXTDROP_AUTH_KEY, '{malformed']]);
+    const values = new Map([
+      [legacyKey, credentials],
+      [TEXTDROP_AUTH_KEY, '{malformed'],
+    ]);
     const storage = {
       getItem: vi.fn((key: string) => values.get(key) ?? null),
-      setItem: vi.fn((key: string, value: string) => { values.set(key, value); }),
-      removeItem: vi.fn((key: string) => { values.delete(key); }),
+      setItem: vi.fn((key: string, value: string) => {
+        values.set(key, value);
+      }),
+      removeItem: vi.fn((key: string) => {
+        values.delete(key);
+      }),
     };
     vi.stubGlobal('window', { localStorage: storage });
-    await expect(cloud().loadPage(page.id)).rejects.toThrow('Could not preserve your existing TextDrop session');
+    await expect(cloud().loadPage(page.id)).rejects.toBeInstanceOf(SessionDamagedError);
     expect(values.get(legacyKey)).toBe(credentials);
     expect(values.get(TEXTDROP_AUTH_KEY)).toBe('{malformed');
     expect(storage.setItem).not.toHaveBeenCalled();
@@ -61,7 +72,13 @@ describe('online snippet sharing', () => {
   });
 
   it('reports browser storage read failures before creating a cloud client', async () => {
-    vi.stubGlobal('window', { localStorage: { getItem: () => { throw new Error('Storage denied'); } } });
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: () => {
+          throw new Error('Storage denied');
+        },
+      },
+    });
     await expect(cloud().loadPage(page.id)).rejects.toThrow('Could not preserve your existing TextDrop session');
     expect(mock.createClient).not.toHaveBeenCalled();
     expect(mock.signInAnonymously).not.toHaveBeenCalled();
@@ -75,6 +92,7 @@ describe('online snippet sharing', () => {
     expect(mock.signInAnonymously).not.toHaveBeenCalled();
     expect(mock.createClient).toHaveBeenCalledWith('https://test-project.supabase.co', 'public-test-key', {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'textdrop-auth' },
+      global: { fetch: expect.any(Function) },
     });
   });
 
@@ -166,7 +184,8 @@ describe('online snippet sharing', () => {
     await expect(shared.createPage(page.id)).rejects.toThrow('Check your connection');
     await expect(shared.createPage(page.id)).resolves.toEqual(page);
     expect(mock.rpc.mock.calls.slice(0, 2)).toEqual([
-      ['textdrop_create_page', { p_id: page.id }], ['textdrop_create_page', { p_id: page.id }],
+      ['textdrop_create_page', { p_id: page.id }],
+      ['textdrop_create_page', { p_id: page.id }],
     ]);
     mock.rpc.mockResolvedValueOnce({ data: null, error: { message: 'Failed to fetch' } });
     await expect(shared.savePage(page.id, 'Changes')).rejects.toThrow('Check your connection');
@@ -222,11 +241,79 @@ describe('online snippet sharing', () => {
     await expect(shared.loadPage(page.id)).rejects.toThrow('Enable anonymous sign-ins');
   });
 
-  it('distinguishes an existing database upgrade from a fresh setup when a new RPC is missing', async () => {
+  it('polls conditionally: an unchanged reply is null, a changed reply is the whole snippet', async () => {
+    const shared = cloud();
+    mock.rpc.mockResolvedValueOnce({ data: { id: page.id, unchanged: true, version: 1 }, error: null });
+    await expect(shared.pollPage?.(page.id, 1)).resolves.toBeNull();
+    expect(mock.rpc).toHaveBeenLastCalledWith('textdrop_poll_page', { p_id: page.id, p_known: 1 });
+    const newer = { ...page, text: 'Newer', version: 2 };
+    mock.rpc.mockResolvedValueOnce({ data: newer, error: null });
+    await expect(shared.pollPage?.(page.id, 1)).resolves.toEqual(newer);
+    for (const reply of [
+      { id: page.id, unchanged: true, version: 2 },
+      { id: 'x', unchanged: true, version: 1 },
+      { id: page.id, unchanged: true, version: 1, text: 'leak' },
+    ]) {
+      mock.rpc.mockResolvedValueOnce({ data: reply, error: null });
+      await expect(shared.pollPage?.(page.id, 1)).rejects.toThrow('invalid snippet data');
+    }
+    mock.rpc.mockResolvedValueOnce({ data: { ...newer, id: '33333333-3333-4333-8333-333333333333' }, error: null });
+    await expect(shared.pollPage?.(page.id, 1)).rejects.toThrow('different snippet');
+    mock.rpc.mockResolvedValueOnce({ data: null, error: { message: 'TEXTDROP_ACCESS_DENIED' } });
+    await expect(shared.pollPage?.(page.id, 1)).rejects.toThrow('no longer have access');
+    expect(mock.rpc.mock.calls.every(([name]) => name === 'textdrop_poll_page')).toBe(true);
+  });
+
+  it('falls back to a full load for good when the project lacks the conditional poll function', async () => {
+    for (const code of ['PGRST202', '42883']) {
+      vi.clearAllMocks();
+      mock.getSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } }, error: null });
+      const shared = cloud();
+      mock.rpc.mockResolvedValueOnce({ data: null, error: { code, message: 'missing function' } });
+      mock.rpc.mockResolvedValue({ data: page, error: null });
+      await expect(shared.pollPage?.(page.id, 1)).resolves.toEqual(page);
+      await expect(shared.pollPage?.(page.id, 1)).resolves.toEqual(page);
+      expect(mock.rpc.mock.calls.map(([name]) => name)).toEqual(['textdrop_poll_page', 'textdrop_load_page', 'textdrop_load_page']);
+    }
+  });
+
+  it('does not treat a missing table or other poll errors as a missing function', async () => {
+    const shared = cloud();
+    mock.rpc.mockResolvedValueOnce({ data: null, error: { code: '42P01', message: 'missing table' } });
+    await expect(shared.pollPage?.(page.id, 1)).rejects.toThrow('needs database setup');
+    expect(mock.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts a new session by setting damaged credentials aside and using a fresh client', async () => {
+    const values = new Map([[TEXTDROP_AUTH_KEY, '{malformed']]);
+    const storage = {
+      getItem: vi.fn((key: string) => values.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        values.set(key, value);
+      }),
+      removeItem: vi.fn((key: string) => {
+        values.delete(key);
+      }),
+    };
+    vi.stubGlobal('window', { localStorage: storage });
+    const shared = cloud();
+    await expect(shared.loadPage(page.id)).rejects.toBeInstanceOf(SessionDamagedError);
+    expect(mock.createClient).not.toHaveBeenCalled();
+    await shared.startNewSession();
+    expect(values.has(TEXTDROP_AUTH_KEY)).toBe(false);
+    expect(values.get(`${TEXTDROP_AUTH_KEY}-damaged`)).toBe('{malformed');
+    mock.getSession.mockResolvedValueOnce({ data: { session: null }, error: null });
+    await expect(shared.loadPage(page.id)).resolves.toEqual(page);
+    expect(mock.signInAnonymously).toHaveBeenCalledTimes(1);
+  });
+
+  it('points to the one-time schema setup when an RPC is missing', async () => {
     mock.rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202', message: 'missing function' } });
-    const error = await cloud().loadPage(page.id).catch(failure => failure as Error);
+    const error = await cloud()
+      .loadPage(page.id)
+      .catch(failure => failure as Error);
     expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toContain('upgrade-to-textdrop.sql for an earlier installation');
-    expect((error as Error).message).toContain('schema.sql for a new project');
+    expect((error as Error).message).toContain('Run supabase/schema.sql once');
+    expect((error as Error).message).not.toMatch(/upgrade|earlier installation/i);
   });
 });

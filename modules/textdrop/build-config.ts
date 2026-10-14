@@ -10,6 +10,8 @@ export function validatePublicConfig(url: string, key: string): void {
   try {
     const pieces = key.split('.');
     if (pieces.length === 3 && JSON.parse(Buffer.from(pieces[1]!, 'base64url').toString()).role === 'anon') return;
-  } catch { /* A malformed key is never included in the output. */ }
+  } catch {
+    /* A malformed key is never included in the output. */
+  }
   throw new Error('TextDrop requires a public Supabase publishable or anon key. Secret and service_role keys cannot be exposed by this app.');
 }

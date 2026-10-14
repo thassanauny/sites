@@ -4,10 +4,11 @@ NODE ?= node
 NPM ?= npm
 # Capture overrides before assigning defaults, including exported environment values.
 PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
+# Publishing rewrites this exact line (see publishing/snapshot-lib.mjs) in standalone snapshots: keep its shape.
 PUBLISH_SCRIPT ?= scripts/prepare-shared.mjs
 DEST ?=
 
-.PHONY: all help node-check setup build run dev test typecheck check preview prepare-shared
+.PHONY: all help node-check setup build run dev test typecheck lint format check preview prepare-shared
 
 all: build
 
@@ -22,9 +23,12 @@ help:
 	  'make setup       Install missing npm dependencies (Node.js 24+)' \
 	  'make test        Run automated behavior tests' \
 	  'make typecheck   Check TypeScript without building assets' \
-	  'make check       Run TypeScript checks and automated tests' \
+	  'make lint        Check formatting and lint rules with Biome (no changes)' \
+	  'make format      Apply Biome formatting and safe lint fixes' \
+	  'make check       Run TypeScript, Biome and automated tests' \
+	  'make prepare-shared DEST=<Sites checkout>  Prepare a public source snapshot (used by publishing)' \
 	  'Publishing: run make -C webapps/everydayapps/publishing publish from the development repository root' \
-	  'Supabase defaults: ../../publishing/.env.local; app settings override defaults, exported environment overrides both.'
+	  'Supabase settings: see webapps/everydayapps/AGENTS.md.'
 
 node-check:
 	@command -v "$(NODE)" >/dev/null 2>&1 || { printf '%s\n' 'Install Node.js 24 or newer; see README.md.' >&2; exit 1; }
@@ -36,6 +40,7 @@ setup: node-check
 	    [ package.json -nt node_modules/.package-lock.json ] || \
 	    [ package-lock.json -nt node_modules/.package-lock.json ] || \
 	    [ ! -x node_modules/.bin/tsc ] || \
+	    [ ! -x node_modules/.bin/biome ] || \
 	    [ ! -x node_modules/.bin/vite ] || \
 	    [ ! -x node_modules/.bin/vitest ]; then \
 	  "$(NPM)" ci --include=dev; \
@@ -52,12 +57,17 @@ dev: run
 
 test: setup
 	"$(NPM)" test
-	"$(NODE)" --test scripts/publishing.test.mjs
 
 typecheck: setup
 	"$(NPM)" exec tsc -- -b
 
-check: typecheck test
+lint: setup
+	"$(NPM)" run lint
+
+format: setup
+	"$(NPM)" run format
+
+check: typecheck lint test
 
 preview: PORT ?= 4173
 preview: build
@@ -67,3 +77,8 @@ preview: build
 prepare-shared: node-check
 	@test -n "$(DEST)" || { printf '%s\n' 'Set DEST to an existing shared Sites repository.' >&2; exit 1; }
 	"$(NODE)" "$(PUBLISH_SCRIPT)" "$(DEST)" "$(CURDIR)"
+
+.PHONY: check-site
+check-site: node-check
+	@test -n "$(SITE)" || { printf '%s\n' 'Set SITE to the prepared website folder.' >&2; exit 1; }
+	"$(NODE)" scripts/check-cloud-build.mjs "$(SITE)"

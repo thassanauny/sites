@@ -1,20 +1,25 @@
 import { normalizeInviteCode } from '../../domain/boards/board';
 
 export const DEVICE_BOARDS_PREFIX = 'pinboard-removed-board:';
-type BoardStorage = Pick<
-  Storage,
-  'getItem' | 'setItem' | 'length' | 'key'
->;
+type BoardStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'length' | 'key'>;
 const restoredKey = (key: string, marker: string) => `${key}:restored:${marker}`;
 function activeRemoval(storage: BoardStorage, key: string): string | null {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const marker = storage.getItem(key);
-    const restored =
-      marker !== null && storage.getItem(restoredKey(key, marker)) === '1';
+    const restored = marker !== null && storage.getItem(restoredKey(key, marker)) === '1';
     // The marker can change in another tab while its acknowledgement is read.
     if (storage.getItem(key) === marker) return restored ? null : marker;
   }
   throw new Error('Board removal changed while reading. Try again.');
+}
+
+/** The acknowledgement of a replaced marker can never apply again, so it is only clutter; a failure here is harmless. */
+function forget(storage: BoardStorage, name: string): void {
+  try {
+    storage.removeItem(name);
+  } catch {
+    // The leftover key is ignored on every read.
+  }
 }
 
 /** Only removal preferences are saved here, never board contents or credentials. */
@@ -33,15 +38,12 @@ export class DeviceBoards {
         const key = storage.key(index);
         if (key?.startsWith(DEVICE_BOARDS_PREFIX)) {
           const code = key.slice(DEVICE_BOARDS_PREFIX.length);
-          if (/^[a-f0-9]{32}$/.test(code) && activeRemoval(storage, key) !== null)
-            codes.add(code);
+          if (/^[a-f0-9]{32}$/.test(code) && activeRemoval(storage, key) !== null) codes.add(code);
         }
       }
       return codes;
     } catch {
-      throw new Error(
-        'Could not read boards on this device. Allow browser storage and try again.',
-      );
+      throw new Error('Could not read boards on this device. Allow browser storage and try again.');
     }
   }
 
@@ -50,17 +52,18 @@ export class DeviceBoards {
     try {
       return activeRemoval(this.getStorage(), key);
     } catch {
-      throw new Error(
-        'Could not read boards on this device. Allow browser storage and try again.',
-      );
+      throw new Error('Could not read boards on this device. Allow browser storage and try again.');
     }
   }
 
   remove(code: string): void {
     const key = DEVICE_BOARDS_PREFIX + normalizeInviteCode(code);
     try {
+      const storage = this.getStorage();
+      const previous = storage.getItem(key);
       // A different marker lets an older Join response respect a newer removal.
-      this.getStorage().setItem(key, crypto.randomUUID());
+      storage.setItem(key, crypto.randomUUID());
+      if (previous !== null) forget(storage, restoredKey(key, previous));
     } catch {
       throw new Error(
         'Could not remove the board from this device. Allow browser storage and try again.',

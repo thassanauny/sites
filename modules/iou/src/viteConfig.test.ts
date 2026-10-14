@@ -139,10 +139,7 @@ describe('iou shared publishing configuration', () => {
       'import.meta.env.VITE_SUPABASE_ANON_KEY': '""',
     })
     expect(definitions).toThrow(/iou production builds require/)
-    for (const settings of [
-      'VITE_SUPABASE_URL=https://shared.supabase.co\n',
-      'VITE_SUPABASE_ANON_KEY=sb_publishable_shared\n',
-    ]) {
+    for (const settings of ['VITE_SUPABASE_URL=https://shared.supabase.co\n', 'VITE_SUPABASE_ANON_KEY=sb_publishable_shared\n']) {
       write(publishingDirectory, '.env.local', settings)
       expect(definitions).toThrow(/iou production builds require/)
     }
@@ -158,7 +155,7 @@ describe('iou shared publishing configuration', () => {
   })
 
   it('keeps base path settings app-owned and preserves validation', () => {
-    write(publishingDirectory, '.env.local', sharedValues + 'VITE_BASE_PATH=/shared/\n')
+    write(publishingDirectory, '.env.local', `${sharedValues}VITE_BASE_PATH=/shared/\n`)
     expect(configure({ mode: 'production', command: 'build' }).base).toBe('./')
     write(appDirectory, '.env.local', 'VITE_BASE_PATH=/iou\n')
     expect(configure({ mode: 'production', command: 'build' }).base).toBe('/iou/')

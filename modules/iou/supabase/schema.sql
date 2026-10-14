@@ -1,5 +1,7 @@
 -- iou: run once in the Supabase SQL editor, as the project administrator.
 -- Keep the private schema OUT of the Data API's exposed schemas.
+-- This file creates tables, so it cannot be run again on a project that has them. To pick up a later change to the
+-- validation rules, run only the changed "create or replace function private.iou_valid_*" statements (see README.md).
 begin;
 
 create schema if not exists private;
@@ -23,7 +25,9 @@ begin
   -- Match JavaScript's UTF-16 length and trim semantics, including emoji and BOM.
   return char_length(value) + char_length(regexp_replace(value, E'[^\U00010000-\U0010ffff]', '', 'g')) <= p_max
     and (not p_required or value !~ E'^[\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*$')
-    and translate(value, chr(9) || chr(10) || chr(13), '') !~ '[[:cntrl:]]';
+    -- The same set as the client (CONTROL_PATTERN): C0 controls except tab, LF and CR, and DEL. Spelled out, because
+    -- [[:cntrl:]] also matches U+0080-U+009F (and, in some locales, more) depending on the database locale.
+    and value !~ E'[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]';
 end;
 $$;
 
@@ -82,7 +86,7 @@ declare
   shares_total numeric;
   shares_count integer;
 begin
-  if p_payload is null or octet_length(p_payload::text) > 8000000 then return false; end if;
+  if p_payload is null or octet_length(p_payload::text) > 4000000 then return false; end if;
   if not private.iou_has_keys(p_payload, array['id','name','description','currency','icon','color','inviteCode','createdAt','updatedAt','members','transactions'])
     or not private.iou_valid_id(p_payload->'id')
     or not private.iou_valid_text(p_payload->'name', 80)

@@ -29,15 +29,9 @@ describe('local board removal preferences', () => {
   it('persists one removal, saves no board contents, and preserves other apps and authentication', () => {
     const { device, storage, values } = fixture();
     device.remove(first.toUpperCase());
-    expect(new DeviceBoards(() => storage).removedCodes()).toEqual(
-      new Set([first]),
-    );
+    expect(new DeviceBoards(() => storage).removedCodes()).toEqual(new Set([first]));
     expect(device.removal(first)).toMatch(/^[a-f\d-]{36}$/);
-    expect([...values.keys()]).toEqual([
-      'pinboard-auth',
-      'iou-store',
-      key(first),
-    ]);
+    expect([...values.keys()]).toEqual(['pinboard-auth', 'iou-store', key(first)]);
     expect(values.get('pinboard-auth')).toBe('existing session');
     expect(values.get('iou-store')).toBe('existing groups');
   });
@@ -76,7 +70,7 @@ describe('local board removal preferences', () => {
     expect(device.restore(first, earlier)).toBe(false);
     expect(device.removal(first)).not.toBe(earlier);
     expect(device.removedCodes()).toEqual(new Set([first]));
-    expect(storage.removeItem).not.toHaveBeenCalled();
+    expect(storage.removeItem).not.toHaveBeenCalledWith(key(first));
   });
 
   it('lets two joins acknowledge the same removal and requires a fresh join after another removal', () => {
@@ -120,15 +114,12 @@ describe('local board removal preferences', () => {
         }
         return values.get(name) ?? null;
       });
-      if (operation === 'removal')
-        expect(device.removal(first)).toBe(values.get(key(first)));
-      if (operation === 'list')
-        expect(device.removedCodes()).toEqual(new Set([first]));
-      if (operation === 'restore')
-        expect(device.restore(first, earlier)).toBe(false);
+      if (operation === 'removal') expect(device.removal(first)).toBe(values.get(key(first)));
+      if (operation === 'list') expect(device.removedCodes()).toEqual(new Set([first]));
+      if (operation === 'restore') expect(device.restore(first, earlier)).toBe(false);
       expect(interleaved).toBe(true);
       expect(device.removal(first)).not.toBeNull();
-      expect(storage.removeItem).not.toHaveBeenCalled();
+      expect(storage.removeItem).not.toHaveBeenCalledWith(key(first));
     },
   );
 
@@ -163,6 +154,53 @@ describe('local board removal preferences', () => {
       expect(device.restore(first, device.removal(first))).toBe(true);
     },
   );
+
+  describe('acknowledgements of replaced removals', () => {
+    const acknowledgement = (marker: string | null) => `${key(first)}:restored:${marker}`;
+
+    it('are deleted when a newer removal replaces them, leaving the marker and other apps alone', () => {
+      const { device, storage, values } = fixture();
+      device.remove(first);
+      const earlier = device.removal(first);
+      expect(device.restore(first, earlier)).toBe(true);
+      expect(values.has(acknowledgement(earlier))).toBe(true);
+      device.remove(first);
+      expect(values.has(acknowledgement(earlier))).toBe(false);
+      expect(device.removal(first)).not.toBeNull();
+      expect(device.removal(first)).not.toBe(earlier);
+      expect(storage.removeItem.mock.calls).toEqual([[acknowledgement(earlier)]]);
+      expect([...values.keys()]).toEqual(['pinboard-auth', 'iou-store', key(first)]);
+    });
+
+    it('stay at one per board however many times it is removed and joined again', () => {
+      const { device, values } = fixture();
+      for (let cycle = 0; cycle < 5; cycle += 1) {
+        device.remove(first);
+        expect(device.restore(first, device.removal(first))).toBe(true);
+      }
+      expect([...values.keys()].filter((name) => name.includes(':restored:'))).toHaveLength(1);
+      expect(device.removedCodes()).toEqual(new Set());
+    });
+
+    it('are not looked for after the first removal of a board', () => {
+      const { device, storage } = fixture();
+      device.remove(first);
+      expect(storage.removeItem).not.toHaveBeenCalled();
+    });
+
+    it('do not stop a removal when they cannot be deleted', () => {
+      const { device, storage } = fixture();
+      device.remove(first);
+      const earlier = device.removal(first);
+      device.restore(first, earlier);
+      storage.removeItem.mockImplementationOnce(() => {
+        throw new Error('SecurityError');
+      });
+      expect(() => device.remove(first)).not.toThrow();
+      expect(device.removal(first)).not.toBe(earlier);
+      expect(device.removedCodes()).toEqual(new Set([first]));
+    });
+  });
 
   it('rejects invalid codes without reading or changing storage', () => {
     const { device, storage } = fixture();
@@ -207,9 +245,7 @@ describe('local board removal preferences', () => {
     storage.setItem.mockImplementationOnce(() => {
       throw new Error('SecurityError');
     });
-    expect(() => device.restore(first, marker)).toThrow(
-      'Could not restore the board',
-    );
+    expect(() => device.restore(first, marker)).toThrow('Could not restore the board');
     expect(device.removal(first)).toBe(marker);
   });
 });

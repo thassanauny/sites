@@ -6,16 +6,16 @@ import { mount as media } from '../src/features/media/mediaConverter';
 import { mount as crop } from '../src/features/images/cropImage';
 import { mount as documentConverter } from '../src/features/documents/documentConverter';
 
-vi.mock('../src/infrastructure/capabilities', () => ({ detectCapabilities: () => [
-  { id: 'ffmpeg', label: 'FFmpeg', state: 'Supported', detail: 'Test environment' },
-] }));
+vi.mock('../src/infrastructure/capabilities', () => ({ detectCapabilities: () => [{ id: 'ffmpeg', label: 'FFmpeg', state: 'Supported', detail: 'Test environment' }] }));
 let root: HTMLElement;
 beforeEach(() => {
   localStorage.clear();
   document.body.innerHTML = '<main id="main"></main>';
   root = document.getElementById('main')!;
 });
-afterEach(() => { root.dispatchEvent(new Event('utility-desk:leave')); });
+afterEach(() => {
+  root.dispatchEvent(new Event('utility-desk:leave'));
+});
 
 const cases: { id: string; mount: (root: HTMLElement) => void | (() => void); source: Record<string, string>; defaults: Record<string, string>; prefs: Record<string, string> }[] = [
   { id: 'split-pdf', mount: split, source: { range: '1,3' }, defaults: { range: '' }, prefs: { mode: 'range' } },

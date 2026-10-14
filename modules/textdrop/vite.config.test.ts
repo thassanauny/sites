@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,13 +10,11 @@ const settings = vi.hoisted(() => ({
   real: false,
 }));
 
-vi.mock('vite', async (importOriginal) => {
+vi.mock('vite', async importOriginal => {
   const actual = await importOriginal<typeof import('vite')>();
   return {
     ...actual,
-    loadEnv: (mode: string, path: string, prefixes: string) => settings.real
-      ? actual.loadEnv(mode, path, prefixes)
-      : path.endsWith('/publishing') ? settings.shared : settings.local,
+    loadEnv: (mode: string, path: string, prefixes: string) => (settings.real ? actual.loadEnv(mode, path, prefixes) : path.endsWith('/publishing') ? settings.shared : settings.local),
   };
 });
 
@@ -112,6 +110,17 @@ describe('TextDrop static configuration', () => {
       'import.meta.env.VITE_SUPABASE_ANON_KEY': '"sb_publishable_local"',
       __APP_VERSION__: JSON.stringify(version),
     });
+  });
+});
+
+describe('TextDrop version', () => {
+  it('is the same in package.json, the lockfile and the README', () => {
+    const lock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf8')) as { version: string; packages: Record<string, { version: string }> };
+    expect(lock.version).toBe(version);
+    expect(lock.packages['']!.version).toBe(version);
+    // A published snapshot leaves README.md out, so there is nothing to compare there.
+    const readme = new URL('./README.md', import.meta.url);
+    if (existsSync(readme)) expect(readFileSync(readme, 'utf8')).toContain(`Source version: **${version}**`);
   });
 });
 

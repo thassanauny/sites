@@ -4,12 +4,12 @@ import { parsePageRanges } from '../src/domain/pdf/ranges';
 import { extractPages, splitEachPage } from '../src/domain/pdf/operations';
 import { dateToTimestamp } from '../src/domain/datetime/dates';
 import { sizeImage } from '../src/domain/images/operations';
-import { mediaArgs, mediaSeconds } from '../src/features/media/mediaConverter';
-import { persistForm, input, taskControls } from '../src/ui/elements';
+import { mediaArgs, mediaSeconds } from '../src/domain/media/ffmpeg';
+import { persistForm, taskControls } from '../src/application/tasks';
+import { input } from '../src/ui/elements';
 import { store } from '../src/infrastructure/storage';
 import { convertDocument, epubToHtml } from '../src/domain/documents/conversion';
-import { readZip } from '../src/shared/zip';
-import { strFromU8 } from 'fflate';
+import { strFromU8, unzipSync } from 'fflate';
 import { downloadBlob } from '../src/shared/util';
 
 describe('original functionality parity', () => {
@@ -49,7 +49,7 @@ describe('original functionality parity', () => {
   it('overrides EPUB title and author with escaped metadata', () => {
     const out = convertDocument({ format: 'txt', text: 'Hello', title: 'Original', titleOverride: 'New & book', author: 'A < B' }, 'epub') as Uint8Array;
     expect(epubToHtml(out).title).toBe('New & book');
-    expect(strFromU8(readZip(out)['OEBPS/content.opf'])).toContain('<dc:creator>A &lt; B</dc:creator>');
+    expect(strFromU8(unzipSync(out)['OEBPS/content.opf'])).toContain('<dc:creator>A &lt; B</dc:creator>');
   });
 });
 
@@ -68,14 +68,17 @@ describe('navigation during work', () => {
     document.getElementById('main')!.dispatchEvent(new Event('utility-desk:leave'));
     expect(revoke).toHaveBeenCalledWith('blob:fixture');
     expect(document.querySelector('a')).toBeNull();
-    click.mockRestore(); vi.unstubAllGlobals();
+    click.mockRestore();
+    vi.unstubAllGlobals();
   });
   it('flushes form choices immediately on navigation', () => {
     document.body.innerHTML = '<main></main>';
     const root = document.querySelector('main')!;
-    const control = input('text', 'parity', ''); root.append(control);
+    const control = input('text', 'parity', '');
+    root.append(control);
     persistForm('parity-test', root);
-    control.value = 'edited'; control.dispatchEvent(new Event('input', { bubbles: true }));
+    control.value = 'edited';
+    control.dispatchEvent(new Event('input', { bubbles: true }));
     root.dispatchEvent(new Event('utility-desk:leave'));
     expect(store.getDraft('parity-test').parity).toBe('edited');
   });
@@ -83,8 +86,12 @@ describe('navigation during work', () => {
     document.body.innerHTML = '<main></main>';
     const root = document.querySelector('main')!;
     let signal: AbortSignal | undefined;
-    const run = vi.fn(async (ctx) => { signal = ctx.signal; await new Promise<void>((resolve) => ctx.signal.addEventListener('abort', () => resolve(), { once: true })); });
-    const task = taskControls('parity-test', 'Work', run); root.append(task.el);
+    const run = vi.fn(async (ctx) => {
+      signal = ctx.signal;
+      await new Promise<void>((resolve) => ctx.signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    const task = taskControls('parity-test', 'Work', run);
+    root.append(task.el);
     const completion = task.run();
     root.dispatchEvent(new Event('utility-desk:leave'));
     await completion;

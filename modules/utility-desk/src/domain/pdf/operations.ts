@@ -7,7 +7,12 @@ export async function pageCount(bytes: Uint8Array): Promise<number> {
   return doc.getPageCount();
 }
 
-export interface MergeSource { bytes: Uint8Array; /** 1-based pages; all pages when omitted */ pages?: number[] }
+export interface MergeSource {
+  /** The PDF, or a function that reads it when its turn comes, so the sources of one merge are not all held at once. */
+  bytes: Uint8Array | (() => Promise<Uint8Array>);
+  /** 1-based pages; all pages when omitted */
+  pages?: number[];
+}
 
 async function loadForCopy(bytes: Uint8Array, signal?: AbortSignal): Promise<PDFDocument> {
   throwIfAborted(signal);
@@ -22,10 +27,13 @@ export async function mergePdfs(sources: MergeSource[], signal?: AbortSignal, on
   throwIfAborted(signal);
   const out = await PDFDocument.create();
   for (let i = 0; i < sources.length; i++) {
-    const src = await loadForCopy(sources[i].bytes, signal);
+    const bytes = typeof sources[i].bytes === 'function' ? await (sources[i].bytes as () => Promise<Uint8Array>)() : (sources[i].bytes as Uint8Array);
+    const src = await loadForCopy(bytes, signal);
     const idx = (sources[i].pages ?? src.getPageIndices().map((n) => n + 1)).map((n) => n - 1);
     const pages = await out.copyPages(src, idx);
-    pages.forEach((p) => out.addPage(p));
+    pages.forEach((p) => {
+      out.addPage(p);
+    });
     onProgress?.((i + 1) / sources.length);
   }
   throwIfAborted(signal);
@@ -38,27 +46,51 @@ export function extractPages(bytes: Uint8Array, pages: number[], signal?: AbortS
   return mergePdfs([{ bytes, pages }], signal, onProgress);
 }
 
-export async function splitEachPage(bytes: Uint8Array, signal?: AbortSignal, onProgress?: (p: number) => void, selected?: number[]): Promise<Uint8Array[]> {
+/** Saves each selected page (all pages by default) as its own PDF and hands it to `onPart` at once, so a caller need not keep them all. */
+export async function splitPages(bytes: Uint8Array, onPart: (part: Uint8Array, page: number) => void | Promise<void>, signal?: AbortSignal, onProgress?: (p: number) => void, selected?: number[]): Promise<void> {
   const src = await loadForCopy(bytes, signal);
   const pages = selected ?? src.getPageIndices().map((i) => i + 1);
   const n = pages.length;
-  const out: Uint8Array[] = [];
   for (let i = 0; i < n; i++) {
     throwIfAborted(signal);
     const d = await PDFDocument.create();
     const [p] = await d.copyPages(src, [pages[i] - 1]);
     d.addPage(p);
-    out.push(await d.save());
+    await onPart(await d.save(), pages[i]);
     onProgress?.((i + 1) / n);
   }
   throwIfAborted(signal);
+}
+
+export async function splitEachPage(bytes: Uint8Array, signal?: AbortSignal, onProgress?: (p: number) => void, selected?: number[]): Promise<Uint8Array[]> {
+  const out: Uint8Array[] = [];
+  await splitPages(
+    bytes,
+    (part) => {
+      out.push(part);
+    },
+    signal,
+    onProgress,
+    selected,
+  );
   return out;
 }
 
 export type PageSizeName = 'A4' | 'Letter' | 'Fit';
 export type Fit = 'contain' | 'cover' | 'stretch' | 'original';
-export interface ImageToPdfOptions { pageSize: PageSizeName; orientation: 'portrait' | 'landscape' | 'auto'; fit: Fit; dpi: number; marginPt: number }
-export interface PdfImage { bytes: Uint8Array; type: 'png' | 'jpg'; width: number; height: number }
+export interface ImageToPdfOptions {
+  pageSize: PageSizeName;
+  orientation: 'portrait' | 'landscape' | 'auto';
+  fit: Fit;
+  dpi: number;
+  marginPt: number;
+}
+export interface PdfImage {
+  bytes: Uint8Array;
+  type: 'png' | 'jpg';
+  width: number;
+  height: number;
+}
 
 export function pageDimensions(size: PageSizeName, orientation: 'portrait' | 'landscape' | 'auto', img: { width: number; height: number }, dpi: number): [number, number] {
   if (size === 'Fit') return [(img.width / dpi) * 72, (img.height / dpi) * 72];
@@ -70,13 +102,19 @@ export function pageDimensions(size: PageSizeName, orientation: 'portrait' | 'la
 
 /** Placement of an image on a page, in PDF points (origin bottom-left). */
 export function layoutImage(img: { width: number; height: number }, page: [number, number], fit: Fit, dpi: number, margin: number) {
-  const aw = Math.max(1, page[0] - margin * 2), ah = Math.max(1, page[1] - margin * 2);
+  const aw = Math.max(1, page[0] - margin * 2),
+    ah = Math.max(1, page[1] - margin * 2);
   let w: number, h: number;
-  if (fit === 'stretch') { w = aw; h = ah; }
-  else if (fit === 'original') { w = (img.width / dpi) * 72; h = (img.height / dpi) * 72; }
-  else {
+  if (fit === 'stretch') {
+    w = aw;
+    h = ah;
+  } else if (fit === 'original') {
+    w = (img.width / dpi) * 72;
+    h = (img.height / dpi) * 72;
+  } else {
     const s = fit === 'contain' ? Math.min(aw / img.width, ah / img.height) : Math.max(aw / img.width, ah / img.height);
-    w = img.width * s; h = img.height * s;
+    w = img.width * s;
+    h = img.height * s;
   }
   return { x: (page[0] - w) / 2, y: (page[1] - h) / 2, width: w, height: h };
 }

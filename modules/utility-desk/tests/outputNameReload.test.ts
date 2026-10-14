@@ -8,25 +8,34 @@ import { mount as images } from '../src/features/pdf/imagesToPdf';
 import { mount as merge } from '../src/features/pdf/mergePdfs';
 import { mount as crop } from '../src/features/images/cropImage';
 import { mount as compressImage } from '../src/features/images/compressImage';
-vi.mock('../src/infrastructure/capabilities', () => ({ detectCapabilities: () => [
-  { id: 'ffmpeg', label: 'FFmpeg', state: 'Supported', detail: 'Test environment' },
-] }));
+vi.mock('../src/infrastructure/capabilities', () => ({ detectCapabilities: () => [{ id: 'ffmpeg', label: 'FFmpeg', state: 'Supported', detail: 'Test environment' }] }));
 let root: HTMLElement;
 beforeEach(() => {
   localStorage.clear();
   window.document.body.innerHTML = '<main id="main"></main>';
   root = window.document.getElementById('main')!;
 });
-afterEach(() => { root.dispatchEvent(new Event('utility-desk:leave')); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  root.dispatchEvent(new Event('utility-desk:leave'));
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 it.each([
-  ['document-converter', document], ['media-converter', media], ['compress-pdf', compress],
-  ['unlock-pdf', unlock], ['images-to-pdf', images], ['merge-pdfs', merge], ['crop-image', crop], ['compress-image', compressImage],
+  ['document-converter', document],
+  ['media-converter', media],
+  ['compress-pdf', compress],
+  ['unlock-pdf', unlock],
+  ['images-to-pdf', images],
+  ['merge-pdfs', merge],
+  ['crop-image', crop],
+  ['compress-image', compressImage],
 ] as const)('%s resets its output name instead of restoring a saved name', (id, mount) => {
-  store.setDraft(id, {outName: 'old_output', outputName: 'old_output'});
+  store.setDraft(id, { outName: 'old_output', outputName: 'old_output' });
   const cleanup = mount(root);
   const control = root.querySelector<HTMLInputElement>('[name=outName], [name=outputName]')!;
   expect(control.value).toBe(id === 'merge-pdfs' ? 'merged' : '');
-  control.value = 'edited'; control.dispatchEvent(new Event('input', {bubbles: true}));
+  control.value = 'edited';
+  control.dispatchEvent(new Event('input', { bubbles: true }));
   root.dispatchEvent(new Event('utility-desk:leave'));
   if (id !== 'unlock-pdf') {
     expect(store.getDraft(id).outName).toBeUndefined();
@@ -84,9 +93,20 @@ const singleSourceTools = [
   { id: 'crop-image', mount: crop, extension: 'png', suffix: 'cropped' },
 ] as const;
 for (const tool of singleSourceTools) {
-  it.each(['Keep my name', ''])(`preserves output name %j when ${tool.id} reselects the same source, then resets for changed or invalid sources`, async chosenName => {
-    vi.stubGlobal('URL', class extends URL { static createObjectURL() { return 'blob:fixture'; } static revokeObjectURL() {} });
-    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 100, height: 100, close: vi.fn() })));
+  it.each(['Keep my name', ''])(`preserves output name %j when ${tool.id} reselects the same source, then resets for changed or invalid sources`, async (chosenName) => {
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static createObjectURL() {
+          return 'blob:fixture';
+        }
+        static revokeObjectURL() {}
+      },
+    );
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(async () => ({ width: 100, height: 100, close: vi.fn() })),
+    );
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage() {} } as unknown as CanvasRenderingContext2D);
     const cleanup = tool.mount(root);
     const file = (name = `source.${tool.extension}`, lastModified = 123) => new File(['fixture'], name, { lastModified });
@@ -97,7 +117,7 @@ for (const tool of singleSourceTools) {
       if (tool.id === 'crop-image') await vi.waitFor(() => expect(root.textContent).toContain('source.png: 100×100'));
       control.value = chosenName;
       addImages([file()]);
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
       expect(control.value).toBe(chosenName);
       addImages([file(undefined, 124)]);
       await vi.waitFor(() => expect(control.value).toBe(`source_${tool.suffix}`));
@@ -108,6 +128,8 @@ for (const tool of singleSourceTools) {
       addImages([tooLarge]);
       expect(control.value).toBe('');
       expect(root.textContent).toMatch(/exceeds|browser limit/);
-    } finally { if (typeof cleanup === 'function') cleanup(); }
+    } finally {
+      if (typeof cleanup === 'function') cleanup();
+    }
   });
 }

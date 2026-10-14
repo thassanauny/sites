@@ -1,4 +1,4 @@
-import { PDFDocument, PDFName, PDFNumber, PDFRawStream } from 'pdf-lib';
+import { type PDFDocument, PDFName, PDFNumber, PDFRawStream } from 'pdf-lib';
 import { throwIfAborted } from '../../shared/util';
 
 // pdf-lib's delimiter fallback can consume a stream's final CR/LF when /Length
@@ -10,7 +10,8 @@ export async function restoreStreamLengths(doc: PDFDocument, original: Uint8Arra
     const length = object.dict.lookup(PDFName.of('Length'));
     const contents = object.getContents();
     if (!(length instanceof PDFNumber) || length.asNumber() === contents.length) continue;
-    const expected = length.asNumber(), missing = expected - contents.length;
+    const expected = length.asNumber(),
+      missing = expected - contents.length;
     const failure = () => new Error('Could not read a complete PDF stream. Its declared length does not match the source data.');
     if (!contents.length || !Number.isInteger(expected) || missing < 1 || missing > 2) throw failure();
     let recovered: Uint8Array | undefined;
@@ -31,7 +32,10 @@ export async function restoreStreamLengths(doc: PDFDocument, original: Uint8Arra
       if (!matches || ![101, 110, 100, 115, 116, 114, 101, 97, 109].every((byte, i) => original[marker + i] === byte)) continue;
       for (let i = 0; i < contents.length; i++) {
         if (++comparisons > original.length * 4) throw failure();
-        if (original[start + i] !== contents[i]) { matches = false; break; }
+        if (original[start + i] !== contents[i]) {
+          matches = false;
+          break;
+        }
       }
       if (!matches) continue;
       const candidate = original.slice(start, end);

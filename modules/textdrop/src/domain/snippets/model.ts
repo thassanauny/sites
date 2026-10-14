@@ -6,7 +6,23 @@ export interface TextDropPage {
   updatedAt: string;
 }
 
+/** The saved browser session is unreadable or conflicts with itself; "Start a new session" is the way out. */
+export class SessionDamagedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SessionDamagedError';
+  }
+}
+
 export const MAX_TEXT_BYTES = 1_048_576;
+export const MAX_SNIPPET_NAME_LENGTH = 80;
+
+/** A snippet this device has opened: its invitation code, when it was last opened and an optional local name. */
+export interface DeviceSnippet {
+  code: string;
+  openedAt: string;
+  name?: string;
+}
 const PAGE_KEYS = ['id', 'code', 'text', 'version', 'updatedAt'];
 const encoder = new TextEncoder();
 
@@ -20,6 +36,7 @@ export function validateUuid(input: unknown): string {
 /** Accept spaces, tabs, line breaks, and hyphens when someone copies a code. */
 export function normalizeCode(input: unknown): string {
   if (typeof input !== 'string') throw new Error('Enter the complete 32-character snippet code.');
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: the tab-to-carriage-return range is the whitespace set the database ignores too
   const normalized = input.replace(/[\u0009-\u000d\u0020-]+/g, '').toLowerCase();
   if (!/^[a-f\d]{32}$/.test(normalized)) throw new Error('Enter the complete 32-character snippet code.');
   return normalized;
@@ -29,13 +46,52 @@ export function textBytes(input: string): number {
   return encoder.encode(input).byteLength;
 }
 
+/**
+ * Whether the text is over the limit. Each UTF-16 unit takes one to three UTF-8 bytes,
+ * so only lengths between a third and the whole limit need an exact count.
+ */
+export function exceedsLimit(input: string): boolean {
+  if (input.length > MAX_TEXT_BYTES) return true;
+  if (input.length * 3 <= MAX_TEXT_BYTES) return false;
+  return textBytes(input) > MAX_TEXT_BYTES;
+}
+
+/** The first and last six characters of a code, as the snippet list shows it. */
+export function shortCode(code: string): string {
+  return `${code.slice(0, 6)}…${code.slice(-6)}`;
+}
+
+/**
+ * A file name for downloaded text: the snippet's name on this device, otherwise today's date.
+ * It never contains the code, because files travel and the code is the credential.
+ */
+export function exportFileName(name: string | undefined, now: Date): string {
+  const cleaned = (name ?? '')
+    .replace(/[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '') // text-direction controls can disguise a file extension
+    .replace(/[\\/:*?"<>|\p{Cc}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^\.+/, '')
+    .trim();
+  if (cleaned) return `${cleaned}.txt`;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `textdrop-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.txt`;
+}
+
+/** Lines separated by line feeds; an empty text has one. */
+export function countLines(input: string): number {
+  let lines = 1;
+  for (let at = input.indexOf('\n'); at !== -1; at = input.indexOf('\n', at + 1)) lines += 1;
+  return lines;
+}
+
 /** Preserve exact text; PostgreSQL text cannot store NUL or malformed Unicode. */
 export function validateText(input: unknown): string {
   if (typeof input !== 'string') throw new Error('The snippet must contain text.');
   if (input.includes('\u0000') || /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(input)) {
     throw new Error('The text contains a character that cannot be saved.');
   }
-  if (textBytes(input) > MAX_TEXT_BYTES) throw new Error('A snippet supports up to 1 MiB of UTF-8 text.');
+  if (exceedsLimit(input)) throw new Error('A snippet supports up to 1 MiB of UTF-8 text.');
   return input;
 }
 

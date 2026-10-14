@@ -1,20 +1,18 @@
-import { normalizeCode } from '../../domain/snippets/model';
-
-export interface DeviceSnippet {
-  code: string;
-  openedAt: string;
-  name?: string;
-}
+import { MAX_SNIPPET_NAME_LENGTH, normalizeCode, type DeviceSnippet } from '../../domain/snippets/model';
 
 export const DEVICE_SNIPPETS_KEY = 'textdrop-snippets';
-export const MAX_SNIPPET_NAME_LENGTH = 80;
-type SnippetStorage = Pick<Storage, 'getItem' | 'setItem' | 'length' | 'key'>;
+type SnippetStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'length' | 'key'>;
 const prefix = `${DEVICE_SNIPPETS_KEY}:`;
 const removalPrefix = `${prefix}removed:`;
 const openingPrefix = `${prefix}opened:`;
 const namePrefix = `${prefix}name:`;
-interface StoredSnippet extends DeviceSnippet { removalToken?: string }
-interface StoredState { row: string | null; marker: string | null }
+interface StoredSnippet extends DeviceSnippet {
+  removalToken?: string;
+}
+interface StoredState {
+  row: string | null;
+  marker: string | null;
+}
 
 function newestFirst(snippets: DeviceSnippet[]): DeviceSnippet[] {
   return snippets.sort((left, right) => right.openedAt.localeCompare(left.openedAt) || left.code.localeCompare(right.code));
@@ -24,52 +22,43 @@ function normalizedName(name: string): string {
   return name.replace(/\s+/g, ' ').trim();
 }
 
-function readName(code: string, saved: string | null): string | undefined {
-  if (saved === null) return undefined;
-  try {
-    const row: unknown = JSON.parse(saved);
-    if (!row || typeof row !== 'object' || Array.isArray(row)) return undefined;
-    const { code: storedCode, name } = row as Record<string, unknown>;
-    if (normalizeCode(storedCode) !== code || typeof name !== 'string') return undefined;
-    const normalized = normalizedName(name);
-    return normalized && normalized.length <= MAX_SNIPPET_NAME_LENGTH ? normalized : undefined;
-  } catch { return undefined; }
-}
-
-function readEntry(code: string, saved: string | null): StoredSnippet | null {
+/** The JSON object stored for a code, or null when it is missing, malformed or belongs to another code. */
+function readRow(code: string, saved: string | null): Record<string, unknown> | null {
   if (saved === null) return null;
   try {
     const row: unknown = JSON.parse(saved);
     if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
-    const { code: storedCode, openedAt, removed, removalToken } = row as Record<string, unknown>;
-    if (normalizeCode(storedCode) !== code || removed === true || typeof openedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(openedAt)) return null;
-    const date = new Date(openedAt);
-    if (!Number.isFinite(date.getTime()) || date.toISOString() !== openedAt) return null;
-    if (removalToken !== undefined && (typeof removalToken !== 'string' || !removalToken)) return null;
-    return { code, openedAt, ...(removalToken === undefined ? {} : { removalToken }) };
+    return normalizeCode((row as Record<string, unknown>).code) === code ? (row as Record<string, unknown>) : null;
   } catch {
     return null;
   }
 }
 
+function readName(code: string, saved: string | null): string | undefined {
+  const name = readRow(code, saved)?.name;
+  if (typeof name !== 'string') return undefined;
+  const normalized = normalizedName(name);
+  return normalized && normalized.length <= MAX_SNIPPET_NAME_LENGTH ? normalized : undefined;
+}
+
+function readEntry(code: string, saved: string | null): StoredSnippet | null {
+  const row = readRow(code, saved);
+  if (!row) return null;
+  const { openedAt, removed, removalToken } = row;
+  if (removed === true || typeof openedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(openedAt)) return null;
+  const date = new Date(openedAt);
+  if (!Number.isFinite(date.getTime()) || date.toISOString() !== openedAt) return null;
+  if (removalToken !== undefined && (typeof removalToken !== 'string' || !removalToken)) return null;
+  return { code, openedAt, ...(removalToken === undefined ? {} : { removalToken }) };
+}
+
 function inlineRemoved(code: string, saved: string | null): boolean {
-  if (saved === null) return false;
-  try {
-    const row: unknown = JSON.parse(saved);
-    if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
-    const { code: storedCode, removed } = row as Record<string, unknown>;
-    return removed === true && normalizeCode(storedCode) === code;
-  } catch { return false; }
+  return readRow(code, saved)?.removed === true;
 }
 
 function readRemovalToken(code: string, saved: string | null): string | null {
-  if (saved === null) return null;
-  try {
-    const row: unknown = JSON.parse(saved);
-    if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
-    const { code: storedCode, removed, token } = row as Record<string, unknown>;
-    return removed === true && normalizeCode(storedCode) === code && typeof token === 'string' && token ? token : null;
-  } catch { return null; }
+  const row = readRow(code, saved);
+  return row?.removed === true && typeof row.token === 'string' && row.token ? row.token : null;
 }
 
 function snapshotOf(state: StoredState): string | null {
@@ -95,6 +84,11 @@ export class DeviceSnippets {
     this.now = now;
   }
 
+  /** Whether a `storage` event key shows that another tab changed the list (a null key means all storage was cleared). */
+  changedBy(key: string | null): boolean {
+    return key === null || key.startsWith(prefix);
+  }
+
   private storage(): SnippetStorage {
     try {
       return this.getStorage();
@@ -116,6 +110,20 @@ export class DeviceSnippets {
       throw new Error('Could not read snippets saved on this device. Check browser storage permissions.');
     }
     throw new Error('Snippets on this device changed while reading. Try again.');
+  }
+
+  /** A new removal epoch never shows the rows of earlier epochs again. Deleting them keeps storage from growing with every remove and reopen. */
+  private pruneEarlierEpochs(storage: SnippetStorage, code: string, current: string): void {
+    try {
+      const earlier: string[] = [];
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key !== null && key !== current && (key === openingKey(code, null) || key.startsWith(`${openingPrefix}${code}:`))) earlier.push(key);
+      }
+      for (const key of earlier) storage.removeItem(key);
+    } catch {
+      /* The rows are only garbage: nothing reads an earlier epoch's opening. */
+    }
   }
 
   private read(storage: SnippetStorage): DeviceSnippet[] {
@@ -170,8 +178,11 @@ export class DeviceSnippets {
     } catch {
       throw new Error('Could not save the snippet name on this device. Check browser storage permissions or available space.');
     }
-    try { return this.read(storage); }
-    catch { return previous.filter(snippet => snippet.code !== normalized); }
+    try {
+      return this.read(storage);
+    } catch {
+      return previous.filter(snippet => snippet.code !== normalized);
+    }
   }
 
   remember(code: string, expected?: string | null): DeviceSnippet[] {
@@ -184,17 +195,22 @@ export class DeviceSnippets {
     const opened = this.now();
     if (!Number.isFinite(opened.getTime())) throw new Error('Could not record when this snippet was opened.');
     const removalToken = readRemovalToken(normalized, observed.marker);
+    const key = openingKey(normalized, removalToken);
     try {
       // Never rewrite a removal or another epoch's opening. A late reply can
       // neither undo a removal nor hide a successful rejoin after that removal.
-      storage.setItem(openingKey(normalized, removalToken), JSON.stringify({ code: normalized, openedAt: opened.toISOString(), ...(removalToken === null ? {} : { removalToken }) }));
+      storage.setItem(key, JSON.stringify({ code: normalized, openedAt: opened.toISOString(), ...(removalToken === null ? {} : { removalToken }) }));
     } catch {
       throw new Error('Could not save the snippet on this device. Check browser storage permissions or available space.');
     }
+    if (removalToken !== null && observed.row === null) this.pruneEarlierEpochs(storage, normalized, key);
     // The row is committed. If visibility cannot be checked, omit it until the
     // next successful read instead of displaying a possibly concurrent removal.
-    try { return this.read(storage); }
-    catch { return previous.filter(row => row.code !== normalized); }
+    try {
+      return this.read(storage);
+    } catch {
+      return previous.filter(row => row.code !== normalized);
+    }
   }
 
   remove(code: string): DeviceSnippet[] {
@@ -207,7 +223,10 @@ export class DeviceSnippets {
     } catch {
       throw new Error('Could not remove the snippet from this device. Check browser storage permissions.');
     }
-    try { return this.read(storage); }
-    catch { return previous.filter(row => row.code !== normalized); }
+    try {
+      return this.read(storage);
+    } catch {
+      return previous.filter(row => row.code !== normalized);
+    }
   }
 }

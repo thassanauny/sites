@@ -25,4 +25,9 @@ describe('snippet invitations on any static hosting path', () => {
     expect(() => joinCode('https://example.test/#/')).toThrow(/does not contain/);
     expect(() => joinCode('javascript:alert(1)')).toThrow();
   });
+  it('explains a malformed link instead of showing the browser error', () => {
+    for (const link of ['http://', 'https://', `http://exa mple.test/#/p/${code}`, 'https://[::1']) {
+      expect(() => joinCode(link)).toThrow('That link does not contain a snippet code. Copy the invitation link again.');
+    }
+  });
 });

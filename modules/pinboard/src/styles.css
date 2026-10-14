@@ -1,18 +1,12 @@
 :root {
-  font-family:
-    Inter,
-    ui-sans-serif,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #283d34;
   background: #fafbf8;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   --green: #246b52;
-  --muted: #7d8981;
+  --muted: #63735d;
   --border: #e4e9e2;
   --color: #839287;
   --soft: #e9eee9;
@@ -45,7 +39,7 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 3px solid #93bda4;
+  outline: 3px solid var(--green);
   outline-offset: 3px;
 }
 button {
@@ -188,7 +182,6 @@ a {
 }
 .sidebar-empty {
   font-size: 11px;
-  color: #98a097;
   line-height: 1.8;
   margin: 12px;
 }
@@ -341,7 +334,7 @@ a {
   margin-bottom: 47px;
 }
 .home h1 {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   letter-spacing: -1.6px;
   font-size: 54px;
   line-height: 1.06;
@@ -384,7 +377,7 @@ a {
   color: #8f9e81;
 }
 .welcome-copy h2 {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 31px;
   letter-spacing: -0.5px;
   line-height: 1.2;
@@ -693,7 +686,7 @@ a {
   margin-bottom: 11px;
 }
 .board-heading h1 {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   letter-spacing: -0.6px;
   font-weight: 400;
   font-size: 34px;
@@ -1140,7 +1133,7 @@ a {
   margin-bottom: 23px;
 }
 .dialog-heading h2 {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 25px;
   font-weight: 400;
   letter-spacing: -0.4px;
@@ -1806,7 +1799,9 @@ a {
   *,
   *::before,
   *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must beat every component rule. */
     animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must beat every component rule. */
     transition-duration: 0.01ms !important;
   }
 }

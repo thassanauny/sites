@@ -5,12 +5,15 @@ import { mount as mountImages } from '../src/features/pdf/pdfToImages';
 import { mount as mountSplit } from '../src/features/pdf/splitPdf';
 
 vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, AnnotationMode: { DISABLE: 0, ENABLE: 1 }, getDocument: vi.fn() }));
-vi.mock('../src/domain/pdf/operations', () => ({ pageCount: vi.fn(), splitEachPage: vi.fn(), extractPages: vi.fn() }));
+vi.mock('../src/domain/pdf/operations', () => ({ pageCount: vi.fn(), splitPages: vi.fn(), extractPages: vi.fn() }));
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: Error) => void;
-  const promise = new Promise<T>((complete, fail) => { resolve = complete; reject = fail; });
+  const promise = new Promise<T>((complete, fail) => {
+    resolve = complete;
+    reject = fail;
+  });
   return { promise, resolve, reject };
 }
 function choose(root: HTMLElement, name: string, marker: number): void {
@@ -26,24 +29,34 @@ function document(pages: number) {
 let root: HTMLElement;
 let cleanup: (() => void) | undefined;
 beforeEach(() => {
-  localStorage.clear(); vi.clearAllMocks();
+  localStorage.clear();
+  vi.clearAllMocks();
   window.document.body.innerHTML = '<main id="main"></main>';
   root = window.document.getElementById('main')!;
 });
-afterEach(() => { root.dispatchEvent(new Event('utility-desk:leave')); cleanup?.(); cleanup = undefined; vi.restoreAllMocks(); });
+afterEach(() => {
+  root.dispatchEvent(new Event('utility-desk:leave'));
+  cleanup?.();
+  cleanup = undefined;
+  vi.restoreAllMocks();
+});
 
 describe('PDF source selection', () => {
   it('keeps the latest image-export source and releases superseded loads', async () => {
-    const older = deferred<ReturnType<typeof document>>(), newer = deferred<ReturnType<typeof document>>();
+    const older = deferred<ReturnType<typeof document>>(),
+      newer = deferred<ReturnType<typeof document>>();
     const olderLoad = { promise: older.promise, destroy: vi.fn().mockResolvedValue(undefined) };
     const newerLoad = { promise: newer.promise, destroy: vi.fn().mockResolvedValue(undefined) };
-    vi.mocked(pdfjs.getDocument).mockReturnValueOnce(olderLoad as unknown as pdfjs.PDFDocumentLoadingTask).mockReturnValueOnce(newerLoad as unknown as pdfjs.PDFDocumentLoadingTask);
+    vi.mocked(pdfjs.getDocument)
+      .mockReturnValueOnce(olderLoad as unknown as pdfjs.PDFDocumentLoadingTask)
+      .mockReturnValueOnce(newerLoad as unknown as pdfjs.PDFDocumentLoadingTask);
     cleanup = mountImages(root);
     choose(root, 'older.pdf', 1);
     await vi.waitFor(() => expect(pdfjs.getDocument).toHaveBeenCalledOnce());
     choose(root, 'newer.pdf', 2);
     await vi.waitFor(() => expect(pdfjs.getDocument).toHaveBeenCalledTimes(2));
-    const newDocument = document(3), oldDocument = document(2);
+    const newDocument = document(3),
+      oldDocument = document(2);
     newer.resolve(newDocument);
     await vi.waitFor(() => expect(root.textContent).toContain('newer.pdf: 3 pages.'));
     older.resolve(oldDocument);
@@ -60,8 +73,10 @@ describe('PDF source selection', () => {
     cleanup = mountImages(root);
     choose(root, 'pending.pdf', 1);
     await vi.waitFor(() => expect(pdfjs.getDocument).toHaveBeenCalledOnce());
-    cleanup(); cleanup = undefined;
-    const loaded = document(2); pending.resolve(loaded);
+    cleanup();
+    cleanup = undefined;
+    const loaded = document(2);
+    pending.resolve(loaded);
     await vi.waitFor(() => expect(loaded.destroy).toHaveBeenCalledOnce());
     expect(load.destroy).toHaveBeenCalledOnce();
     expect(root.textContent).not.toContain('pending.pdf: 2 pages.');
@@ -69,7 +84,7 @@ describe('PDF source selection', () => {
 
   it('keeps the newest split-PDF source when earlier page counting finishes late', async () => {
     const older = deferred<number>();
-    vi.mocked(pageCount).mockImplementation(async (bytes) => bytes[0] === 1 ? older.promise : 3);
+    vi.mocked(pageCount).mockImplementation(async (bytes) => (bytes[0] === 1 ? older.promise : 3));
     const dispose = mountSplit(root);
     cleanup = typeof dispose === 'function' ? dispose : undefined;
     choose(root, 'older.pdf', 1);
@@ -77,7 +92,9 @@ describe('PDF source selection', () => {
     choose(root, 'newer.pdf', 2);
     await vi.waitFor(() => expect(root.textContent).toContain('newer.pdf: 3 pages'));
     older.resolve(2);
-    await older.promise; await Promise.resolve(); await Promise.resolve();
+    await older.promise;
+    await Promise.resolve();
+    await Promise.resolve();
     expect(root.textContent).toContain('newer.pdf: 3 pages');
     expect(root.textContent).not.toContain('older.pdf: 2 pages');
   });
@@ -88,7 +105,9 @@ describe('PDF source selection', () => {
     const page = { getViewport: () => ({ width: 100, height: 150 }), render: vi.fn(() => rendering), cleanup: vi.fn() };
     const source = { ...document(1), getPage: vi.fn().mockResolvedValue(page) };
     vi.mocked(pdfjs.getDocument).mockReturnValue({ promise: Promise.resolve(source), destroy: vi.fn() } as unknown as pdfjs.PDFDocumentLoadingTask);
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement) { return { canvas: this } as unknown as CanvasRenderingContext2D; });
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement) {
+      return { canvas: this } as unknown as CanvasRenderingContext2D;
+    });
     cleanup = mountImages(root);
     choose(root, 'render.pdf', 1);
     await vi.waitFor(() => expect(root.textContent).toContain('render.pdf: 1 pages.'));

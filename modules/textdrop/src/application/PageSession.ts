@@ -1,5 +1,6 @@
-import type { Cloud, TextDropPage } from '../infrastructure/cloud/snippets';
-import { validateText } from '../domain/snippets/model';
+import { SessionDamagedError, validateText, type TextDropPage } from '../domain/snippets/model';
+import { errorMessage } from './errorMessage';
+import type { Cloud } from './ports';
 
 export interface SessionState {
   page: TextDropPage | null;
@@ -8,7 +9,12 @@ export interface SessionState {
   dirty: boolean;
   online: boolean;
   error: string;
+  /** The error comes from a damaged saved browser session, which "Start a new session" repairs. */
+  sessionDamaged: boolean;
 }
+
+/** What a poll found: newer text, nothing new, a failure, or nothing to ask (offline, no page, replaced page). */
+export type RefreshResult = 'changed' | 'unchanged' | 'failed' | 'skipped';
 
 function newPageId(): string {
   const randomness = globalThis.crypto;
@@ -24,48 +30,74 @@ function newPageId(): string {
 /** Text and failed drafts stay in memory; this controller has no durable edit queue. */
 export class PageSession {
   state: SessionState = {
-    page: null, draft: '', phase: 'home', dirty: false, online: true, error: '',
+    page: null,
+    draft: '',
+    phase: 'home',
+    dirty: false,
+    online: true,
+    error: '',
+    sessionDamaged: false,
   };
   private generation = 0;
   private edits = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private saveInFlight: Promise<void> | undefined;
-  private refreshInFlight: Promise<void> | undefined;
+  private refreshInFlight: Promise<RefreshResult> | undefined;
   private createId: string | undefined;
+  private firstEditAt: number | undefined;
   private listeners = new Set<(state: SessionState) => void>();
   private cloud: Cloud;
   private delay: number;
+  private maxWait: number;
 
-  constructor(cloud: Cloud, delay = 650) {
+  /** `delay` is the pause after the last keystroke; `maxWait` is the longest an edit waits while typing continues. */
+  constructor(cloud: Cloud, delay = 650, maxWait = 10_000) {
     this.cloud = cloud;
     this.delay = delay;
+    this.maxWait = maxWait;
   }
 
   subscribe(listener: (state: SessionState) => void): () => void {
     this.listeners.add(listener);
     listener(this.state);
-    return () => { this.listeners.delete(listener); };
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   private update(patch: Partial<SessionState>): void {
-    this.state = { ...this.state, ...patch };
-    this.listeners.forEach(listener => listener(this.state));
+    // Any new error text replaces the old cause; only `failure` knows whether the session is damaged.
+    const cause = 'error' in patch && !('sessionDamaged' in patch) ? { sessionDamaged: false } : {};
+    this.state = { ...this.state, ...patch, ...cause };
+    for (const listener of this.listeners) listener(this.state);
   }
 
   private cancelTimer(): void {
     clearTimeout(this.timer);
     this.timer = undefined;
+    this.firstEditAt = undefined;
   }
 
   private schedule(): void {
+    const burstStart = this.firstEditAt ?? Date.now();
     this.cancelTimer();
     if (this.state.online && this.state.dirty && !this.state.error) {
-      this.timer = setTimeout(() => { void this.save(); }, this.delay);
+      // Each keystroke restarts the pause, but never beyond `maxWait` after the first unsaved edit.
+      this.firstEditAt = burstStart;
+      const wait = Math.min(this.delay, Math.max(0, burstStart + this.maxWait - Date.now()));
+      this.timer = setTimeout(() => {
+        void this.save();
+      }, wait);
     }
   }
 
   private message(error: unknown): string {
-    return error instanceof Error ? error.message : 'Could not connect. Please try again.';
+    return errorMessage(error, 'Could not connect. Please try again.');
+  }
+
+  /** The state patch for a failed request. */
+  private failure(error: unknown): Pick<SessionState, 'error' | 'sessionDamaged'> {
+    return { error: this.message(error), sessionDamaged: error instanceof SessionDamagedError };
   }
 
   private async open(fetchPage: () => Promise<TextDropPage>): Promise<boolean> {
@@ -80,7 +112,7 @@ export class PageSession {
       this.update({ page, draft: page.text, phase: 'ready' });
       return true;
     } catch (error) {
-      if (generation === this.generation) this.update({ phase: 'home', error: this.message(error) });
+      if (generation === this.generation) this.update({ phase: 'home', ...this.failure(error) });
       return false;
     }
   }
@@ -111,9 +143,14 @@ export class PageSession {
   }
 
   setOnline(online: boolean): void {
-    this.update({ online, ...(!online && this.state.dirty ? {
-      error: 'Your unsaved text is only in this open page. Reconnect and choose Retry save.',
-    } : {}) });
+    this.update({
+      online,
+      ...(!online && this.state.dirty
+        ? {
+            error: 'Your unsaved text is only in this open page. Reconnect and choose Retry save.',
+          }
+        : {}),
+    });
     if (!online) this.cancelTimer();
     // Reconnection doesn't silently publish a failed draft. The user can retry.
   }
@@ -122,7 +159,11 @@ export class PageSession {
     if (!this.state.page || !this.state.online || this.state.phase === 'opening') return;
     ++this.edits;
     let error = '';
-    try { validateText(text); } catch (reason) { error = this.message(reason); }
+    try {
+      validateText(text);
+    } catch (reason) {
+      error = this.message(reason);
+    }
     this.update({ draft: text, dirty: true, error });
     this.schedule();
   }
@@ -133,24 +174,29 @@ export class PageSession {
     this.update({ page, ...(!this.state.dirty ? { draft: page.text } : {}) });
   }
 
-  refresh(): Promise<void> {
+  refresh(): Promise<RefreshResult> {
     const page = this.state.page;
     const generation = this.generation;
-    if (!page || !this.state.online) return Promise.resolve();
+    if (!page || !this.state.online) return Promise.resolve('skipped');
     if (this.refreshInFlight) return this.refreshInFlight;
-    const request = Promise.resolve().then(async () => {
+    const request = Promise.resolve().then(async (): Promise<RefreshResult> => {
       try {
-        if (generation !== this.generation || !this.state.online) return;
-        const remote = await this.cloud.loadPage(page.id);
-        if (generation !== this.generation) return;
-        this.remember(remote);
-        if (!this.state.dirty && this.state.phase === 'ready') this.update({ error: '' });
+        if (generation !== this.generation || !this.state.online) return 'skipped';
+        const remote = this.cloud.pollPage ? await this.cloud.pollPage(page.id, page.version) : await this.cloud.loadPage(page.id);
+        if (generation !== this.generation) return 'skipped';
+        const known = this.state.page?.version;
+        if (remote) this.remember(remote);
+        // Only a sync error needs an update; an unchanged poll must not redraw the page.
+        if (this.state.error && !this.state.dirty && this.state.phase === 'ready') this.update({ error: '' });
+        return this.state.page?.version === known ? 'unchanged' : 'changed';
       } catch (error) {
+        if (generation !== this.generation) return 'skipped';
         // A save completed after this poll began already confirmed a newer
         // server version. An older failed read must not replace that status.
-        if (generation === this.generation && !this.state.dirty && this.state.page?.version === page.version) {
-          this.update({ error: this.message(error) });
+        if (!this.state.dirty && this.state.page?.version === page.version) {
+          this.update(this.failure(error));
         }
+        return 'failed';
       } finally {
         if (this.refreshInFlight === request) this.refreshInFlight = undefined;
       }
@@ -159,11 +205,25 @@ export class PageSession {
     return request;
   }
 
+  /**
+   * Sends an edit that is still waiting for its timer, for a page that is being hidden or closed.
+   * It never retries a failed save or sends while offline: nothing is waiting then.
+   */
+  flush(): Promise<void> {
+    if (this.timer === undefined) return Promise.resolve();
+    const inFlight = this.saveInFlight;
+    if (!inFlight) return this.save();
+    const generation = this.generation;
+    return inFlight.then(() => (generation === this.generation && this.timer !== undefined ? this.save() : undefined));
+  }
+
   save(): Promise<void> {
     this.cancelTimer();
     if (this.saveInFlight) return this.saveInFlight;
     if (!this.state.page || !this.state.dirty || !this.state.online) return Promise.resolve();
-    try { validateText(this.state.draft); } catch (error) {
+    try {
+      validateText(this.state.draft);
+    } catch (error) {
       this.update({ error: this.message(error) });
       return Promise.resolve();
     }
@@ -190,7 +250,7 @@ export class PageSession {
         }
       } catch (error) {
         if (generation === this.generation) {
-          this.update({ phase: 'ready', error: this.message(error) });
+          this.update({ phase: 'ready', ...this.failure(error) });
         }
       } finally {
         if (generation === this.generation) {
@@ -201,6 +261,18 @@ export class PageSession {
     });
     this.saveInFlight = request;
     return request;
+  }
+
+  /** Repairs a damaged saved session; the next request signs in again. Text and codes on this device stay. */
+  async startNewSession(): Promise<boolean> {
+    try {
+      await this.cloud.startNewSession();
+    } catch (error) {
+      this.update({ error: this.message(error), sessionDamaged: true });
+      return false;
+    }
+    this.update({ error: '' });
+    return true;
   }
 
   dispose(): void {

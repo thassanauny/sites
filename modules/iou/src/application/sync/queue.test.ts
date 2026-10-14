@@ -1,20 +1,134 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import type { Group, Expense } from '../../domain/groups/types'
-import { acknowledgeGroup, mergeLatestGroup, queueGroup, queueJoin } from './queue'
-import { emptyStore, loadStore, mergeCloudStore, removeGroupFromDevice, saveStore, STORE_KEY } from '../../infrastructure/storage/store'
+import { acknowledgeGroup, queueGroup, queueJoin } from './queue'
+import { mergeLatestGroup } from './merge'
+import { groupBytes, MAX_GROUP_BYTES } from '../../domain/groups/size'
+import { emptyStore, mergeCloudStore, removeGroupFromDevice } from '../deviceStore'
+import { loadStore, saveStore, STORE_KEY } from '../../infrastructure/storage/store'
 
 const time = (minute: number) => `2026-10-08T09:${String(minute).padStart(2, '0')}:00.000Z`
-const group = (): Group => ({ id: 'trip', name: 'Trip', description: '', currency: 'THB', icon: 'trip', color: '#10b981', inviteCode: 'a'.repeat(32), createdAt: time(0), updatedAt: time(0), members: [{ id: 'amy', name: 'Amy' }, { id: 'ben', name: 'Ben' }], transactions: [] })
-const expense = (id: string): Expense => ({ id, type: 'expense', description: 'Dinner', amount: 1000, paidBy: 'amy', shares: { amy: 500, ben: 500 }, category: 'food', date: '2026-10-08', createdAt: time(1) })
+const group = (): Group => ({
+  id: 'trip',
+  name: 'Trip',
+  description: '',
+  currency: 'THB',
+  icon: 'trip',
+  color: '#10b981',
+  inviteCode: 'a'.repeat(32),
+  createdAt: time(0),
+  updatedAt: time(0),
+  members: [
+    { id: 'amy', name: 'Amy' },
+    { id: 'ben', name: 'Ben' },
+  ],
+  transactions: [],
+})
+const expense = (id: string): Expense => ({
+  id,
+  type: 'expense',
+  description: 'Dinner',
+  amount: 1000,
+  paidBy: 'amy',
+  shares: { amy: 500, ben: 500 },
+  category: 'food',
+  date: '2026-10-08',
+  createdAt: time(1),
+})
 const cached = () => ({ ...emptyStore(), groups: [group()], cloudRevisions: { trip: 1 } })
 afterEach(() => vi.unstubAllGlobals())
+
+describe('member names', () => {
+  const withMembers = (...members: { id: string; name: string }[]): Group => ({ ...group(), updatedAt: time(2), members })
+
+  it('refuses a change that gives two members the same name, ignoring case and spaces', () => {
+    expect(() => queueGroup(cached(), withMembers(...group().members, { id: 'cal', name: ' amy ' }))).toThrow('Use a different name for each member.')
+    expect(() => queueGroup(cached(), withMembers({ id: 'amy', name: 'Amy' }, { id: 'ben', name: 'AMY' }))).toThrow('Use a different name for each member.')
+  })
+
+  it('refuses a group that is created with a repeated name', () => {
+    expect(() => queueGroup(emptyStore(), withMembers({ id: 'a', name: 'Sam' }, { id: 'b', name: 'sam' }))).toThrow('Use a different name for each member.')
+  })
+
+  it('keeps accepting other changes to a group whose members already share a name', () => {
+    const doubled = withMembers(...group().members, { id: 'amy-2', name: 'AMY' })
+    const store = { ...emptyStore(), groups: [doubled], cloudRevisions: { trip: 1 } }
+    const next = queueGroup(store, { ...doubled, updatedAt: time(3), transactions: [expense('dinner')] })
+    expect(next.outbox).toHaveLength(1)
+    expect(next.groups[0]!.members).toHaveLength(3)
+  })
+
+  it('refuses another copy of a name that is already shared', () => {
+    const doubled = withMembers(...group().members, { id: 'amy-2', name: 'AMY' })
+    const store = { ...emptyStore(), groups: [doubled], cloudRevisions: { trip: 1 } }
+    expect(() => queueGroup(store, { ...doubled, updatedAt: time(3), members: [...doubled.members, { id: 'amy-3', name: 'amy' }] })).toThrow('Use a different name for each member.')
+  })
+
+  it('allows renaming a member to a free name, and removing one of two members who share a name', () => {
+    const doubled = withMembers(...group().members, { id: 'amy-2', name: 'AMY' })
+    const store = { ...emptyStore(), groups: [doubled], cloudRevisions: { trip: 1 } }
+    expect(queueGroup(store, { ...doubled, updatedAt: time(3), members: doubled.members.map(member => (member.id === 'amy-2' ? { ...member, name: 'Amelia' } : member)) }).outbox).toHaveLength(1)
+    expect(queueGroup(store, { ...doubled, updatedAt: time(3), members: doubled.members.slice(0, 2) }).outbox).toHaveLength(1)
+  })
+})
+
+describe('the size limit for sharing', () => {
+  // Each expense is split among 100 people, so about 4.4 KB of the shared limit goes on every one.
+  const members = Array.from({ length: 100 }, (_, index) => ({ id: `member-${String(index).padStart(3, '0')}-${'x'.repeat(24)}`, name: `Member ${index}` }))
+  const shares = Object.fromEntries(members.map(member => [member.id, 1]))
+  const crowdedExpense = (index: number): Expense => ({
+    id: `e${index}`,
+    type: 'expense',
+    description: 'Dinner',
+    amount: 100,
+    paidBy: members[0]!.id,
+    shares,
+    category: 'food',
+    date: '2026-10-08',
+    createdAt: time(1),
+  })
+  const crowded = (count: number): Group => ({ ...group(), updatedAt: time(2), members, transactions: Array.from({ length: count }, (_, index) => crowdedExpense(index)) })
+  const holding = (value: Group) => ({ ...emptyStore(), groups: [value], cloudRevisions: { trip: 1 } })
+  const message = 'This group has reached the size limit for sharing. Delete some older transactions before adding more.'
+
+  it('is a limit of 4,000,000 bytes that these test groups straddle', () => {
+    expect(groupBytes(crowded(850))).toBeLessThan(MAX_GROUP_BYTES)
+    expect(groupBytes(crowded(950))).toBeGreaterThan(MAX_GROUP_BYTES)
+  })
+
+  it('accepts changes up to the limit and refuses one that would pass it', () => {
+    const fits = crowded(850)
+    expect(queueGroup(holding(group()), fits).outbox).toHaveLength(1)
+    expect(() => queueGroup(holding(fits), { ...crowded(950), updatedAt: time(3) })).toThrow(message)
+  })
+
+  it('refuses a new group that is already too big', () => {
+    expect(() => queueGroup(emptyStore(), crowded(950))).toThrow(message)
+  })
+
+  it('lets a group that is already too big shrink, but not grow', () => {
+    const over = crowded(950)
+    const store = holding(over)
+    expect(queueGroup(store, { ...crowded(925), updatedAt: time(3) }).outbox).toHaveLength(1)
+    expect(queueGroup(store, { ...over, updatedAt: time(3), transactions: over.transactions.slice(1) }).outbox).toHaveLength(1)
+    expect(() => queueGroup(store, { ...over, updatedAt: time(3), name: 'A much longer name for the trip' })).toThrow(message)
+  })
+})
 
 describe('durable offline changes', () => {
   it('reopens a new offline group with expenses and payments, preserving the first sync base', () => {
     let raw: string | null = null
-    vi.stubGlobal('localStorage', { getItem: () => raw, setItem: (_: string, value: string) => { raw = value } })
+    vi.stubGlobal('localStorage', {
+      getItem: () => raw,
+      setItem: (_: string, value: string) => {
+        raw = value
+      },
+    })
     let store = queueGroup(emptyStore(), group(), 'amy')
-    store = queueGroup(store, { ...group(), updatedAt: time(2), transactions: [expense('dinner'), { id: 'payment', type: 'payment', fromId: 'ben', toId: 'amy', amount: 500, note: '', date: '2026-10-08', createdAt: time(2) }] })
+    store = queueGroup(store, {
+      ...group(),
+      updatedAt: time(2),
+      transactions: [expense('dinner'), { id: 'payment', type: 'payment', fromId: 'ben', toId: 'amy', amount: 500, note: '', date: '2026-10-08', createdAt: time(2) }],
+    })
     saveStore(store)
     expect(loadStore()).toEqual({ store })
     expect(store.cloudRevisions.trip).toBe(0)
@@ -96,7 +210,12 @@ describe('durable offline changes', () => {
   it('preserves the previous durable queue when the next device write fails', () => {
     const previous = queueGroup(cached(), { ...group(), name: 'Saved', updatedAt: time(1) })
     const original = saveToMemory(previous)
-    vi.stubGlobal('localStorage', { getItem: () => original, setItem: () => { throw new Error('Full') } })
+    vi.stubGlobal('localStorage', {
+      getItem: () => original,
+      setItem: () => {
+        throw new Error('Full')
+      },
+    })
     expect(() => saveStore(queueGroup(previous, { ...group(), name: 'Unsaved', updatedAt: time(2) }))).toThrow(/Could not save/)
     expect(loadStore().store).toEqual(previous)
   })
@@ -106,7 +225,11 @@ describe('durable offline changes', () => {
     saveToMemory(queued)
     expect(loadStore().store).toEqual(queued)
     expect(queueJoin(queued, queued.pendingJoins[0]).pendingJoins).toHaveLength(1)
-    for (const invalid of [{ ...queued, pendingJoins: null }, { ...queued, outbox: [{ group: group(), base: null, revision: 2 }] }, { ...cached(), cloudRevisions: { trip: 0 } }]) {
+    for (const invalid of [
+      { ...queued, pendingJoins: null },
+      { ...queued, outbox: [{ group: group(), base: null, revision: 2 }] },
+      { ...cached(), cloudRevisions: { trip: 0 } },
+    ]) {
       const raw = JSON.stringify(invalid)
       vi.stubGlobal('localStorage', { getItem: () => raw, setItem: vi.fn() })
       expect(loadStore().error).toMatch(/kept in browser storage/)
@@ -117,7 +240,12 @@ describe('durable offline changes', () => {
 
 function saveToMemory(store: ReturnType<typeof emptyStore>): string {
   let raw = ''
-  vi.stubGlobal('localStorage', { getItem: (key: string) => key === STORE_KEY ? raw : null, setItem: (_: string, value: string) => { raw = value } })
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => (key === STORE_KEY ? raw : null),
+    setItem: (_: string, value: string) => {
+      raw = value
+    },
+  })
   saveStore(store)
   return raw
 }

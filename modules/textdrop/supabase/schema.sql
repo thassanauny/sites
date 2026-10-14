@@ -1,5 +1,5 @@
 -- TextDrop: run once in the existing IOU project's Supabase SQL editor as administrator.
--- This additive transaction leaves IOU and Kanban objects unchanged.
+-- This additive transaction leaves IOU and Pinboard objects unchanged.
 -- Keep private OUT of the Data API's exposed schemas.
 begin;
 
@@ -28,15 +28,7 @@ create index textdrop_pages_creator_idx on public.textdrop_pages (created_by);
 alter table public.textdrop_pages enable row level security;
 alter table public.textdrop_page_access enable row level security;
 revoke all on public.textdrop_pages, public.textdrop_page_access from public, anon, authenticated;
-grant select on public.textdrop_pages, public.textdrop_page_access to authenticated;
-
-create policy textdrop_read_own_access on public.textdrop_page_access
-  for select to authenticated using (user_id = (select auth.uid()));
-create policy textdrop_read_joined_pages on public.textdrop_pages
-  for select to authenticated using (exists (
-    select 1 from public.textdrop_page_access access
-    where access.page_id = textdrop_pages.id and access.user_id = (select auth.uid())
-  ));
+-- RLS stays enabled with no policies: the app uses the RPCs below only, so there is no direct read.
 
 create or replace function private.textdrop_page_json(p_page public.textdrop_pages)
 returns jsonb language sql immutable security invoker set search_path = '' as $$
@@ -143,6 +135,26 @@ begin
 end;
 $$;
 
+-- Conditional poll: the caller's known version comes back as a few bytes when nothing changed.
+-- Also in update-poll-and-grants.sql for projects installed earlier.
+create or replace function private.textdrop_poll_page(p_id uuid, p_known bigint)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  caller uuid := auth.uid();
+  page_row public.textdrop_pages%rowtype;
+begin
+  if caller is null then raise exception 'TEXTDROP_AUTH_REQUIRED' using errcode = '42501'; end if;
+  if not exists (select 1 from public.textdrop_page_access where page_id = p_id and user_id = caller)
+    then raise exception 'TEXTDROP_ACCESS_DENIED' using errcode = '42501'; end if;
+  select * into page_row from public.textdrop_pages where id = p_id;
+  if not found then raise exception 'TEXTDROP_ACCESS_DENIED' using errcode = '42501'; end if;
+  if p_known is not null and page_row.version = p_known then
+    return jsonb_build_object('id', page_row.id, 'unchanged', true, 'version', page_row.version);
+  end if;
+  return private.textdrop_page_json(page_row);
+end;
+$$;
+
 -- Invoker entry points are exposed; checked privileged implementations stay private.
 create or replace function public.textdrop_create_page(p_id uuid)
 returns jsonb language sql security invoker set search_path = '' as $$
@@ -161,15 +173,23 @@ returns jsonb language sql security invoker set search_path = '' as $$
   select private.textdrop_save_page(p_id, p_text);
 $$;
 
+create or replace function public.textdrop_poll_page(p_id uuid, p_known bigint)
+returns jsonb language sql security invoker set search_path = '' as $$
+  select private.textdrop_poll_page(p_id, p_known);
+$$;
+
 revoke all on function private.textdrop_page_json(public.textdrop_pages), private.textdrop_create_page(uuid),
-  private.textdrop_join_page(text), private.textdrop_load_page(uuid), private.textdrop_save_page(uuid,text)
-  from public, anon, authenticated;
+  private.textdrop_join_page(text), private.textdrop_load_page(uuid), private.textdrop_save_page(uuid,text),
+  private.textdrop_poll_page(uuid,bigint) from public, anon, authenticated;
 revoke all on function public.textdrop_create_page(uuid), public.textdrop_join_page(text),
-  public.textdrop_load_page(uuid), public.textdrop_save_page(uuid,text) from public, anon, authenticated;
+  public.textdrop_load_page(uuid), public.textdrop_save_page(uuid,text), public.textdrop_poll_page(uuid,bigint)
+  from public, anon, authenticated;
 grant usage on schema private to authenticated;
 grant execute on function private.textdrop_create_page(uuid), private.textdrop_join_page(text),
-  private.textdrop_load_page(uuid), private.textdrop_save_page(uuid,text) to authenticated;
+  private.textdrop_load_page(uuid), private.textdrop_save_page(uuid,text), private.textdrop_poll_page(uuid,bigint) to authenticated;
 grant execute on function public.textdrop_create_page(uuid), public.textdrop_join_page(text),
-  public.textdrop_load_page(uuid), public.textdrop_save_page(uuid,text) to authenticated;
+  public.textdrop_load_page(uuid), public.textdrop_save_page(uuid,text), public.textdrop_poll_page(uuid,bigint) to authenticated;
 
+-- Ask the Data API to reload its schema cache so the new functions are callable at once.
+notify pgrst, 'reload schema';
 commit;

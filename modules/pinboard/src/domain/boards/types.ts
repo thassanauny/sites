@@ -32,13 +32,26 @@ export interface Board {
   updated_at: string;
 }
 
+/** A board's identity and version, read cheaply to find out which boards changed. */
+export interface BoardHead {
+  id: string;
+  revision: number;
+}
+
 export type CardPatch = Partial<Omit<Card, 'id'>>;
 
 /** Operations touch only their own fields; the server serializes edits to a board. */
 export type Operation =
-  | { type: 'update_board'; patch: Partial<Pick<Board, 'title' | 'description'>> }
+  | {
+      type: 'update_board';
+      patch: Partial<Pick<Board, 'title' | 'description'>>;
+    }
   | { type: 'add_column'; column: Column }
-  | { type: 'update_column'; id: string; patch: Partial<Pick<Column, 'title' | 'color'>> }
+  | {
+      type: 'update_column';
+      id: string;
+      patch: Partial<Pick<Column, 'title' | 'color'>>;
+    }
   | { type: 'reorder_columns'; columnIds: string[] }
   | { type: 'delete_column'; id: string; targetColumnId: string }
   | { type: 'create_card'; card: Card }

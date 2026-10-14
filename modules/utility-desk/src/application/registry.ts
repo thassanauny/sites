@@ -1,19 +1,27 @@
-import type { RouteId } from './router';
+import { TOOL_INFO, type ToolId, type ToolInfo } from './tools';
 
-export interface ToolDef { id: Exclude<RouteId, 'dashboard'>; title: string; desc: string; icon: string; sub: string; load: () => Promise<{ mount: (root: HTMLElement) => void | (() => void) }> }
+export interface ToolModule {
+  mount: (root: HTMLElement) => void | (() => void);
+}
+export interface ToolDef extends ToolInfo {
+  load: () => Promise<ToolModule>;
+}
 
-export const TOOLS: ToolDef[] = [
-  { id: 'date-time', title: 'Date & time', icon: 'date-time', sub: 'Dates & timezones', desc: 'Date math, differences, Unix timestamps and world clocks.', load: () => import('../features/datetime/dateTime') },
-  { id: 'media-converter', title: 'Media converter', icon: 'media-converter', sub: 'Convert & trim media', desc: 'Convert and trim audio/video with FFmpeg WebAssembly.', load: () => import('../features/media/mediaConverter') },
-  { id: 'document-converter', title: 'Document converter', icon: 'document-converter', sub: 'Convert books & documents', desc: 'Convert PDF, EPUB, Markdown, text, HTML and classic MOBI.', load: () => import('../features/documents/documentConverter') },
-  { id: 'pdf-to-images', title: 'PDF to images', icon: 'pdf-to-images', sub: 'Export pages as images', desc: 'Render PDF pages to PNG or JPEG.', load: () => import('../features/pdf/pdfToImages') },
-  { id: 'images-to-pdf', title: 'Images to PDF', icon: 'images-to-pdf', sub: 'Combine images into PDF', desc: 'Combine images into a single PDF.', load: () => import('../features/pdf/imagesToPdf') },
-  { id: 'merge-pdfs', title: 'Merge PDFs', icon: 'merge-pdfs', sub: 'Combine PDF files', desc: 'Join PDFs, optionally selecting pages.', load: () => import('../features/pdf/mergePdfs') },
-  { id: 'split-pdf', title: 'Split PDF', icon: 'split-pdf', sub: 'Split & extract pages', desc: 'Split into pages or extract a range.', load: () => import('../features/pdf/splitPdf') },
-  { id: 'compress-pdf', title: 'Compress PDF', icon: 'compress-pdf', sub: 'Reduce PDF file size', desc: 'Reduce PDF file size with lossless or image-based compression.', load: () => import('../features/pdf/compressPdf') },
-  { id: 'unlock-pdf', title: 'Unlock PDF', icon: 'unlock-pdf', sub: 'Remove PDF password', desc: 'Use a known password to save an unlocked copy of a PDF.', load: () => import('../features/pdf/unlockPdf') },
-  { id: 'qr-generator', title: 'QR generator', icon: 'qr-generator', sub: 'Create QR codes', desc: 'Create a QR code for text, Wi-Fi, email, phone, SMS, or a contact.', load: () => import('../features/qr/qrGenerator') },
-  { id: 'image-workshop', title: 'Image workshop', icon: 'image-workshop', sub: 'Rotate, flip & adjust colors', desc: 'Rotate, filter and convert images.', load: () => import('../features/images/imageWorkshop') },
-  { id: 'crop-image', title: 'Crop Image', icon: 'crop-image', sub: 'Crop to exact dimensions', desc: 'Crop an image with a preview and exact pixel measurements.', load: () => import('../features/images/cropImage') },
-  { id: 'compress-image', title: 'Compress Image', icon: 'compress-image', sub: 'Reduce & resize images', desc: 'Reduce image file size, with optional resizing.', load: () => import('../features/images/compressImage') },
-];
+const LOADERS: Record<ToolId, ToolDef['load']> = {
+  'date-time': () => import('../features/datetime/dateTime'),
+  'media-converter': () => import('../features/media/mediaConverter'),
+  'document-converter': () => import('../features/documents/documentConverter'),
+  'pdf-to-images': () => import('../features/pdf/pdfToImages'),
+  'images-to-pdf': () => import('../features/pdf/imagesToPdf'),
+  'merge-pdfs': () => import('../features/pdf/mergePdfs'),
+  'split-pdf': () => import('../features/pdf/splitPdf'),
+  'compress-pdf': () => import('../features/pdf/compressPdf'),
+  'unlock-pdf': () => import('../features/pdf/unlockPdf'),
+  'qr-generator': () => import('../features/qr/qrGenerator'),
+  'image-workshop': () => import('../features/images/imageWorkshop'),
+  'crop-image': () => import('../features/images/cropImage'),
+  'compress-image': () => import('../features/images/compressImage'),
+};
+
+/** Every tool with its lazy screen loader. */
+export const TOOLS: ToolDef[] = TOOL_INFO.map((tool) => ({ ...tool, load: LOADERS[tool.id] }));

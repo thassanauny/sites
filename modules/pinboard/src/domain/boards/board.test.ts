@@ -1,28 +1,62 @@
 import { describe, expect, it } from 'vitest';
 import type { Board, Card } from './types';
-import { acceptBoard, cardPatch, MAX_POSITION, nextPosition, normalizeInviteCode, readInviteCode, readBoard, sortedCards, validateOperation } from './board';
+import {
+  acceptBoard,
+  cardPatch,
+  LIMITS,
+  nextPosition,
+  normalizeInviteCode,
+  readInviteCode,
+  readBoard,
+  readBoardHead,
+  sortedCards,
+  validateOperation,
+} from './board';
 
 const card: Card = {
   id: '11111111-1111-4111-8111-111111111111',
-  title: 'Book the room', description: 'Pick a place near the station.', columnId: 'todo', position: 1_024,
-  priority: 'medium', assignee: 'Alex', dueDate: '2026-10-20', labels: ['Travel'],
+  title: 'Book the room',
+  description: 'Pick a place near the station.',
+  columnId: 'todo',
+  position: 1_024,
+  priority: 'medium',
+  assignee: 'Alex',
+  dueDate: '2026-10-20',
+  labels: ['Travel'],
 };
 
 const board: Board = {
-  id: '22222222-2222-4222-8222-222222222222', invite_code: 'a'.repeat(32),
-  title: 'Trip plans', description: '',
-  columns: [{ id: 'todo', title: 'To do', color: 'slate' }, { id: 'done', title: 'Done', color: 'emerald' }],
-  cards: [card], revision: 1,
-  created_at: '2026-10-10T01:00:00.123456+00:00', updated_at: '2026-10-10T01:00:00.123456+00:00',
+  id: '22222222-2222-4222-8222-222222222222',
+  invite_code: 'a'.repeat(32),
+  title: 'Trip plans',
+  description: '',
+  columns: [
+    { id: 'todo', title: 'To do', color: 'slate' },
+    { id: 'done', title: 'Done', color: 'emerald' },
+  ],
+  cards: [card],
+  revision: 1,
+  created_at: '2026-10-10T01:00:00.123456+00:00',
+  updated_at: '2026-10-10T01:00:00.123456+00:00',
 };
 
 describe('board data and concurrent updates', () => {
   it('accepts codes and invitation links while rejecting incomplete or unrelated links', () => {
     const code = 'a'.repeat(32);
-    for (const input of [code.toUpperCase(), `  https://example.test/#join/${code}  `, `https://example.test/#/join/${code}`, `https://example.test/#board/${code}`]) {
+    for (const input of [
+      code.toUpperCase(),
+      `  https://example.test/#join/${code}  `,
+      `https://example.test/#/join/${code}`,
+      `https://example.test/#board/${code}`,
+    ]) {
       expect(readInviteCode(input)).toBe(code);
     }
-    for (const input of ['https://example.test/', `https://example.test/#other/${code}`, `#join/${code}/extra`, '#join/short']) {
+    for (const input of [
+      'https://example.test/',
+      `https://example.test/#other/${code}`,
+      `#join/${code}/extra`,
+      '#join/short',
+    ]) {
       expect(() => readInviteCode(input)).toThrow('32-character');
     }
   });
@@ -46,33 +80,115 @@ describe('board data and concurrent updates', () => {
   });
 
   it('rejects malformed dates, dangling cards, duplicate IDs, and unsafe revisions', () => {
-    expect(() => readBoard({ ...board, cards: [{ ...card, dueDate: '2026-02-30' }] })).toThrow('date is invalid');
-    expect(() => readBoard({ ...board, cards: [{ ...card, columnId: 'missing' }] })).toThrow('existing column');
-    expect(() => readBoard({ ...board, cards: [{ ...card, id: 'abcdefab-abcd-4abc-8abc-abcdefabcdef' }, { ...card, id: 'ABCDEFAB-ABCD-4ABC-8ABC-ABCDEFABCDEF' }] })).toThrow('unique');
-    expect(() => readBoard({ ...board, columns: [board.columns[0], board.columns[0]] })).toThrow('unique');
-    expect(() => readBoard({ ...board, revision: Number.MAX_SAFE_INTEGER + 1 })).toThrow('revision');
+    expect(() => readBoard({ ...board, cards: [{ ...card, dueDate: '2026-02-30' }] })).toThrow(
+      'date is invalid',
+    );
+    expect(() => readBoard({ ...board, cards: [{ ...card, columnId: 'missing' }] })).toThrow(
+      'existing column',
+    );
+    expect(() =>
+      readBoard({
+        ...board,
+        cards: [
+          { ...card, id: 'abcdefab-abcd-4abc-8abc-abcdefabcdef' },
+          { ...card, id: 'ABCDEFAB-ABCD-4ABC-8ABC-ABCDEFABCDEF' },
+        ],
+      }),
+    ).toThrow('unique');
+    expect(() => readBoard({ ...board, columns: [board.columns[0], board.columns[0]] })).toThrow(
+      'unique',
+    );
+    expect(() => readBoard({ ...board, revision: Number.MAX_SAFE_INTEGER + 1 })).toThrow(
+      'revision',
+    );
     expect(() => readBoard({ ...board, updated_at: '2026-10-09T00:00:00Z' })).toThrow('precede');
   });
 
+  it('ignores unknown top-level fields so a newer server can add data, but not inside columns or cards', () => {
+    expect(
+      readBoard({
+        ...board,
+        archived_at: null,
+        created_by: 'private',
+        extra: { nested: true },
+      }),
+    ).toEqual(board);
+    expect(Object.keys(readBoard({ ...board, extra: 1 })).sort()).toEqual(
+      Object.keys(board).sort(),
+    );
+    expect(() => readBoard({ ...board, cards: [{ ...card, colour: 'red' }] })).toThrow(
+      'unsupported field',
+    );
+    expect(() =>
+      readBoard({
+        ...board,
+        columns: [{ ...board.columns[0], hidden: true }, board.columns[1]],
+      }),
+    ).toThrow('unsupported field');
+    let read = false;
+    const spy = { ...board };
+    Object.defineProperty(spy, 'extra', {
+      enumerable: true,
+      get() {
+        read = true;
+        return 1;
+      },
+    });
+    expect(readBoard(spy)).toEqual(board);
+    expect(read).toBe(false);
+  });
+
   it('rejects untrusted object fields and accessors without evaluating them', () => {
-    expect(() => readBoard({ ...board, unknown: 'hidden' })).toThrow('unsupported field');
-    const injected = JSON.parse(JSON.stringify(board).replace('"title":"Trip plans"', '"title":"Trip plans","__proto__":{"polluted":true}'));
+    const injected = JSON.parse(
+      JSON.stringify(board).replace(
+        '"title":"Trip plans"',
+        '"title":"Trip plans","__proto__":{"polluted":true}',
+      ),
+    );
     expect(() => readBoard(injected)).toThrow('unsupported field');
     let read = false;
     const accessor = { ...board };
-    Object.defineProperty(accessor, 'cards', { get() { read = true; return []; } });
+    Object.defineProperty(accessor, 'cards', {
+      get() {
+        read = true;
+        return [];
+      },
+    });
     expect(() => readBoard(accessor)).toThrow('ordinary values');
     expect(read).toBe(false);
   });
 
   it('bounds board sizes, labels, field lengths, and ordering numbers', () => {
     expect(() => readBoard({ ...board, columns: [] })).toThrow('between 1 and 20');
-    expect(() => readBoard({ ...board, columns: Array.from({ length: 21 }, (_, index) => ({ id: `col-${index}`, title: 'Column', color: 'slate' })) })).toThrow('between 1 and 20');
+    expect(() =>
+      readBoard({
+        ...board,
+        columns: Array.from({ length: 21 }, (_, index) => ({
+          id: `col-${index}`,
+          title: 'Column',
+          color: 'slate',
+        })),
+      }),
+    ).toThrow('between 1 and 20');
     expect(() => readBoard({ ...board, cards: Array(2_001).fill(card) })).toThrow('2');
-    expect(() => readBoard({ ...board, cards: [{ ...card, labels: Array(9).fill('Label') }] })).toThrow('8 labels');
-    expect(() => readBoard({ ...board, cards: [{ ...card, title: 'x'.repeat(161) }] })).toThrow('160');
-    expect(() => readBoard({ ...board, cards: [{ ...card, position: Infinity }] })).toThrow('position');
-    expect(() => readBoard({ ...board, cards: [{ ...card, position: MAX_POSITION + 1 }] })).toThrow('position');
+    expect(() =>
+      readBoard({
+        ...board,
+        cards: [{ ...card, labels: Array(9).fill('Label') }],
+      }),
+    ).toThrow('8 labels');
+    expect(() => readBoard({ ...board, cards: [{ ...card, title: 'x'.repeat(161) }] })).toThrow(
+      '160',
+    );
+    expect(() => readBoard({ ...board, cards: [{ ...card, position: Infinity }] })).toThrow(
+      'position',
+    );
+    expect(() =>
+      readBoard({
+        ...board,
+        cards: [{ ...card, position: LIMITS.position + 1 }],
+      }),
+    ).toThrow('position');
     expect(() => readBoard({ ...board, cards: [{ ...card, position: -1 }] })).toThrow('position');
     expect(() => readBoard({ ...board, columns: Array(1) })).toThrow('object');
     expect(() => readBoard({ ...board, cards: [{ ...card, labels: Array(1) }] })).toThrow('Label');
@@ -85,11 +201,22 @@ describe('board data and concurrent updates', () => {
   });
 
   it('sends only editor-changed fields so another member’s move is preserved', () => {
-    const edited = { ...card, title: 'Book a hotel', labels: ['Travel', 'Booking'] };
+    const edited = {
+      ...card,
+      title: 'Book a hotel',
+      labels: ['Travel', 'Booking'],
+    };
     const patch = cardPatch(card, edited);
-    expect(patch).toEqual({ title: 'Book a hotel', labels: ['Travel', 'Booking'] });
+    expect(patch).toEqual({
+      title: 'Book a hotel',
+      labels: ['Travel', 'Booking'],
+    });
     const current = { ...card, columnId: 'done', assignee: 'Sam' };
-    expect({ ...current, ...patch }).toEqual({ ...edited, columnId: 'done', assignee: 'Sam' });
+    expect({ ...current, ...patch }).toEqual({
+      ...edited,
+      columnId: 'done',
+      assignee: 'Sam',
+    });
     expect(cardPatch(card, { ...card, labels: [...card.labels] })).toEqual({});
     patch.labels!.push('Changed copy');
     expect(edited.labels).toEqual(['Travel', 'Booking']);
@@ -99,74 +226,236 @@ describe('board data and concurrent updates', () => {
     const saved = { ...board, revision: 4, title: 'Saved' };
     const delayed = { ...board, revision: 3, title: 'Old refresh' };
     expect(acceptBoard(saved, delayed)).toBe(saved);
-    expect(acceptBoard(saved, { ...board, revision: 4 })).toEqual({ ...board, revision: 4 });
-    expect(acceptBoard(saved, { ...board, revision: 5 })).toEqual({ ...board, revision: 5 });
+    expect(acceptBoard(saved, { ...board, revision: 4 })).toEqual({
+      ...board,
+      revision: 4,
+    });
+    expect(acceptBoard(saved, { ...board, revision: 5 })).toEqual({
+      ...board,
+      revision: 5,
+    });
     expect(acceptBoard(undefined, board)).toBe(board);
     const other = { ...board, id: '33333333-3333-4333-8333-333333333333' };
     expect(acceptBoard(saved, other)).toBe(other);
   });
 
+  it('keeps the identity of unchanged boards, columns and cards when a refresh repeats them', () => {
+    const second = {
+      ...card,
+      id: '33333333-3333-4333-8333-333333333333',
+      title: 'Second',
+    };
+    const before = { ...board, revision: 2, cards: [card, second] };
+    const repeated = JSON.parse(JSON.stringify(before)) as Board;
+    expect(acceptBoard(before, repeated)).toBe(before);
+    const changed = JSON.parse(
+      JSON.stringify({
+        ...before,
+        revision: 3,
+        cards: [card, { ...second, title: 'Renamed' }],
+      }),
+    ) as Board;
+    const accepted = acceptBoard(before, changed);
+    expect(accepted).toEqual(changed);
+    expect(accepted).not.toBe(before);
+    expect(accepted.columns).toBe(before.columns);
+    expect(accepted.cards[0]).toBe(before.cards[0]);
+    expect(accepted.cards[1]).toBe(changed.cards[1]);
+    const reordered = JSON.parse(
+      JSON.stringify({ ...before, revision: 4, cards: [second, card] }),
+    ) as Board;
+    const swapped = acceptBoard(before, reordered);
+    expect(swapped.cards).toEqual([second, card]);
+    expect(swapped.cards[0]).toBe(before.cards[1]);
+    expect(swapped.cards[1]).toBe(before.cards[0]);
+    const other = { ...board, id: '44444444-4444-4444-8444-444444444444' };
+    expect(acceptBoard(before, other)).toBe(other);
+  });
+
+  it('reads the ID and revision a poll needs and ignores anything else', () => {
+    expect(readBoardHead({ id: board.id, revision: 3 })).toEqual({
+      id: board.id,
+      revision: 3,
+    });
+    expect(readBoardHead({ id: board.id.toUpperCase(), revision: '4', extra: 1 })).toEqual({
+      id: board.id,
+      revision: 4,
+    });
+    expect(() => readBoardHead({ id: 'abc', revision: 1 })).toThrow('ID');
+    expect(() => readBoardHead({ id: board.id, revision: 0 })).toThrow('revision');
+    expect(() => readBoardHead({ id: board.id, revision: 1.5 })).toThrow('revision');
+    expect(() => readBoardHead({ id: board.id })).toThrow('revision');
+    expect(() => readBoardHead(null)).toThrow('object');
+  });
+
   it('orders a column deterministically without changing the board and bounds appended positions', () => {
-    const earlier = { ...card, id: '00000000-0000-4000-8000-000000000000', position: 512 };
-    const samePosition = { ...card, id: '00000000-0000-4000-8000-000000000001' };
-    const otherColumn = { ...card, id: '00000000-0000-4000-8000-000000000002', columnId: 'done', position: 1 };
-    const unordered = { ...board, cards: [card, otherColumn, samePosition, earlier] };
+    const earlier = {
+      ...card,
+      id: '00000000-0000-4000-8000-000000000000',
+      position: 512,
+    };
+    const samePosition = {
+      ...card,
+      id: '00000000-0000-4000-8000-000000000001',
+    };
+    const otherColumn = {
+      ...card,
+      id: '00000000-0000-4000-8000-000000000002',
+      columnId: 'done',
+      position: 1,
+    };
+    const unordered = {
+      ...board,
+      cards: [card, otherColumn, samePosition, earlier],
+    };
     expect(sortedCards(unordered, 'todo')).toEqual([earlier, samePosition, card]);
     expect(unordered.cards[0]).toBe(card);
     expect(nextPosition(unordered, 'todo')).toBe(2_048);
     expect(nextPosition({ ...board, cards: [] }, 'todo')).toBe(1_024);
-    expect(nextPosition({ ...board, cards: [{ ...card, position: MAX_POSITION }] }, 'todo')).toBe(MAX_POSITION);
+    expect(
+      nextPosition({ ...board, cards: [{ ...card, position: LIMITS.position }] }, 'todo'),
+    ).toBe(LIMITS.position);
   });
 
   it('rejects malformed actions before they can replace unrelated data', () => {
-    expect(validateOperation({ type: 'update_card', id: card.id, patch: { title: 'Changed' } })).toEqual({ type: 'update_card', id: card.id, patch: { title: 'Changed' } });
-    expect(() => validateOperation({ type: 'update_card', id: card.id, patch: { id: card.id } })).toThrow('unsupported field');
-    expect(() => validateOperation({ type: 'move_card', id: card.id, columnId: 'todo', position: NaN })).toThrow('position');
-    expect(() => validateOperation({ type: 'delete_column', id: 'todo', targetColumnId: 'todo' })).toThrow('different column');
-    expect(() => validateOperation({ type: 'delete_card', id: card.id, cards: [] })).toThrow('unsupported field');
+    expect(
+      validateOperation({
+        type: 'update_card',
+        id: card.id,
+        patch: { title: 'Changed' },
+      }),
+    ).toEqual({
+      type: 'update_card',
+      id: card.id,
+      patch: { title: 'Changed' },
+    });
+    expect(() =>
+      validateOperation({
+        type: 'update_card',
+        id: card.id,
+        patch: { id: card.id },
+      }),
+    ).toThrow('unsupported field');
+    expect(() =>
+      validateOperation({
+        type: 'move_card',
+        id: card.id,
+        columnId: 'todo',
+        position: NaN,
+      }),
+    ).toThrow('position');
+    expect(() =>
+      validateOperation({
+        type: 'delete_column',
+        id: 'todo',
+        targetColumnId: 'todo',
+      }),
+    ).toThrow('different column');
+    expect(() => validateOperation({ type: 'delete_card', id: card.id, cards: [] })).toThrow(
+      'unsupported field',
+    );
     expect(() => validateOperation({ type: 'unknown' })).toThrow('unsupported');
   });
 
   it('clones an ordered list of safe column IDs without changing their casing or order', () => {
     const columnIds = ['done', 'Todo_2'];
     const result = validateOperation({ type: 'reorder_columns', columnIds });
-    expect(result).toEqual({ type: 'reorder_columns', columnIds: ['done', 'Todo_2'] });
+    expect(result).toEqual({
+      type: 'reorder_columns',
+      columnIds: ['done', 'Todo_2'],
+    });
     if (result.type !== 'reorder_columns') throw new Error('Unexpected action type');
     result.columnIds.reverse();
     expect(columnIds).toEqual(['done', 'Todo_2']);
-    expect(validateOperation({ type: 'reorder_columns', columnIds: ['todo'] })).toEqual({ type: 'reorder_columns', columnIds: ['todo'] });
+    expect(validateOperation({ type: 'reorder_columns', columnIds: ['todo'] })).toEqual({
+      type: 'reorder_columns',
+      columnIds: ['todo'],
+    });
     const maximum = Array.from({ length: 20 }, (_, index) => `column-${index}`);
-    expect(validateOperation({ type: 'reorder_columns', columnIds: maximum })).toEqual({ type: 'reorder_columns', columnIds: maximum });
+    expect(validateOperation({ type: 'reorder_columns', columnIds: maximum })).toEqual({
+      type: 'reorder_columns',
+      columnIds: maximum,
+    });
   });
 
-  it.each([
-    undefined, null, {}, 'todo', [], Array.from({ length: 21 }, (_, index) => `column-${index}`),
-  ].map((columnIds) => ({ columnIds })))('rejects missing or unbounded column orders: $columnIds', ({ columnIds }) => {
-    expect(() => validateOperation({ type: 'reorder_columns', columnIds })).toThrow('between 1 and 20');
+  it.each(
+    [
+      undefined,
+      null,
+      {},
+      'todo',
+      [],
+      Array.from({ length: 21 }, (_, index) => `column-${index}`),
+    ].map((columnIds) => ({
+      columnIds,
+    })),
+  )('rejects missing or unbounded column orders: $columnIds', ({ columnIds }) => {
+    expect(() => validateOperation({ type: 'reorder_columns', columnIds })).toThrow(
+      'between 1 and 20',
+    );
   });
 
-  it.each([
-    [null], [1], [''], [' todo'], ['todo '], ['todo/done'], ['x'.repeat(65)],
-    ['__proto__'], ['prototype'], ['constructor'], Array(1),
-  ].map((columnIds) => ({ columnIds })))('rejects unsafe column IDs in an order: $columnIds', ({ columnIds }) => {
+  it.each(
+    [
+      [null],
+      [1],
+      [''],
+      [' todo'],
+      ['todo '],
+      ['todo/done'],
+      ['x'.repeat(65)],
+      ['__proto__'],
+      ['prototype'],
+      ['constructor'],
+      Array(1),
+    ].map((columnIds) => ({ columnIds })),
+  )('rejects unsafe column IDs in an order: $columnIds', ({ columnIds }) => {
     expect(() => validateOperation({ type: 'reorder_columns', columnIds })).toThrow('Column ID');
   });
 
   it('rejects duplicate IDs and unrelated fields in a reorder action', () => {
-    expect(() => validateOperation({ type: 'reorder_columns', columnIds: ['todo', 'todo'] })).toThrow('unique');
-    expect(() => validateOperation({ type: 'reorder_columns', columnIds: ['todo'], columns: board.columns })).toThrow('unsupported field');
-    expect(() => validateOperation({ type: 'reorder_columns', columnIds: ['todo'], patch: { title: 'Changed' } })).toThrow('unsupported field');
+    expect(() =>
+      validateOperation({
+        type: 'reorder_columns',
+        columnIds: ['todo', 'todo'],
+      }),
+    ).toThrow('unique');
+    expect(() =>
+      validateOperation({
+        type: 'reorder_columns',
+        columnIds: ['todo'],
+        columns: board.columns,
+      }),
+    ).toThrow('unsupported field');
+    expect(() =>
+      validateOperation({
+        type: 'reorder_columns',
+        columnIds: ['todo'],
+        patch: { title: 'Changed' },
+      }),
+    ).toThrow('unsupported field');
   });
 
   it('rejects extraneous array fields and accessors without evaluating them', () => {
     const extra = Object.assign(['todo'], { ignored: 'done' });
-    expect(() => validateOperation({ type: 'reorder_columns', columnIds: extra })).toThrow('unsupported field');
+    expect(() => validateOperation({ type: 'reorder_columns', columnIds: extra })).toThrow(
+      'unsupported field',
+    );
     const symbolic = Object.assign(['todo'], { [Symbol('ignored')]: 'done' });
-    expect(() => validateOperation({ type: 'reorder_columns', columnIds: symbolic })).toThrow('unsupported field');
+    expect(() => validateOperation({ type: 'reorder_columns', columnIds: symbolic })).toThrow(
+      'unsupported field',
+    );
     let read = false;
     const accessor = ['todo'];
-    Object.defineProperty(accessor, '0', { get() { read = true; return 'done'; } });
-    expect(() => validateOperation({ type: 'reorder_columns', columnIds: accessor })).toThrow('ordinary values');
+    Object.defineProperty(accessor, '0', {
+      get() {
+        read = true;
+        return 'done';
+      },
+    });
+    expect(() => validateOperation({ type: 'reorder_columns', columnIds: accessor })).toThrow(
+      'ordinary values',
+    );
     expect(read).toBe(false);
   });
 });

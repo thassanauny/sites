@@ -1,5 +1,6 @@
-import { zipSync, unzipSync, strFromU8, strToU8 } from 'fflate';
+import { zipSync, strFromU8, strToU8 } from 'fflate';
 import { mobiToHtml, buildMobi } from './mobi';
+import { sanitizeHtml, unzipLimited, hasDrm } from './sanitize';
 
 export type TextDocFormat = 'txt' | 'md' | 'html' | 'epub' | 'mobi';
 export type DocFormat = TextDocFormat | 'pdf';
@@ -25,34 +26,101 @@ function inline(s: string): string {
 export function markdownToHtml(md: string): string {
   const lines = md.replace(/\r\n?/g, '\n').split('\n');
   const out: string[] = [];
-  let para: string[] = [], list: 'ul' | 'ol' | null = null, code: string[] | null = null;
-  const flushP = () => { if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = []; } };
-  const flushL = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  let para: string[] = [],
+    list: 'ul' | 'ol' | null = null,
+    code: string[] | null = null;
+  const flushP = () => {
+    if (para.length) {
+      out.push(`<p>${inline(para.join(' '))}</p>`);
+      para = [];
+    }
+  };
+  const flushL = () => {
+    if (list) {
+      out.push(`</${list}>`);
+      list = null;
+    }
+  };
   for (const line of lines) {
-    if (code) { if (line.startsWith('```')) { out.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`); code = null; } else code.push(line); continue; }
-    if (line.startsWith('```')) { flushP(); flushL(); code = []; continue; }
-    let m: RegExpExecArray | null;
-    if ((m = /^(#{1,6})\s+(.*)$/.exec(line))) { flushP(); flushL(); out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); }
-    else if ((m = /^\s*[-*+]\s+(.*)$/.exec(line))) { flushP(); if (list !== 'ul') { flushL(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(m[1])}</li>`); }
-    else if ((m = /^\s*\d+\.\s+(.*)$/.exec(line))) { flushP(); if (list !== 'ol') { flushL(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(m[1])}</li>`); }
-    else if ((m = /^>\s?(.*)$/.exec(line))) { flushP(); flushL(); out.push(`<blockquote>${inline(m[1])}</blockquote>`); }
-    else if (!line.trim()) { flushP(); flushL(); }
-    else { flushL(); para.push(line.trim()); }
+    if (code) {
+      if (line.startsWith('```')) {
+        out.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+        code = null;
+      } else code.push(line);
+      continue;
+    }
+    if (line.startsWith('```')) {
+      flushP();
+      flushL();
+      code = [];
+      continue;
+    }
+    let m!: RegExpExecArray;
+    const match = (re: RegExp) => {
+      const found = re.exec(line);
+      if (found) m = found;
+      return found !== null;
+    };
+    if (match(/^(#{1,6})\s+(.*)$/)) {
+      flushP();
+      flushL();
+      out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`);
+    } else if (match(/^\s*[-*+]\s+(.*)$/)) {
+      flushP();
+      if (list !== 'ul') {
+        flushL();
+        out.push('<ul>');
+        list = 'ul';
+      }
+      out.push(`<li>${inline(m[1])}</li>`);
+    } else if (match(/^\s*\d+\.\s+(.*)$/)) {
+      flushP();
+      if (list !== 'ol') {
+        flushL();
+        out.push('<ol>');
+        list = 'ol';
+      }
+      out.push(`<li>${inline(m[1])}</li>`);
+    } else if (match(/^>\s?(.*)$/)) {
+      flushP();
+      flushL();
+      out.push(`<blockquote>${inline(m[1])}</blockquote>`);
+    } else if (!line.trim()) {
+      flushP();
+      flushL();
+    } else {
+      flushL();
+      para.push(line.trim());
+    }
   }
   if (code) out.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
-  flushP(); flushL();
+  flushP();
+  flushL();
   return out.join('\n');
 }
 
 export function textToHtml(text: string): string {
-  return text.replace(/\r\n?/g, '\n').split(/\n{2,}/).filter((p) => p.trim()).map((p) => `<p>${escapeHtml(p.trim()).replace(/\n/g, '<br>')}</p>`).join('\n');
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split(/\n{2,}/)
+    .filter((p) => p.trim())
+    .map((p) => `<p>${escapeHtml(p.trim()).replace(/\n/g, '<br>')}</p>`)
+    .join('\n');
 }
 
-function walk(node: Node, fn: (n: Node, enter: boolean) => void) { fn(node, true); node.childNodes.forEach((c) => walk(c, fn)); fn(node, false); }
+function walk(node: Node, fn: (n: Node, enter: boolean) => void) {
+  fn(node, true);
+  node.childNodes.forEach((c) => {
+    walk(c, fn);
+  });
+  fn(node, false);
+}
 
 export function htmlToText(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  doc.querySelectorAll('script,style,head').forEach((e) => e.remove());
+  doc.querySelectorAll('script,style,head').forEach((e) => {
+    e.remove();
+  });
   let out = '';
   walk(doc.body, (n, enter) => {
     if (n.nodeType === 3 && enter) out += (n.textContent ?? '').replace(/\s+/g, ' ');
@@ -62,16 +130,22 @@ export function htmlToText(html: string): string {
       if (enter && t === 'br') out += '\n';
     }
   });
-  return out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  return `${out
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()}\n`;
 }
 
 export function htmlToMarkdown(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  doc.querySelectorAll('script,style,head').forEach((e) => e.remove());
+  doc.querySelectorAll('script,style,head').forEach((e) => {
+    e.remove();
+  });
   const conv = (n: Node): string => {
     if (n.nodeType === 3) return (n.textContent ?? '').replace(/\s+/g, ' ');
     if (n.nodeType !== 1) return '';
-    const el = n as Element, kids = () => [...el.childNodes].map(conv).join('');
+    const el = n as Element,
+      kids = () => [...el.childNodes].map(conv).join('');
     const t = el.tagName.toLowerCase();
     if (/^h[1-6]$/.test(t)) return `\n\n${'#'.repeat(Number(t[1]))} ${kids().trim()}\n\n`;
     if (t === 'p' || t === 'div') return `\n\n${kids().trim()}\n\n`;
@@ -86,10 +160,14 @@ export function htmlToMarkdown(html: string): string {
     if (t === 'blockquote') return `\n\n> ${kids().trim()}\n\n`;
     return kids();
   };
-  return conv(doc.body).replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  return `${conv(doc.body)
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()}\n`;
 }
 
-export function markdownToText(md: string): string { return htmlToText(markdownToHtml(md)); }
+export function markdownToText(md: string): string {
+  return htmlToText(markdownToHtml(md));
+}
 
 export function wrapHtml(body: string, title: string): string {
   return `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head>\n<body>\n${body}\n</body></html>\n`;
@@ -113,9 +191,8 @@ export function buildEpub(title: string, bodyHtml: string, author = ''): Uint8Ar
 
 /** Extract concatenated XHTML body content from an unprotected EPUB, following the spine. */
 export function epubToHtml(bytes: Uint8Array): { title: string; html: string } {
-  const files = unzipSync(bytes);
-  if (files['META-INF/encryption.xml'] && /EncryptedData/.test(strFromU8(files['META-INF/encryption.xml'])) && !/IDPF|fontobfuscation/i.test(strFromU8(files['META-INF/encryption.xml'])))
-    throw new Error('This EPUB appears to be DRM-protected and cannot be converted.');
+  const files = unzipLimited(bytes);
+  if (hasDrm(files['META-INF/encryption.xml'])) throw new Error('This EPUB appears to be DRM-protected and cannot be converted.');
   const container = files['META-INF/container.xml'];
   if (!container) throw new Error('Not a valid EPUB (missing container.xml)');
   const parser = new DOMParser();
@@ -124,7 +201,9 @@ export function epubToHtml(bytes: Uint8Array): { title: string; html: string } {
   const opf = parser.parseFromString(strFromU8(files[opfPath]), 'application/xml');
   const title = opf.getElementsByTagNameNS('*', 'title')[0]?.textContent?.trim() || 'Untitled';
   const manifest = new Map<string, string>();
-  opf.querySelectorAll('manifest > item').forEach((i) => manifest.set(i.getAttribute('id') ?? '', i.getAttribute('href') ?? ''));
+  opf.querySelectorAll('manifest > item').forEach((i) => {
+    manifest.set(i.getAttribute('id') ?? '', i.getAttribute('href') ?? '');
+  });
   const packageUrl = new URL(opfPath, 'https://epub.invalid/');
   const parts: string[] = [];
   opf.querySelectorAll('spine > itemref').forEach((r) => {
@@ -136,51 +215,76 @@ export function epubToHtml(bytes: Uint8Array): { title: string; html: string } {
       const url = new URL(href, packageUrl);
       if (url.origin !== packageUrl.origin) throw new Error('External chapter');
       path = decodeURIComponent(url.pathname.slice(1));
-    } catch { throw new Error(`EPUB chapter path could not be read: ${href}`); }
+    } catch {
+      throw new Error(`EPUB chapter path could not be read: ${href}`);
+    }
     const data = files[path];
     if (!data) throw new Error(`EPUB chapter file not found: ${href}`);
     const doc = parser.parseFromString(strFromU8(data), 'text/html');
-    doc.querySelectorAll('script,style,img,svg,link').forEach((e) => e.remove());
-    parts.push(doc.body.innerHTML);
+    parts.push(sanitizeHtml(doc.body.innerHTML));
   });
   if (!parts.length) throw new Error('No readable chapters found in this EPUB');
   return { title, html: parts.join('\n') };
 }
 
+/** The document format a file name's extension stands for, or null when the converter cannot read it. */
+export function formatFromName(name: string): DocFormat | null {
+  const e = name.toLowerCase().split('.').pop();
+  return e === 'markdown' ? 'md' : e === 'htm' ? 'html' : e === 'prc' ? 'mobi' : ['txt', 'md', 'html', 'epub', 'mobi', 'pdf'].includes(e ?? '') ? (e as DocFormat) : null;
+}
+
 export const OUTPUTS: Record<DocFormat, DocFormat[]> = {
-  txt: ['md', 'html', 'epub', 'mobi', 'pdf'], md: ['pdf', 'txt', 'html', 'epub', 'mobi'], html: ['txt', 'md', 'epub', 'mobi', 'pdf'],
-  epub: ['pdf', 'mobi', 'txt', 'md', 'html'], mobi: ['epub', 'txt', 'md', 'html', 'pdf'], pdf: ['epub', 'md', 'txt', 'html'],
+  txt: ['md', 'html', 'epub', 'mobi', 'pdf'],
+  md: ['pdf', 'txt', 'html', 'epub', 'mobi'],
+  html: ['txt', 'md', 'epub', 'mobi', 'pdf'],
+  epub: ['pdf', 'mobi', 'txt', 'md', 'html'],
+  mobi: ['epub', 'txt', 'md', 'html', 'pdf'],
+  pdf: ['epub', 'md', 'txt', 'html'],
 };
 export const MIME: Record<DocFormat, string> = { txt: 'text/plain', md: 'text/markdown', html: 'text/html', epub: 'application/epub+zip', mobi: 'application/x-mobipocket-ebook', pdf: 'application/pdf' };
 
-export interface DocInput { format: DocFormat; text?: string; bytes?: Uint8Array; title: string; titleOverride?: string; author?: string }
+export interface DocInput {
+  format: DocFormat;
+  text?: string;
+  bytes?: Uint8Array;
+  title: string;
+  titleOverride?: string;
+  author?: string;
+}
 
 export function convertDocument(input: DocInput, out: DocFormat): Uint8Array | string {
   if (input.format === 'pdf' || out === 'pdf') throw new Error('Use the asynchronous document converter for PDF.');
   let html: string;
-  let md: string | null = null, txt: string | null = null;
+  let md: string | null = null,
+    txt: string | null = null;
   let title = input.title;
   if (input.format === 'mobi') {
     const r = mobiToHtml(input.bytes ?? new Uint8Array());
-    html = r.html; title = r.title;
+    html = r.html;
+    title = r.title;
   } else if (input.format === 'epub') {
     const r = epubToHtml(input.bytes ?? new Uint8Array());
-    html = r.html; title = r.title;
-  } else if (input.format === 'html') html = input.text ?? '';
-  else if (input.format === 'md') { md = input.text ?? ''; html = markdownToHtml(md); }
-  else { txt = input.text ?? ''; html = textToHtml(txt); }
+    html = r.html;
+    title = r.title;
+  } else if (input.format === 'html') html = sanitizeHtml(input.text ?? '');
+  else if (input.format === 'md') {
+    md = input.text ?? '';
+    html = markdownToHtml(md);
+  } else {
+    txt = input.text ?? '';
+    html = textToHtml(txt);
+  }
   title = input.titleOverride?.trim() || title;
   switch (out) {
-    case 'html': return wrapHtml(input.format === 'html' ? html : html, title);
-    case 'md': return md ?? htmlToMarkdown(html);
-    case 'txt': return txt ?? htmlToText(html);
-    case 'mobi': return buildMobi(title, stripUnsafe(html), input.author);
-    case 'epub': return buildEpub(title, input.format === 'html' ? new XMLSerializer().serializeToString(new DOMParser().parseFromString(html, 'text/html').body).replace(/^<body[^>]*>|<\/body>$/g, '') : html, input.author);
+    case 'html':
+      return wrapHtml(html, title);
+    case 'md':
+      return md ?? htmlToMarkdown(html);
+    case 'txt':
+      return txt ?? htmlToText(html);
+    case 'mobi':
+      return buildMobi(title, html, input.author);
+    case 'epub':
+      return buildEpub(title, input.format === 'html' ? new XMLSerializer().serializeToString(new DOMParser().parseFromString(html, 'text/html').body).replace(/^<body[^>]*>|<\/body>$/g, '') : html, input.author);
   }
-}
-
-function stripUnsafe(html: string): string {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  doc.querySelectorAll('script,style,img,svg,link,iframe,object').forEach((e) => e.remove());
-  return doc.body.innerHTML;
 }

@@ -4,9 +4,11 @@ import { pathToFileURL } from 'node:url';
 import { PDFDocument } from 'pdf-lib';
 import * as pdfjs from 'pdfjs-dist';
 import { parsePageRanges } from '../src/domain/pdf/ranges';
-import { mergePdfs, splitEachPage, extractPages, pageCount, layoutImage, pageDimensions, imagesToPdf } from '../src/domain/pdf/operations';
+import { mergePdfs, splitEachPage, splitPages, extractPages, pageCount, layoutImage, pageDimensions, imagesToPdf } from '../src/domain/pdf/operations';
 
-beforeAll(() => { pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(resolve('node_modules/pdfjs-dist/build/pdf.worker.min.mjs')).href; });
+beforeAll(() => {
+  pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(resolve('node_modules/pdfjs-dist/build/pdf.worker.min.mjs')).href;
+});
 
 async function makePdf(n: number) {
   const d = await PDFDocument.create();
@@ -31,7 +33,8 @@ describe('page ranges', () => {
 
 describe('pdf operations', () => {
   it('merges with selected pages and preserves sources', async () => {
-    const a = await makePdf(3), b = await makePdf(2);
+    const a = await makePdf(3),
+      b = await makePdf(2);
     const copyA = a.slice();
     const merged = await mergePdfs([{ bytes: a, pages: [1, 3] }, { bytes: b }]);
     expect(await pageCount(merged)).toBe(4);
@@ -46,8 +49,47 @@ describe('pdf operations', () => {
     expect(await pageCount(parts[2])).toBe(1);
     expect(await pageCount(await extractPages(src, [2, 4]))).toBe(2);
   });
+  it('hands each split page to a callback as soon as it is saved', async () => {
+    const src = await makePdf(4);
+    const seen: [number, number][] = [],
+      progress: number[] = [];
+    await splitPages(
+      src,
+      async (part, page) => {
+        seen.push([page, await pageCount(part)]);
+      },
+      undefined,
+      (value) => progress.push(value),
+      [4, 2],
+    );
+    expect(seen).toEqual([
+      [4, 1],
+      [2, 1],
+    ]);
+    expect(progress).toEqual([0.5, 1]);
+    const calls: number[] = [];
+    await expect(
+      splitPages(src, (_part, page) => {
+        calls.push(page);
+        if (page === 2) throw new Error('Too big');
+      }),
+    ).rejects.toThrow('Too big');
+    expect(calls).toEqual([1, 2]);
+  });
+  it('reads merge sources only when their turn comes', async () => {
+    const [a, b] = [await makePdf(1), await makePdf(2)];
+    const events: string[] = [];
+    const lazy = (name: string, bytes: Uint8Array) => async () => {
+      events.push(`read ${name}`);
+      return bytes;
+    };
+    const merged = await mergePdfs([{ bytes: lazy('a', a) }, { bytes: lazy('b', b), pages: [2] }], undefined, (value) => events.push(`done ${value}`));
+    expect(events).toEqual(['read a', 'done 0.5', 'read b', 'done 1']);
+    expect(await pageCount(merged)).toBe(2);
+  });
   it('honours cancellation', async () => {
-    const ac = new AbortController(); ac.abort();
+    const ac = new AbortController();
+    ac.abort();
     await expect(mergePdfs([{ bytes: await makePdf(1) }], ac.signal)).rejects.toMatchObject({ name: 'AbortError' });
   });
   it('honours cancellation at the final progress update', async () => {
@@ -67,7 +109,13 @@ describe('pdf operations', () => {
   });
   it('builds a PDF from images', async () => {
     const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
-    const pdf = await imagesToPdf([{ bytes: png, type: 'png', width: 1, height: 1 }, { bytes: png, type: 'png', width: 1, height: 1 }], { pageSize: 'A4', orientation: 'portrait', fit: 'contain', dpi: 150, marginPt: 10 });
+    const pdf = await imagesToPdf(
+      [
+        { bytes: png, type: 'png', width: 1, height: 1 },
+        { bytes: png, type: 'png', width: 1, height: 1 },
+      ],
+      { pageSize: 'A4', orientation: 'portrait', fit: 'contain', dpi: 150, marginPt: 10 },
+    );
     expect(await pageCount(pdf)).toBe(2);
   });
   it('clips fill-crop images to the rectangle inside the requested margins', async () => {
@@ -76,7 +124,8 @@ describe('pdf operations', () => {
       const bytes = await imagesToPdf([{ bytes: png, type: 'png', width: 200, height: 100 }], { pageSize: 'A4', orientation, fit: 'cover', dpi: 150, marginPt: 72 });
       const doc = await pdfjs.getDocument({ data: bytes }).promise;
       try {
-        const page = await doc.getPage(1), ops = await page.getOperatorList();
+        const page = await doc.getPage(1),
+          ops = await page.getOperatorList();
         const clipIndex = ops.fnArray.indexOf(pdfjs.OPS.clip);
         const imageIndex = ops.fnArray.indexOf(pdfjs.OPS.paintImageXObject);
         expect(clipIndex).toBeGreaterThan(0);
@@ -86,7 +135,9 @@ describe('pdf operations', () => {
         expect(ops.argsArray[pathIndex][0]).toContain(pdfjs.OPS.rectangle);
         expect(ops.argsArray[pathIndex][1]).toEqual([72, 72, viewport.width - 144, viewport.height - 144]);
         expect(ops.fnArray.slice(imageIndex + 1)).toContain(pdfjs.OPS.restore);
-      } finally { await doc.destroy(); }
+      } finally {
+        await doc.destroy();
+      }
     }
   });
 });

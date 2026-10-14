@@ -1,59 +1,64 @@
-import { toolPage, group } from '../../application/page';
-import * as pdfjs from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { h, field, input, select, filePicker, taskControls, notice, persistForm, option } from '../../ui/elements';
+import type * as Pdfjs from 'pdfjs-dist';
+import { toolPage } from '../../application/page';
+import { taskControls, persistForm, operationSlot, sourceSelection } from '../../application/tasks';
+import { h, field, input, select, filePicker, notice, option, rangeField, qualityScale } from '../../ui/elements';
+import { group } from '../../ui/layout';
+import { loadPdfjs, pdfjsDocumentOptions } from '../../domain/pdf/pdfjs';
 import { parsePageRanges } from '../../domain/pdf/ranges';
-import { makeZip } from '../../shared/zip';
+import { zipWriter } from '../../shared/zip';
 import { encodeCanvas } from '../../domain/images/operations';
-import { readFileBytes, downloadBlob, baseName, sanitizeFilename, MAX_FILE_BYTES, formatBytes, throwIfAborted } from '../../shared/util';
-
-pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-const MAX_PIXELS = 50_000_000;
+import { LIMITS } from '../../shared/limits';
+import { readFileBytes, downloadBlob, baseName, sanitizeFilename, formatBytes, throwIfAborted } from '../../shared/util';
 
 export function mount(root: HTMLElement) {
   let file: File | null = null;
-  let doc: pdfjs.PDFDocumentProxy | null = null;
-  let loading: pdfjs.PDFDocumentLoadingTask | null = null;
+  let doc: Pdfjs.PDFDocumentProxy | null = null;
+  let loading: Pdfjs.PDFDocumentLoadingTask | null = null;
   let selectionRequest = 0;
-  let operationController: AbortController | null = null;
+  const operation = operationSlot();
   const info = h('div');
   const range = input('text', 'range', '', { placeholder: 'All pages, or e.g. 1-3, 5' });
-  const fmt = select('format', [['png', 'PNG'], ['jpeg', 'JPEG']], 'png');
+  const fmt = select(
+    'format',
+    [
+      ['png', 'PNG'],
+      ['jpeg', 'JPEG'],
+    ],
+    'png',
+  );
   const dpi = input('number', 'dpi', '300', { min: 72, max: 1200 });
-  const quality = input('range', 'quality', '90', { id: 'pdf-jpeg-quality', min: 1, max: 100, step: 1 });
-  const qualityValue = h('output', {}, quality.value);
-  qualityValue.htmlFor.add(quality.id);
-  const qualityField = h('div', { class: 'field quality-slider' },
-    h('div', { class: 'quality-label' }, h('label', { class: 'field-label', for: quality.id }, 'JPEG quality'), qualityValue),
-    quality, h('div', { class: 'quality-scale', 'aria-hidden': 'true' }, h('span', {}, 'Low'), h('span', {}, 'High')));
-  const updateQuality = () => { qualityValue.value = quality.value; };
-  quality.addEventListener('input', updateQuality); quality.addEventListener('change', updateQuality);
-  const cropBox = input('checkbox', 'cropBox', '', { checked: true });
+  const quality = rangeField({ id: 'pdf-jpeg-quality', name: 'quality', label: 'JPEG quality', value: '90', min: 1, max: 100, step: 1, footer: qualityScale() });
   const hideAnnotations = input('checkbox', 'hideAnnotations');
 
   function releaseSource() {
-    const previousLoad = loading, previousDocument = doc;
-    loading = null; doc = null; file = null;
+    const previousLoad = loading,
+      previousDocument = doc;
+    loading = null;
+    doc = null;
+    file = null;
     if (previousLoad) void previousLoad.destroy();
     else if (previousDocument) void previousDocument.destroy();
   }
 
-  async function renderPage(num: number, scale: number, canvas: HTMLCanvasElement, source: pdfjs.PDFDocumentProxy, hide: boolean, signal: AbortSignal) {
-    let page: pdfjs.PDFPageProxy | undefined, rendering: pdfjs.RenderTask | undefined;
+  async function renderPage(num: number, scale: number, canvas: HTMLCanvasElement, source: Pdfjs.PDFDocumentProxy, hide: boolean, signal: AbortSignal) {
+    let page: Pdfjs.PDFPageProxy | undefined, rendering: Pdfjs.RenderTask | undefined;
     const abort = () => rendering?.cancel();
     signal.addEventListener('abort', abort, { once: true });
     try {
       throwIfAborted(signal);
+      const { AnnotationMode } = await loadPdfjs();
       page = await source.getPage(num);
       throwIfAborted(signal);
       // PDF.js exposes the visible crop box, but not the media box via its public API.
       const viewport = page.getViewport({ scale });
-      const width = Math.ceil(viewport.width), height = Math.ceil(viewport.height);
-      if (!Number.isFinite(width * height) || width < 1 || height < 1 || width * height > MAX_PIXELS) throw new Error(`Page ${num} exceeds the 50 MP rendering limit. Lower the DPI.`);
-      canvas.width = width; canvas.height = height;
+      const width = Math.ceil(viewport.width),
+        height = Math.ceil(viewport.height);
+      if (!Number.isFinite(width * height) || width < 1 || height < 1 || width * height > LIMITS.pagePixels) throw new Error(`Page ${num} exceeds the ${LIMITS.pagePixels / 1_000_000} MP rendering limit. Lower the DPI.`);
+      canvas.width = width;
+      canvas.height = height;
       const context = canvas.getContext('2d');
       if (!context) throw new Error('This browser cannot render PDF pages.');
-      rendering = page.render({ canvasContext: context, viewport, annotationMode: hide ? pdfjs.AnnotationMode.DISABLE : pdfjs.AnnotationMode.ENABLE });
+      rendering = page.render({ canvasContext: context, viewport, annotationMode: hide ? AnnotationMode.DISABLE : AnnotationMode.ENABLE });
       await rendering.promise;
       throwIfAborted(signal);
     } catch (error) {
@@ -65,70 +70,114 @@ export function mount(root: HTMLElement) {
     }
   }
 
-  const picker = filePicker({ label: 'PDF file', accept: '.pdf,application/pdf', onFiles: async ([f]) => {
-    const request = ++selectionRequest;
-    info.replaceChildren();
-    releaseSource();
-    if (f.size > MAX_FILE_BYTES) { info.append(notice('warn', `File exceeds ${formatBytes(MAX_FILE_BYTES)}.`)); return; }
-    try {
-      const assetRoot = new URL('pdfjs/', new URL(import.meta.env.BASE_URL, location.href)).href;
-      const data = await readFileBytes(f);
-      if (request !== selectionRequest) return;
-      loading = pdfjs.getDocument({ data, cMapUrl: assetRoot + 'cmaps/', cMapPacked: true, standardFontDataUrl: assetRoot + 'standard_fonts/', isEvalSupported: false });
-      const loaded = await loading.promise;
-      if (request !== selectionRequest) { void loaded.destroy(); return; }
-      loading = null; doc = loaded; file = f;
-      info.append(notice('info', `${f.name}: ${doc.numPages} pages.`));
-    } catch (e) {
-      if (request !== selectionRequest) return;
+  const picked = sourceSelection(
+    () => {},
+    () => task.reset(),
+  );
+  const picker = filePicker({
+    label: 'PDF file',
+    accept: '.pdf,application/pdf',
+    onFiles: async ([f]) => {
+      const request = ++selectionRequest;
+      const same = picked.begin(f);
+      info.replaceChildren();
       releaseSource();
-      info.append(notice('danger', /password/i.test((e as Error).message) ? 'Password-protected PDFs are not supported.' : `Could not open PDF: ${(e as Error).message}`));
-    }
-  } });
+      if (f.size > LIMITS.fileBytes) {
+        picked.reject();
+        info.append(notice('warn', `File exceeds ${formatBytes(LIMITS.fileBytes)}.`));
+        return;
+      }
+      try {
+        const pdfjs = await loadPdfjs();
+        const data = await readFileBytes(f);
+        if (request !== selectionRequest) return;
+        loading = pdfjs.getDocument(pdfjsDocumentOptions(data));
+        const loaded = await loading.promise;
+        if (request !== selectionRequest) {
+          void loaded.destroy();
+          return;
+        }
+        loading = null;
+        doc = loaded;
+        file = f;
+        picked.accept(f, same);
+        info.append(notice('info', `${f.name}: ${doc.numPages} pages.`));
+      } catch (e) {
+        if (request !== selectionRequest) return;
+        releaseSource();
+        picked.reject();
+        info.append(notice('danger', /password/i.test((e as Error).message) ? 'Password-protected PDFs are not supported.' : `Could not open PDF: ${(e as Error).message}`));
+      }
+    },
+  });
 
-  const task = taskControls('pdf-to-images', 'Export page images', async ({ signal: taskSignal, progress }) => {
-    throwIfAborted(taskSignal);
-    const source = doc!, sourceFile = file!, hide = hideAnnotations.checked;
-    const resolution = Number(dpi.value), jpegQuality = Math.min(1, Math.max(0.01, Number(quality.value) / 100));
-    const outputs: { name: string; blob: Blob }[] = [];
-    const pages = parsePageRanges(range.value, source.numPages);
-    const type = fmt.value === 'jpeg' ? 'image/jpeg' : 'image/png';
-    const ext = fmt.value === 'jpeg' ? 'jpg' : 'png';
-    const stem = sanitizeFilename(baseName(sourceFile.name), 'page');
-    const pad = String(source.numPages).length;
-    if (!Number.isInteger(resolution) || resolution < 72 || resolution > 1200) throw new Error('Resolution must be a whole number from 72 to 1,200 DPI.');
-    const operation = new AbortController(), signal = operation.signal;
-    operationController = operation;
-    const abort = () => operation.abort();
-    taskSignal.addEventListener('abort', abort, { once: true });
-    try {
-      for (let i = 0; i < pages.length; i++) {
-        throwIfAborted(signal);
-        const c = document.createElement('canvas');
-        try {
-          await renderPage(pages[i], resolution / 72, c, source, hide, signal);
-          const blob = await encodeCanvas(c, type, jpegQuality, signal);
+  const task = taskControls(
+    'pdf-to-images',
+    'Export page images',
+    async ({ signal: taskSignal, progress }) => {
+      throwIfAborted(taskSignal);
+      const source = doc!,
+        sourceFile = file!,
+        hide = hideAnnotations.checked;
+      const resolution = Number(dpi.value),
+        jpegQuality = Math.min(1, Math.max(0.01, Number(quality.control.value) / 100));
+      const pages = parsePageRanges(range.value, source.numPages);
+      const type = fmt.value === 'jpeg' ? 'image/jpeg' : 'image/png';
+      const ext = fmt.value === 'jpeg' ? 'jpg' : 'png';
+      const stem = sanitizeFilename(baseName(sourceFile.name), 'page');
+      const pad = String(source.numPages).length;
+      if (!Number.isInteger(resolution) || resolution < 72 || resolution > 1200) throw new Error('Resolution must be a whole number from 72 to 1,200 DPI.');
+      return operation.run(taskSignal, async (signal) => {
+        // Several pages go straight into the archive, so only the page being rendered is held next to it.
+        const archive = pages.length > 1 ? zipWriter() : null;
+        let single: { name: string; blob: Blob } | undefined,
+          total = 0;
+        for (let i = 0; i < pages.length; i++) {
           throwIfAborted(signal);
-          if (!blob || blob.type !== type) throw new Error('Canvas export failed');
-          const name = `${stem}-p${String(pages[i]).padStart(pad, '0')}.${ext}`;
-          outputs.push({ name, blob });
-        } finally { c.width = c.height = 0; }
+          const c = document.createElement('canvas');
+          try {
+            await renderPage(pages[i], resolution / 72, c, source, hide, signal);
+            const blob = await encodeCanvas(c, type, jpegQuality, signal);
+            throwIfAborted(signal);
+            if (!blob || blob.type !== type) throw new Error('Canvas export failed');
+            const name = `${stem}-p${String(pages[i]).padStart(pad, '0')}.${ext}`;
+            total += blob.size;
+            if (total > LIMITS.totalBytes) throw new Error(`The page images exceed ${formatBytes(LIMITS.totalBytes)}. Lower the resolution or export fewer pages.`);
+            if (archive) archive.add(name, new Uint8Array(await blob.arrayBuffer()));
+            else single = { name, blob };
+          } finally {
+            c.width = c.height = 0;
+          }
 
-        progress((i + 1) / pages.length, `Page ${i + 1} of ${pages.length}`);
-      }
-      throwIfAborted(signal);
-      if (outputs.length === 1) downloadBlob(outputs[0].blob, outputs[0].name);
-      else {
-        const items = await Promise.all(outputs.map(async (o) => ({ name: o.name, data: new Uint8Array(await o.blob.arrayBuffer()) })));
+          progress((i + 1) / pages.length, `Page ${i + 1} of ${pages.length}`);
+        }
         throwIfAborted(signal);
-        downloadBlob(new Blob([makeZip(items, { store: true }) as BlobPart], { type: 'application/zip' }), `${stem}-images.zip`);
-      }
-      return `${outputs.length} image(s) downloaded${outputs.length > 1 ? ' as ZIP' : ''}.`;
-    } finally { outputs.length = 0; taskSignal.removeEventListener('abort', abort); operationController = null; }
-  }, { validate: () => (doc ? null : 'Choose a PDF first.') });
+        if (archive) downloadBlob(archive.finish(), `${stem}-images.zip`);
+        else downloadBlob(single!.blob, single!.name);
+        return `${pages.length} image(s) downloaded${pages.length > 1 ? ' as ZIP' : ''}.`;
+      });
+    },
+    { validate: () => (doc ? null : 'Choose a PDF first.') },
+  );
 
-  cropBox.disabled = true;
-  toolPage(root, 'pdf-to-images', { config: [group(null, picker, info), group(null, field('Pages to export', range, 'Leave blank for all, or enter 1, 3, 5-8.'), h('div', { class: 'option-grid' }, field('Image format', fmt), field('Resolution (DPI)', dpi)), qualityField, option('Use the PDF crop box', 'PDF.js always renders the visible crop box. Full media-box rendering and TIFF export are unavailable in this edition.', cropBox), option('Hide annotations', 'Omit annotation appearances from the exported pages.', hideAnnotations))], actions: [task.el] });
+  toolPage(root, 'pdf-to-images', {
+    config: [
+      group(null, picker, info),
+      group(
+        null,
+        field('Pages to export', range, 'Leave blank for all, or enter 1, 3, 5-8.'),
+        h('div', { class: 'option-grid' }, field('Image format', fmt), field('Resolution (DPI)', dpi)),
+        quality.el,
+        option('Hide annotations', 'Omit annotation appearances from the exported pages.', hideAnnotations),
+        h('p', { class: 'field-hint' }, 'Pages are rendered from the PDF crop box, the area a PDF viewer shows. Media-box rendering and TIFF export are unavailable in this edition.'),
+      ),
+    ],
+    actions: [task.el],
+  });
   persistForm('pdf-to-images', root, ['range']);
-  return () => { selectionRequest++; operationController?.abort(); releaseSource(); };
+  return () => {
+    selectionRequest++;
+    operation.abort();
+    releaseSource();
+  };
 }

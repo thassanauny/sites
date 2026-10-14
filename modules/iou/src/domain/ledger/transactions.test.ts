@@ -6,7 +6,22 @@ const now = '2026-10-08T09:00:00.000Z'
 const expense: Expense = { id: 'entry', type: 'expense', description: 'Dinner', amount: 1_001, paidBy: 'alex', shares: { alex: 501, sam: 500 }, category: 'food', date: '2026-10-08', createdAt: now }
 const payment: Payment = { id: 'entry', type: 'payment', amount: 500, fromId: 'alex', toId: 'sam', note: 'Transfer', date: '2026-10-08', createdAt: now }
 function group(id: string, currency: string, transactions: Group['transactions']): Group {
-  return { id, name: `Group ${id}`, description: '', currency, icon: 'food', color: '#faead6', inviteCode: 'a'.repeat(32), createdAt: now, updatedAt: now, members: [{ id: 'alex', name: `${id} Alex` }, { id: 'sam', name: `${id} Sam` }], transactions }
+  return {
+    id,
+    name: `Group ${id}`,
+    description: '',
+    currency,
+    icon: 'food',
+    color: '#faead6',
+    inviteCode: 'a'.repeat(32),
+    createdAt: now,
+    updatedAt: now,
+    members: [
+      { id: 'alex', name: `${id} Alex` },
+      { id: 'sam', name: `${id} Sam` },
+    ],
+    transactions,
+  }
 }
 
 describe('transactions across groups', () => {
@@ -16,7 +31,8 @@ describe('transactions across groups', () => {
     const entries = getTransactionFeed(groups)
     expect(entries).toHaveLength(2)
     expect(entries.map(entry => [entry.group.id, entry.group.currency, entry.transaction.type, entry.transaction.amount])).toEqual([
-      ['cad', 'CAD', 'payment', 500], ['usd', 'USD', 'expense', 1_001],
+      ['cad', 'CAD', 'payment', 500],
+      ['usd', 'USD', 'expense', 1_001],
     ])
     expect(entries[0]!.group.members[0]!.name).toBe('cad Alex')
     expect(entries[1]!.group.members[0]!.name).toBe('usd Alex')

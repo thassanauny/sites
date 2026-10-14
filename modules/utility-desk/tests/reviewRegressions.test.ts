@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { zipSync, strToU8 } from 'fflate';
-import { persistForm, input, filePicker, taskControls } from '../src/ui/elements';
+import { persistForm, taskControls } from '../src/application/tasks';
+import { input, filePicker } from '../src/ui/elements';
 import { store } from '../src/infrastructure/storage';
 import { epubToHtml } from '../src/domain/documents/conversion';
 import { mount as mountMedia } from '../src/features/media/mediaConverter';
@@ -8,21 +9,34 @@ import { mount as mountImages } from '../src/features/pdf/imagesToPdf';
 import { mount as mountMerge } from '../src/features/pdf/mergePdfs';
 
 const ffmpeg = vi.hoisted(() => ({
-  load: vi.fn(async () => {}), writeFile: vi.fn<(path: string, data: Uint8Array) => Promise<void>>(async () => {}), exec: vi.fn<(command: string[]) => Promise<number>>(async () => 0),
-  readFile: vi.fn(async () => new Uint8Array([1])), terminate: vi.fn(),
+  load: vi.fn(async () => {}),
+  writeFile: vi.fn<(path: string, data: Uint8Array) => Promise<void>>(async () => {}),
+  exec: vi.fn<(command: string[]) => Promise<number>>(async () => 0),
+  readFile: vi.fn(async () => new Uint8Array([1])),
+  terminate: vi.fn(),
 }));
-vi.mock('@ffmpeg/ffmpeg', () => ({ FFmpeg: class {
-  on() {}
-  load = ffmpeg.load;
-  writeFile = ffmpeg.writeFile;
-  exec = ffmpeg.exec;
-  readFile = ffmpeg.readFile;
-  terminate = ffmpeg.terminate;
-} }));
+vi.mock('@ffmpeg/ffmpeg', () => ({
+  FFmpeg: class {
+    on() {}
+    load = ffmpeg.load;
+    writeFile = ffmpeg.writeFile;
+    exec = ffmpeg.exec;
+    readFile = ffmpeg.readFile;
+    terminate = ffmpeg.terminate;
+  },
+}));
 
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); });
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
 
-function main() { document.body.innerHTML = '<main id="main"></main>'; return document.querySelector('main')!; }
+function main() {
+  document.body.innerHTML = '<main id="main"></main>';
+  return document.querySelector('main')!;
+}
 function drop(zone: HTMLElement, files: File[]) {
   const event = new Event('drop', { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'dataTransfer', { value: { files } });
@@ -44,13 +58,17 @@ describe('reviewed file and draft lifecycle', () => {
     expect(root.querySelector('.status')?.textContent).toBe(validation);
     expect(bar.parentElement?.hidden).toBe(true);
   });
-  for (const [id, mount] of [['images-to-pdf', mountImages], ['merge-pdfs', mountMerge]] as const) {
+  for (const [id, mount] of [
+    ['images-to-pdf', mountImages],
+    ['merge-pdfs', mountMerge],
+  ] as const) {
     it(`does not save the output filename in the ${id} draft`, () => {
       vi.useFakeTimers();
       const root = main();
       mount(root);
       const filename = root.querySelector<HTMLInputElement>('[name="outName"]')!;
-      filename.value = 'chosen.pdf'; filename.dispatchEvent(new Event('input', { bubbles: true }));
+      filename.value = 'chosen.pdf';
+      filename.dispatchEvent(new Event('input', { bubbles: true }));
       root.dispatchEvent(new Event('utility-desk:leave'));
       const expected = store.getDraft(id);
       expect(expected.outName).toBeUndefined();
@@ -58,46 +76,74 @@ describe('reviewed file and draft lifecycle', () => {
   }
   it('keeps consecutive tool drafts independent and flushes pending edits once', () => {
     vi.useFakeTimers();
-    const root = main(), first = input('text', 'choice', 'first'); root.append(first);
-    persistForm('first', root); first.value = 'edited'; first.dispatchEvent(new Event('input', { bubbles: true }));
+    const root = main(),
+      first = input('text', 'choice', 'first');
+    root.append(first);
+    persistForm('first', root);
+    first.value = 'edited';
+    first.dispatchEvent(new Event('input', { bubbles: true }));
     root.dispatchEvent(new Event('utility-desk:leave'));
-    const second = input('text', 'choice', 'second'); root.replaceChildren(second); persistForm('second', root);
-    second.value = 'later'; second.dispatchEvent(new Event('input', { bubbles: true }));
+    const second = input('text', 'choice', 'second');
+    root.replaceChildren(second);
+    persistForm('second', root);
+    second.value = 'later';
+    second.dispatchEvent(new Event('input', { bubbles: true }));
     vi.advanceTimersByTime(500);
     expect(store.getDraft('first')).toEqual({ choice: 'edited' });
     expect(store.getDraft('second')).toEqual({ choice: 'later' });
     root.dispatchEvent(new Event('utility-desk:leave'));
   });
   it('rejects dropped replacements during work and allows them after completion', async () => {
-    const root = main(), onFiles = vi.fn();
-    const picker = filePicker({ label: 'Source', accept: '.txt', onFiles }); root.append(picker);
+    const root = main(),
+      onFiles = vi.fn();
+    const picker = filePicker({ label: 'Source', accept: '.txt', onFiles });
+    root.append(picker);
     let finish!: () => void;
-    const task = taskControls('fixture', 'Work', () => new Promise<void>((resolve) => { finish = resolve; })); root.append(task.el);
+    const task = taskControls(
+      'fixture',
+      'Work',
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    root.append(task.el);
     const file = new File(['fixture'], 'fixture.txt');
-    drop(picker, [file]); expect(onFiles).toHaveBeenCalledTimes(1);
+    drop(picker, [file]);
+    expect(onFiles).toHaveBeenCalledTimes(1);
     const completion = task.run();
     expect(picker.querySelector('input')!.disabled).toBe(true);
-    drop(picker, [file]); expect(onFiles).toHaveBeenCalledTimes(1);
-    finish(); await completion;
-    drop(picker, [file]); expect(onFiles).toHaveBeenCalledTimes(2);
+    drop(picker, [file]);
+    expect(onFiles).toHaveBeenCalledTimes(1);
+    finish();
+    await completion;
+    drop(picker, [file]);
+    expect(onFiles).toHaveBeenCalledTimes(2);
   });
 });
 
 function epub(chapters: Record<string, string>, hrefs: string[], ids = hrefs.map((_href, i) => `c${i}`)) {
-  return zipSync(Object.fromEntries(Object.entries({
-    'META-INF/container.xml': '<container><rootfiles><rootfile full-path="OPS/Packages/book.opf"/></rootfiles></container>',
-    'OPS/Packages/book.opf': `<package><metadata><title>Fixture</title></metadata><manifest>${hrefs.map((href, i) => `<item id="c${i}" href="${href}"/>`).join('')}</manifest><spine>${ids.map((id) => `<itemref idref="${id}"/>`).join('')}</spine></package>`,
-    ...chapters,
-  }).map(([path, text]) => [path, strToU8(text)])));
+  return zipSync(
+    Object.fromEntries(
+      Object.entries({
+        'META-INF/container.xml': '<container><rootfiles><rootfile full-path="OPS/Packages/book.opf"/></rootfiles></container>',
+        'OPS/Packages/book.opf': `<package><metadata><title>Fixture</title></metadata><manifest>${hrefs.map((href, i) => `<item id="c${i}" href="${href}"/>`).join('')}</manifest><spine>${ids.map((id) => `<itemref idref="${id}"/>`).join('')}</spine></package>`,
+        ...chapters,
+      }).map(([path, text]) => [path, strToU8(text)]),
+    ),
+  );
 }
 
 describe('EPUB chapter completeness', () => {
   it('resolves parent-relative, dot, encoded and fragment paths in spine order', () => {
-    const bytes = epub({
-      'OPS/Packages/first.xhtml': '<p>First chapter</p>',
-      'OPS/Text/second chapter.xhtml': '<p>Second chapter</p>',
-      'OPS/Text/third.xhtml': '<p>Third chapter</p>',
-    }, ['./first.xhtml', '../Text/second%20chapter.xhtml#section', '../Text/./third.xhtml']);
+    const bytes = epub(
+      {
+        'OPS/Packages/first.xhtml': '<p>First chapter</p>',
+        'OPS/Text/second chapter.xhtml': '<p>Second chapter</p>',
+        'OPS/Text/third.xhtml': '<p>Third chapter</p>',
+      },
+      ['./first.xhtml', '../Text/second%20chapter.xhtml#section', '../Text/./third.xhtml'],
+    );
     const result = epubToHtml(bytes);
     expect(result.html).toBe('<p>First chapter</p>\n<p>Second chapter</p>\n<p>Third chapter</p>');
   });
@@ -113,12 +159,18 @@ describe('EPUB chapter completeness', () => {
 
 function mediaFixture() {
   const NativeURL = URL;
-  vi.stubGlobal('URL', class extends NativeURL {
-    static createObjectURL() { return 'blob:fixture'; }
-    static revokeObjectURL() {}
-  });
+  vi.stubGlobal(
+    'URL',
+    class extends NativeURL {
+      static createObjectURL() {
+        return 'blob:fixture';
+      }
+      static revokeObjectURL() {}
+    },
+  );
   vi.stubGlobal('Worker', class {});
-  const root = main(), cleanup = mountMedia(root)!;
+  const root = main(),
+    cleanup = mountMedia(root)!;
   const picker = root.querySelector<HTMLInputElement>('input[type="file"]')!;
   const preview = root.querySelector('video')!;
   const end = root.querySelector<HTMLInputElement>('[name="end"]')!;
@@ -136,21 +188,34 @@ function mediaFixture() {
 describe('media duration and frozen operation inputs', () => {
   it('keeps full-length conversion unbounded when a longer file replaces the source', () => {
     const { root, end, choose, cleanup } = mediaFixture();
-    choose('short.mp4', 10); expect(end.value).toBe(''); expect(end.placeholder).toContain('10 s');
-    choose('long.mp4', 20); expect(end.value).toBe(''); expect(end.placeholder).toContain('20 s');
+    choose('short.mp4', 10);
+    expect(end.value).toBe('');
+    expect(end.placeholder).toContain('10 s');
+    choose('long.mp4', 20);
+    expect(end.value).toBe('');
+    expect(end.placeholder).toContain('20 s');
     [...root.querySelectorAll('button')].find((button) => button.textContent === 'Preview conversion')!.click();
     expect(root.querySelector('pre')!.textContent).toContain('Source: long.mp4');
     expect(root.querySelector('pre')!.textContent).not.toContain('-t ');
-    end.value = '5'; end.dispatchEvent(new Event('input', { bubbles: true }));
-    choose('another.mp4', 30); expect(end.value).toBe('5');
-    root.dispatchEvent(new Event('utility-desk:leave')); cleanup();
+    end.value = '5';
+    end.dispatchEvent(new Event('input', { bubbles: true }));
+    choose('another.mp4', 30);
+    expect(end.value).toBe('5');
+    root.dispatchEvent(new Event('utility-desk:leave'));
+    cleanup();
   });
   it('preserves the selected file, settings and output name through asynchronous conversion', async () => {
     const { root, picker, choose, cleanup } = mediaFixture();
     choose('original.mp4', 10);
     let finishLoad!: () => void;
-    ffmpeg.load.mockImplementationOnce(() => new Promise<void>((resolve) => { finishLoad = resolve; }));
-    ffmpeg.exec.mockClear(); ffmpeg.writeFile.mockClear();
+    ffmpeg.load.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishLoad = resolve;
+        }),
+    );
+    ffmpeg.exec.mockClear();
+    ffmpeg.writeFile.mockClear();
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     [...root.querySelectorAll('button')].find((button) => button.textContent === 'Convert media →')!.click();
     expect(picker.disabled).toBe(true);
@@ -164,6 +229,7 @@ describe('media duration and frozen operation inputs', () => {
     expect(ffmpeg.exec.mock.calls[0][0]).toContain('output.mp4');
     expect(ffmpeg.exec.mock.calls[0][0]).not.toContain('-t');
     expect(document.querySelector<HTMLAnchorElement>('a[download]')!.download).toBe('original_converted.mp4');
-    root.dispatchEvent(new Event('utility-desk:leave')); cleanup();
+    root.dispatchEvent(new Event('utility-desk:leave'));
+    cleanup();
   });
 });

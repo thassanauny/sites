@@ -1,0 +1,1 @@
+const e={fileBytes:209715200,totalBytes:524288e3,files:50,documentBytes:52428800,mediaBytes:268435456,pdfPages:1e3,documentChars:2e6,imagePixels:1e8,pagePixels:5e7,inflatedBytes:134217728,archiveEntries:1e4,archiveEntryBytes:33554432,mobiTextBytes:33554432};export{e as L};

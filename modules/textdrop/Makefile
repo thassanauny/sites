@@ -4,7 +4,7 @@ NPM ?= npm
 # Capture overrides before assigning defaults, including exported environment values.
 PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
 
-.PHONY: help node-check setup build run dev preview test typecheck check
+.PHONY: help node-check setup build run dev preview test typecheck lint format check
 
 help:
 	@printf '%s\n' \
@@ -19,8 +19,10 @@ help:
 	  'Default ports advance when busy; explicit PORT stays fixed. Use the printed URL.' \
 	  'make test       Run UI, client, database and public-config tests' \
 	  'make typecheck  Check TypeScript' \
+	  'make lint       Check formatting and lint rules with Biome' \
+	  'make format     Apply Biome formatting and safe fixes' \
 	  'make check      Run all applicable checks' \
-	  'Supabase defaults: ../../publishing/.env.local; app settings override defaults, exported environment overrides both.'
+	  'Supabase settings: shared defaults and their precedence are described in webapps/everydayapps/AGENTS.md.'
 
 node-check:
 	@command -v "$(NODE)" >/dev/null 2>&1 || { printf '%s\n' 'Install Node.js 24 or newer; see README.md.' >&2; exit 1; }
@@ -33,7 +35,8 @@ setup: node-check
 	    [ package-lock.json -nt node_modules/.package-lock.json ] || \
 	    [ ! -x node_modules/.bin/tsc ] || \
 	    [ ! -x node_modules/.bin/vite ] || \
-	    [ ! -x node_modules/.bin/vitest ]; then \
+	    [ ! -x node_modules/.bin/vitest ] || \
+	    [ ! -x node_modules/.bin/biome ]; then \
 	  "$(NPM)" ci --include=dev; \
 	fi
 
@@ -56,8 +59,19 @@ test: setup
 typecheck: setup
 	"$(NPM)" exec tsc -- -b
 
-check: typecheck test
+lint: setup
+	"$(NPM)" run lint
+
+format: setup
+	"$(NPM)" run format
+
+check: typecheck lint test
 
 .PHONY: prepare-shared
 prepare-shared: node-check
 	"$(NODE)" scripts/prepare-shared.mjs "$(SITE_CHECKOUT)"
+
+.PHONY: check-site
+check-site: node-check
+	@test -n "$(SITE)" || { printf '%s\n' 'Set SITE to the prepared website folder.' >&2; exit 1; }
+	"$(NODE)" scripts/check-shared-build.mjs "$(SITE)" textdrop

@@ -4,7 +4,7 @@ NPM ?= npm
 # Capture overrides before assigning defaults, including exported environment values.
 PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
 
-.PHONY: help node-check setup build run dev preview test test-postgres typecheck check
+.PHONY: help node-check setup build run dev preview test test-postgres typecheck lint format check
 
 help:
 	@printf '%s\n' \
@@ -20,8 +20,10 @@ help:
 	  'make test-postgres  Optional concurrency checks; requires running Docker and a local PostgreSQL 17 image' \
 	  '                   POSTGRES_IMAGE environment override; default postgres:17-alpine, no image download' \
 	  'make typecheck  Check TypeScript' \
+	  'make lint       Check formatting and lint rules with Biome (no changes written)' \
+	  '                make format applies the formatter and safe lint fixes' \
 	  'make check      Run all applicable checks' \
-	  'Supabase defaults: ../../publishing/.env.local; app settings override defaults, exported environment overrides both.'
+	  'Supabase settings: see webapps/everydayapps/AGENTS.md for the shared defaults and their precedence.'
 
 node-check:
 	@command -v "$(NODE)" >/dev/null 2>&1 || { printf '%s\n' 'Install Node.js 24 or newer; see README.md.' >&2; exit 1; }
@@ -33,6 +35,7 @@ setup: node-check
 	    [ package.json -nt node_modules/.package-lock.json ] || \
 	    [ package-lock.json -nt node_modules/.package-lock.json ] || \
 	    [ ! -x node_modules/.bin/tsc ] || \
+	    [ ! -x node_modules/.bin/biome ] || \
 	    [ ! -x node_modules/.bin/vite ] || \
 	    [ ! -x node_modules/.bin/vitest ]; then \
 	  "$(NPM)" ci --include=dev; \
@@ -60,8 +63,19 @@ test-postgres: setup
 typecheck: setup
 	"$(NPM)" exec tsc -- -b
 
-check: typecheck test
+lint: setup
+	"$(NPM)" exec biome -- check .
+
+format: setup
+	"$(NPM)" exec biome -- check --write .
+
+check: typecheck lint test
 
 .PHONY: prepare-shared
 prepare-shared: node-check
 	"$(NODE)" scripts/prepare-shared.mjs "$(SITE_CHECKOUT)"
+
+.PHONY: check-site
+check-site: node-check
+	@test -n "$(SITE)" || { printf '%s\n' 'Set SITE to the prepared website folder.' >&2; exit 1; }
+	"$(NODE)" scripts/check-shared-build.mjs "$(SITE)" pinboard

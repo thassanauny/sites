@@ -1,0 +1,30 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "vcs": { "enabled": false },
+  "files": {
+    "includes": [
+      "src/**",
+      "scripts/**",
+      "*.ts",
+      "index.html",
+      "package.json",
+      "biome.json",
+      "tsconfig*.json",
+      "!**/dist",
+      "!**/node_modules",
+      "!scripts/prepare-shared.mjs",
+      "!scripts/snapshot-lib.mjs"
+    ]
+  },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 200 },
+  "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "asNeeded", "arrowParentheses": "asNeeded" } },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "complexity": { "noImportantStyles": "off" },
+      "style": { "noNonNullAssertion": "off", "noDescendingSpecificity": "off" }
+    }
+  },
+  "assist": { "enabled": false }
+}

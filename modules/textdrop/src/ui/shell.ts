@@ -1,4 +1,4 @@
-import { MAX_SNIPPET_NAME_LENGTH } from '../infrastructure/storage/deviceSnippets';
+import { MAX_SNIPPET_NAME_LENGTH } from '../domain/snippets/model';
 import { icon } from './icons';
 
 export function shell(): string {
@@ -44,11 +44,11 @@ export function shell(): string {
             <div class="editor-toolbar"><span class="document-label"><span class="document-dot"></span>Plain text</span><div class="editor-actions"><button class="text-button" id="copy-text">${icon('copy')}Copy text</button><button class="text-button" id="download">${icon('download')}Download</button></div></div>
             <label class="sr-only" for="editor">Shared snippet text</label>
             <textarea id="editor" spellcheck="false" placeholder="Write or paste your text here…" aria-describedby="save-status editor-guidance"></textarea>
-            <div class="editor-footer"><span id="save-status" role="status" aria-live="polite"></span><span id="text-count"></span></div>
+            <div class="editor-footer"><span id="save-status"></span><span id="text-count"></span><span id="save-announcement" class="sr-only" role="status" aria-live="polite"></span></div>
           </div>
           <div class="workspace-notes"><p id="editor-guidance">Changes save automatically. If two people edit, the latest saved text wins.</p><span id="updated-at"></span></div>
         </section>
-        <div class="notice" id="notice" hidden><p id="notice-message" role="alert"></p><button class="button small-button" id="retry" hidden>Retry save</button></div>
+        <div class="notice" id="notice" hidden><p id="notice-message" role="alert"></p><button class="button small-button" id="retry" hidden>Retry save</button><button class="button small-button" id="new-session" hidden>Start a new session</button></div>
       </main>
       <footer class="site-footer"><span>Your text, within reach.</span><span>textdrop <span id="version"></span></span></footer>
     </div>
@@ -99,6 +99,81 @@ export function shell(): string {
         <div class="dialog-actions"><button type="button" class="button" id="remove-cancel">Keep on this device</button><button type="submit" class="button primary" id="remove-confirm">Remove from this device</button></div>
       </form>
       <p id="dialog-error" class="dialog-error" role="alert" hidden></p>
+      <button type="button" class="button small-button dialog-new-session" id="dialog-new-session" hidden>Start a new session</button>
     </dialog>
   `;
 }
+
+/** The template elements the app code uses, looked up once so a mistyped id fails at start-up, not on first use. */
+export function shellElements(root: HTMLElement) {
+  const get = <T extends HTMLElement>(id: string): T => {
+    const found = root.querySelector<T>(`#${id}`);
+    if (!found) throw new Error(`The TextDrop page is missing #${id}.`);
+    return found;
+  };
+  return {
+    connection: get<HTMLElement>('connection'),
+    connectionLabel: get<HTMLElement>('connection-label'),
+    home: get<HTMLElement>('home'),
+    create: get<HTMLButtonElement>('create'),
+    join: get<HTMLButtonElement>('join'),
+    deviceHeading: get<HTMLElement>('device-heading'),
+    deviceCount: get<HTMLElement>('device-count'),
+    deviceList: get<HTMLElement>('device-list'),
+    deviceEmpty: get<HTMLElement>('device-empty'),
+    workspace: get<HTMLElement>('workspace'),
+    pageName: get<HTMLElement>('page-name'),
+    share: get<HTMLButtonElement>('share'),
+    settings: get<HTMLButtonElement>('settings'),
+    pageCode: get<HTMLElement>('page-code'),
+    copyCode: get<HTMLButtonElement>('copy-code'),
+    copyText: get<HTMLButtonElement>('copy-text'),
+    download: get<HTMLButtonElement>('download'),
+    editor: get<HTMLTextAreaElement>('editor'),
+    saveStatus: get<HTMLElement>('save-status'),
+    textCount: get<HTMLElement>('text-count'),
+    saveAnnouncement: get<HTMLElement>('save-announcement'),
+    updatedAt: get<HTMLElement>('updated-at'),
+    notice: get<HTMLElement>('notice'),
+    noticeMessage: get<HTMLElement>('notice-message'),
+    retry: get<HTMLButtonElement>('retry'),
+    newSession: get<HTMLButtonElement>('new-session'),
+    dialogNewSession: get<HTMLButtonElement>('dialog-new-session'),
+    version: get<HTMLElement>('version'),
+    toast: get<HTMLElement>('toast'),
+    dialog: get<HTMLDialogElement>('snippet-dialog'),
+    dialogTitle: get<HTMLElement>('dialog-title'),
+    dialogClose: get<HTMLButtonElement>('dialog-close'),
+    createForm: get<HTMLFormElement>('create-form'),
+    createCancel: get<HTMLButtonElement>('create-cancel'),
+    createConfirm: get<HTMLButtonElement>('create-confirm'),
+    createLabel: get<HTMLElement>('create-label'),
+    joinForm: get<HTMLFormElement>('join-form'),
+    joinCode: get<HTMLInputElement>('join-code'),
+    joinCancel: get<HTMLButtonElement>('join-cancel'),
+    joinConfirm: get<HTMLButtonElement>('join-confirm'),
+    joinLabel: get<HTMLElement>('join-label'),
+    invitePanel: get<HTMLElement>('invite-panel'),
+    inviteCode: get<HTMLInputElement>('invite-code'),
+    inviteCopyCode: get<HTMLButtonElement>('invite-copy-code'),
+    inviteCopyLink: get<HTMLButtonElement>('invite-copy-link'),
+    settingsPanel: get<HTMLElement>('settings-panel'),
+    settingsRename: get<HTMLButtonElement>('settings-rename'),
+    settingsRemove: get<HTMLButtonElement>('settings-remove'),
+    renameForm: get<HTMLFormElement>('rename-form'),
+    snippetNameInput: get<HTMLInputElement>('snippet-name-input'),
+    renameCancel: get<HTMLButtonElement>('rename-cancel'),
+    renameConfirm: get<HTMLButtonElement>('rename-confirm'),
+    removeForm: get<HTMLFormElement>('remove-form'),
+    removeCode: get<HTMLInputElement>('remove-code'),
+    removeCopyCode: get<HTMLButtonElement>('remove-copy-code'),
+    removeUnsaved: get<HTMLElement>('remove-unsaved'),
+    removeCopyText: get<HTMLButtonElement>('remove-copy-text'),
+    removeDiscard: get<HTMLInputElement>('remove-discard'),
+    removeSaving: get<HTMLElement>('remove-saving'),
+    removeCancel: get<HTMLButtonElement>('remove-cancel'),
+    removeConfirm: get<HTMLButtonElement>('remove-confirm'),
+    dialogError: get<HTMLElement>('dialog-error'),
+  };
+}
+export type ShellElements = ReturnType<typeof shellElements>;

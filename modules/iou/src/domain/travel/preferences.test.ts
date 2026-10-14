@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { emptyTravelMode, normalizeTravelMode, travelLaunchHash } from './preferences'
 
-const groups = [{ id: 'trip', inviteCode: 'a'.repeat(32) }, { id: 'other', inviteCode: 'b'.repeat(32) }]
+const groups = [
+  { id: 'trip', inviteCode: 'a'.repeat(32) },
+  { id: 'other', inviteCode: 'b'.repeat(32) },
+]
 const enabled = { enabled: true, defaultGroupId: 'trip' }
 
 describe('Travel mode launches', () => {

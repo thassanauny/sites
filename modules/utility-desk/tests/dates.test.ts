@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shiftDate, diffDates, timestampToDate, dateToTimestamp, worldClock } from '../src/domain/datetime/dates';
+import { shiftDate, diffDates, timestampToDate, dateToTimestamp, parseTimestamp, worldClock } from '../src/domain/datetime/dates';
 
 describe('dates', () => {
   it('adds and subtracts with month-end clamping', () => {
@@ -18,6 +18,13 @@ describe('dates', () => {
     expect(timestampToDate(1700000000, 'Asia/Bangkok').iso).toContain('2023-11-15T05:13:20');
     expect(dateToTimestamp('2023-11-14T22:13:20', 'UTC').seconds).toBe(1700000000);
     expect(() => timestampToDate(NaN, 'UTC')).toThrow();
+  });
+  it('rejects a blank or non-numeric timestamp instead of treating it as 0', () => {
+    expect(parseTimestamp(' 1700000000 ')).toBe(1700000000);
+    expect(parseTimestamp('-1.5')).toBe(-1.5);
+    expect(parseTimestamp('0')).toBe(0);
+    for (const blank of ['', '   ']) expect(() => parseTimestamp(blank)).toThrow('Enter a Unix timestamp.');
+    for (const bad of ['abc', 'Infinity', '12 34']) expect(() => parseTimestamp(bad)).toThrow('Enter a valid number');
   });
   it('formats world clocks', () => {
     const c = worldClock(new Date('2024-01-01T00:00:00Z'), 'Asia/Tokyo');

@@ -30,11 +30,11 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v6
       - name: Verify iou shared-group configuration
-        run: node modules/iou/scripts/check-cloud-build.mjs site/iou
+        run: make -C modules/iou check-site SITE=../../site/iou
       - name: Verify TextDrop shared-text configuration
-        run: node modules/textdrop/scripts/check-shared-build.mjs site/textdrop textdrop
+        run: make -C modules/textdrop check-site SITE=../../site/textdrop
       - name: Verify Pinboard shared-board configuration
-        run: node modules/pinboard/scripts/check-shared-build.mjs site/pinboard pinboard
+        run: make -C modules/pinboard check-site SITE=../../site/pinboard
       - name: Upload only the website
         uses: actions/upload-pages-artifact@v5
         with:

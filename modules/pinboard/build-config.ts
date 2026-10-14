@@ -1,16 +1,18 @@
+/** Cleartext http is only for a Supabase stack running on this machine. */
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+
 /** Reject private settings before Vite can expose them in a static bundle. */
 export function validatePublicConfig(url: string, key: string): void {
   try {
     const parsed = new URL(url);
-    if (
-      !['https:', 'http:'].includes(parsed.protocol) ||
-      parsed.username ||
-      parsed.password
-    ) {
-      throw new Error();
-    }
+    const allowed =
+      parsed.protocol === 'https:' ||
+      (parsed.protocol === 'http:' && LOCAL_HOSTS.includes(parsed.hostname));
+    if (!allowed || parsed.username || parsed.password) throw new Error();
   } catch {
-    throw new Error('Pinboard requires a valid Supabase project URL.');
+    throw new Error(
+      'Pinboard requires a valid Supabase project URL. Plain http:// is accepted only for localhost.',
+    );
   }
   if (/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) return;
   try {

@@ -1,6 +1,10 @@
 export function sanitizeFilename(name: string, fallback = 'file'): string {
-  // eslint-disable-next-line no-control-regex
-  let n = name.replace(/[\\/]+/g, '_').replace(/[\x00-\x1f\x7f<>:"|?*]/g, '').replace(/\s+/g, ' ').trim();
+  let n = name
+    .replace(/[\\/]+/g, '_')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1f\x7f<>:"|?*]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   n = n.replace(/^\.+/, '').replace(/[. ]+$/, '');
   if (/^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i.test(n)) n = `_${n}`;
   if (n.length > 120) {
@@ -32,18 +36,17 @@ export function suggestOutputName(control: HTMLInputElement, suffix: string) {
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   const u = ['KB', 'MB', 'GB'];
-  let v = n / 1024, i = 0;
-  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  let v = n / 1024,
+    i = 0;
+  while (v >= 1024 && i < u.length - 1) {
+    v /= 1024;
+    i++;
+  }
   return `${v.toFixed(v < 10 ? 1 : 0)} ${u[i]}`;
 }
 
-/** Tracks object URLs so they can all be revoked. */
-export class UrlBag {
-  private urls = new Set<string>();
-  make(blob: Blob): string { const u = URL.createObjectURL(blob); this.urls.add(u); return u; }
-  revoke(u: string) { if (this.urls.delete(u)) URL.revokeObjectURL(u); }
-  revokeAll() { this.urls.forEach((u) => URL.revokeObjectURL(u)); this.urls.clear(); }
-}
+/** A count with thousands separators, as the limits are quoted in messages and docs. */
+export const formatCount = (n: number): string => n.toLocaleString('en-US');
 
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -55,7 +58,12 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.click();
   // Retain the hidden anchor briefly for embedded browsers, then release it.
   const root = document.getElementById('main');
-  const release = () => { clearTimeout(timer); URL.revokeObjectURL(url); a.remove(); root?.removeEventListener('utility-desk:leave', release); };
+  const release = () => {
+    clearTimeout(timer);
+    URL.revokeObjectURL(url);
+    a.remove();
+    root?.removeEventListener('utility-desk:leave', release);
+  };
   const timer = setTimeout(release, 10 * 60_000);
   root?.addEventListener('utility-desk:leave', release, { once: true });
 }
@@ -74,6 +82,3 @@ export async function readFileBytes(file: File, signal?: AbortSignal): Promise<U
 export function throwIfAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
 }
-
-export const MAX_FILE_BYTES = 200 * 1024 * 1024;
-export const MAX_TOTAL_BYTES = 500 * 1024 * 1024;

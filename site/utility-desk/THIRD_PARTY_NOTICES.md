@@ -6,7 +6,6 @@ These packages are bundled locally. License texts are in [licenses/](licenses/).
 | --- | --- | --- |
 | @ffmpeg/core | 0.12.10 | GPL-2.0-or-later |
 | @ffmpeg/ffmpeg | 0.12.15 | MIT |
-| @ffmpeg/util | 0.12.2 | MIT |
 | @js-temporal/polyfill | 0.5.1 | ISC |
 | jsbi | 4.3.2 | Apache-2.0 |
 | fflate | 0.8.3 | MIT |
@@ -21,7 +20,7 @@ These packages are bundled locally. License texts are in [licenses/](licenses/).
 | @pdf-lib/fontkit | 1.1.1 | MIT |
 | pako | 1.0.11 | MIT/Zlib |
 | pdfjs-dist | 4.8.69 | Apache-2.0 |
-| @pdf-lib/standard-fonts | 1.0.0 | MIT |
+| @pdf-lib/standard-fonts | 1.0.1 | MIT |
 | @pdf-lib/upng | 1.0.1 | MIT |
 | tslib | 1.14.1 | 0BSD |
 

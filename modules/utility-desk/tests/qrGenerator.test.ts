@@ -3,18 +3,26 @@ import { mount } from '../src/features/qr/qrGenerator';
 import { generateQr } from '../src/domain/qr/qr';
 
 vi.mock('../src/domain/qr/qr', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../src/domain/qr/qr')>(),
+  ...(await importOriginal<typeof import('../src/domain/qr/qr')>()),
   generateQr: vi.fn(async () => ({ png: 'data:image/png;base64,AA==', svg: '<svg></svg>' })),
 }));
 
-afterEach(() => { vi.clearAllMocks(); localStorage.clear(); document.body.replaceChildren(); });
+afterEach(() => {
+  vi.clearAllMocks();
+  localStorage.clear();
+  document.body.replaceChildren();
+});
 
 function page() {
   document.body.innerHTML = '<main></main>';
   const root = document.querySelector('main')!;
   const cleanup = mount(root);
   const control = (name: string) => root.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[name="${name}"]`)!;
-  const change = (name: string, value: string) => { const el = control(name); el.value = value; el.dispatchEvent(new Event('change', { bubbles: true })); };
+  const change = (name: string, value: string) => {
+    const el = control(name);
+    el.value = value;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  };
   const generate = () => (root.querySelector('.task .btn-primary') as HTMLButtonElement).click();
   return { root, cleanup, control, change, generate };
 }
@@ -23,12 +31,20 @@ describe('QR type form', () => {
   it('shows fields for each type and hides the password on open networks', () => {
     const { control, change } = page();
     expect((control('qrType') as HTMLSelectElement).options.length).toBe(6);
-    for (const [type, fields] of [['text', ['text']], ['wifi', ['ssid', 'password']], ['email', ['email', 'subject', 'body']], ['phone', ['phone']], ['sms', ['phone', 'message']], ['contact', ['firstName', 'lastName', 'organization']]] as const) {
+    for (const [type, fields] of [
+      ['text', ['text']],
+      ['wifi', ['ssid', 'password']],
+      ['email', ['email', 'subject', 'body']],
+      ['phone', ['phone']],
+      ['sms', ['phone', 'message']],
+      ['contact', ['firstName', 'lastName', 'organization']],
+    ] as const) {
       change('qrType', type);
       const shown = new Set<string>(fields);
       for (const name of ['text', 'ssid', 'email', 'phone', 'message', 'firstName']) expect(!!control(name).closest('[hidden]')).toBe(!shown.has(name));
     }
-    change('qrType', 'wifi'); change('security', 'nopass');
+    change('qrType', 'wifi');
+    change('security', 'nopass');
     expect(control('password').disabled).toBe(true);
     expect(control('password').closest('[hidden]')).toBeTruthy();
     change('security', 'WPA');
@@ -38,10 +54,12 @@ describe('QR type form', () => {
 
   it('validates Wi-Fi fields, generates the selected payload, clears stale results and never persists credentials', async () => {
     const { root, control, change, generate, cleanup } = page();
-    change('qrType', 'wifi'); generate();
+    change('qrType', 'wifi');
+    generate();
     expect(root.querySelector('.task [role="status"]')!.textContent).toContain('network name');
     expect(generateQr).not.toHaveBeenCalled();
-    change('ssid', 'Guest;ไทย'); generate();
+    change('ssid', 'Guest;ไทย');
+    generate();
     expect(root.querySelector('.task [role="status"]')!.textContent).toContain('password');
     change('password', 'private-fixture');
     (control('hidden') as HTMLInputElement).checked = true;
@@ -51,11 +69,47 @@ describe('QR type form', () => {
     expect(JSON.stringify(localStorage)).not.toContain('private-fixture');
     change('qrType', 'email');
     expect(root.querySelector('.qr-preview')).toBeNull();
-    change('qrType', 'wifi'); change('security', 'nopass'); generate();
+    change('qrType', 'wifi');
+    change('security', 'nopass');
+    generate();
     await vi.waitFor(() => expect(root.querySelector('.qr-preview')).toBeTruthy());
     expect(generateQr).toHaveBeenLastCalledWith('WIFI:T:nopass;S:Guest\\;ไทย;H:true;;', { size: 512, level: 'M' });
     cleanup();
     expect(control('password').value).toBe('');
     expect(JSON.stringify(localStorage)).not.toContain('Guest');
+  });
+});
+
+describe('QR downloads', () => {
+  it('saves the PNG and the SVG under the cleaned file name with the right type and content', async () => {
+    const blobs: Blob[] = [],
+      names: string[] = [];
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static createObjectURL(blob: Blob) {
+          blobs.push(blob);
+          return 'blob:fixture';
+        }
+        static revokeObjectURL = vi.fn();
+      },
+    );
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      names.push(this.download);
+    });
+    const { root, change, generate, control } = page();
+    change('text', 'https://example.com');
+    change('outName', 'a/b: code.png');
+    generate();
+    await vi.waitFor(() => expect(root.querySelector('.qr-preview')).toBeTruthy());
+    const [png, svg] = [...root.querySelectorAll<HTMLButtonElement>('.qr-result button')];
+    expect(control('outName').value).toBe('a/b: code.png');
+    png.click();
+    svg.click();
+    expect(names).toEqual(['a_b code.png', 'a_b code.svg']);
+    expect(blobs.map((blob) => blob.type)).toEqual(['image/png', 'image/svg+xml']);
+    expect(blobs[1].size).toBe('<svg></svg>'.length);
+    expect(blobs[0].size).toBe(1);
+    vi.unstubAllGlobals();
   });
 });

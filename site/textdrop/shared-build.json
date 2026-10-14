@@ -1,7 +1,7 @@
 {
   "format": 1,
   "app": "textdrop",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "base": "./",
   "cloudConfigured": true,
   "publicConfig": {
@@ -10,6 +10,6 @@
     "keyKind": "publishable"
   },
   "scripts": {
-    "assets/index-DcoPTLcu.js": "00c9af4a8389ea1b5c3c8145298e06e32914d45b59a83312c1361bf610f71eee"
+    "assets/index-CPWv9tpu.js": "a36867025f1c56be291e0851f1a4113d1f8b6ddef04914d873639077ae272f9d"
   }
 }
