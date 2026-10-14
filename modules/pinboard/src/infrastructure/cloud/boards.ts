@@ -104,7 +104,7 @@ function serviceError(error: ServiceError, action: string): Error {
     error.code === '42883'
   ) {
     return new Error(
-      'Board sharing needs database setup. See webapps/everydayapps/apps/pinboard/supabase/README.md.',
+      'Board sharing needs database setup. See everydayapps/apps/pinboard/supabase/README.md.',
     );
   }
   if (

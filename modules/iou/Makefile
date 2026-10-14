@@ -8,7 +8,7 @@ PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
 PUBLISH_SCRIPT ?= scripts/prepare-shared.mjs
 DEST ?=
 
-.PHONY: all help node-check setup build run dev test typecheck lint format check preview prepare-shared
+.PHONY: all help node-check setup build run dev test test-postgres typecheck lint format check preview prepare-shared
 
 all: build
 
@@ -22,13 +22,14 @@ help:
 	  'Default ports advance when busy; explicit PORT stays fixed. Use the printed URL.' \
 	  'make setup       Install missing npm dependencies (Node.js 24+)' \
 	  'make test        Run automated behavior tests' \
+	  'make test-postgres  Check concurrent database transactions in an isolated local PostgreSQL 17 Docker image' \
 	  'make typecheck   Check TypeScript without building assets' \
 	  'make lint        Check formatting and lint rules with Biome (no changes)' \
 	  'make format      Apply Biome formatting and safe lint fixes' \
 	  'make check       Run TypeScript, Biome and automated tests' \
 	  'make prepare-shared DEST=<Sites checkout>  Prepare a public source snapshot (used by publishing)' \
-	  'Publishing: run make -C webapps/everydayapps/publishing publish from the development repository root' \
-	  'Supabase settings: see webapps/everydayapps/AGENTS.md.'
+	  'Publishing: run make -C everydayapps/publishing publish from the development repository root' \
+	  'Supabase settings: see everydayapps/AGENTS.md.'
 
 node-check:
 	@command -v "$(NODE)" >/dev/null 2>&1 || { printf '%s\n' 'Install Node.js 24 or newer; see README.md.' >&2; exit 1; }
@@ -57,6 +58,9 @@ dev: run
 
 test: setup
 	"$(NPM)" test
+
+test-postgres: setup
+	"$(NODE)" supabase/postgres-check.mjs
 
 typecheck: setup
 	"$(NPM)" exec tsc -- -b

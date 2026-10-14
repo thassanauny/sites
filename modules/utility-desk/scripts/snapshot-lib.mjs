@@ -27,8 +27,8 @@ export function within(parent, child) {
   return !path || (!isAbsolute(path) && path !== '..' && !path.startsWith('..' + sep));
 }
 
-/** The Sites checkout must not be, or sit inside, the development repository (three folders above `file`). */
-export function assertOutsideRepository(file, target, repository = resolve(dirname(file), '../../..')) {
+/** The Sites checkout must not be, or sit inside, the development repository (two folders above `file`). */
+export function assertOutsideRepository(file, target, repository = resolve(dirname(file), '../..')) {
   if (isShipped(file)) return;
   if (within(realpathSync(repository), existsSync(target) ? realpathSync(target) : resolve(target))) {
     throw new Error('Choose a separate Sites checkout outside the development repository.');

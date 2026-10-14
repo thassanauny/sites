@@ -4,7 +4,7 @@ NPM ?= npm
 # Capture overrides before assigning defaults, including exported environment values.
 PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
 
-.PHONY: help node-check setup build run dev preview test typecheck lint format check
+.PHONY: help node-check setup build run dev preview test test-postgres typecheck lint format check
 
 help:
 	@printf '%s\n' \
@@ -18,11 +18,12 @@ help:
 	  'Port override: append PORT=9000 to run, dev, or preview.' \
 	  'Default ports advance when busy; explicit PORT stays fixed. Use the printed URL.' \
 	  'make test       Run UI, client, database and public-config tests' \
+	  'make test-postgres  Check concurrent saves and quotas in an isolated local PostgreSQL 17 Docker image' \
 	  'make typecheck  Check TypeScript' \
 	  'make lint       Check formatting and lint rules with Biome' \
 	  'make format     Apply Biome formatting and safe fixes' \
 	  'make check      Run all applicable checks' \
-	  'Supabase settings: shared defaults and their precedence are described in webapps/everydayapps/AGENTS.md.'
+	  'Supabase settings: shared defaults and their precedence are described in everydayapps/AGENTS.md.'
 
 node-check:
 	@command -v "$(NODE)" >/dev/null 2>&1 || { printf '%s\n' 'Install Node.js 24 or newer; see README.md.' >&2; exit 1; }
@@ -55,6 +56,9 @@ preview: build
 
 test: setup
 	"$(NPM)" test
+
+test-postgres: setup
+	"$(NODE)" supabase/postgres-check.mjs
 
 typecheck: setup
 	"$(NPM)" exec tsc -- -b

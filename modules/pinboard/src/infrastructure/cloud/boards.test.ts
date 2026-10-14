@@ -757,7 +757,7 @@ describe('online board sharing', () => {
       },
     });
     await expect(cloud.loadBoards()).rejects.toThrow(
-      'webapps/everydayapps/apps/pinboard/supabase/README.md',
+      'everydayapps/apps/pinboard/supabase/README.md',
     );
     mock.rpc.mockResolvedValueOnce({
       data: null,

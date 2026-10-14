@@ -250,7 +250,7 @@
     "pdfjs/standard_fonts/LiberationSans-Regular.ttf": "f8ace1f892b2bd9dc1792ba7f097fa7588f84fed48321480e04de5390828221f"
   },
   "sourceFiles": {
-    "Makefile": "6dd600ed24e6a7165caebba689b88b76e317f2d4df9e292f24660e4e9769633a",
+    "Makefile": "bad0812573dc0d42c0512fbe9f4bb102125ec206a83d22c07af786c46be21939",
     "PARITY.md": "3a4a7c5c783a6d1c7b4b1ceab0d17ce96a278298b8f9f6f46e10ccc9eb1032de",
     "biome.json": "1d6c03efbdcd2d23bbcbda652b2ef12f9246c5842b69f4de91487f6c9ad5dadd",
     "eslint.config.js": "7516e5eba72382566f997cb8c86c86c9f1240442cfaf217a8c24e25e932a489f",
@@ -279,8 +279,8 @@
     "public/licenses/qrcode.txt": "a060a98ea20666c5ce36c08c58fcffd9bbf0562f7de525449bbe1b7cdf4911a8",
     "public/licenses/temporal-polyfill.txt": "ffc4aee7f1279fc0494ff2b27f6829e6b4d16c20aa93aa008c3bd8d8af176387",
     "public/licenses/tslib.txt": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751",
-    "scripts/prepare-shared.mjs": "78147695a32e34fe799fbd03f9507ba2da7d49866a2dfa024fcd756d91c78406",
-    "scripts/snapshot-lib.mjs": "1363d6dacedcb43bd2068ddbebd0c43e45deecf623c91517abe5547a0e4ffb91",
+    "scripts/prepare-shared.mjs": "d388daed596d22f5fc38bd7e7292d670d9c5dccddcd746bd277b44821fc7cc11",
+    "scripts/snapshot-lib.mjs": "71968d9f1826454ab61916d01a5e4d4ec5b8643e51163a5d91a4aa81e1bf9e59",
     "src/application/page.ts": "58793486afecb45086c68d688255cb6de8fb290f901d4261e8ebe40087afc1ae",
     "src/application/registry.ts": "7b846297407b9d91f19a020ce300e041696b16e9dabffd06808b16223967aaed",
     "src/application/router.ts": "5a5b8a846212cec2ecbb3301cb00960d38580ba45d22db4287531c9a10df3daa",

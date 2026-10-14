@@ -25,7 +25,7 @@ help:
 	  'make lint            Run ESLint only' \
 	  'make format          Run the Biome format and lint check (no changes written)' \
 	  'make test            Run tests only' \
-	  'Publishing: run make -C webapps/everydayapps/publishing publish from the development repository root'
+	  'Publishing: run make -C everydayapps/publishing publish from the development repository root'
 
 runtime:
 	@$(NODE) -e 'if (Number(process.versions.node.split(".")[0]) < 24) { console.error("Utility Desk Lite requires Node.js 24 or newer; see README.md."); process.exit(1); }'
@@ -35,6 +35,7 @@ setup: runtime
 	    [ ! -x node_modules/.bin/vite ] || \
 	    [ ! -x node_modules/.bin/tsc ] || \
 	    [ ! -x node_modules/.bin/eslint ] || \
+	    [ ! -x node_modules/.bin/biome ] || \
 	    [ ! -x node_modules/.bin/vitest ] || \
 	    [ package.json -nt node_modules/.package-lock.json ] || \
 	    [ package-lock.json -nt node_modules/.package-lock.json ]; then \

@@ -214,6 +214,41 @@ describe('TextDrop authentication storage rename', () => {
     expect(values.get(TEXTDROP_AUTH_KEY)).toBe(credentials);
     expect(vi.getTimerCount()).toBe(0);
   });
+  it.each([`lock:${TEXTDROP_AUTH_KEY}`, `lock:${legacyKey}`])('bounds a fresh start waiting for %s and succeeds once its owner releases it', async held => {
+    vi.useFakeTimers();
+    const { storage, values } = fixture();
+    const locks = browserLocks();
+    let finish!: () => void;
+    const holder = locks.request(
+      held,
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        }),
+    );
+    const migration = migrateLegacyAuthStorage(storage, locks);
+    const outcome = expect(migration).rejects.toThrow('Another TextDrop tab is holding your saved session');
+    let settled = false;
+    void migration
+      .catch(() => {})
+      .finally(() => {
+        settled = true;
+      });
+    await vi.advanceTimersByTimeAsync(LOCK_WAIT_MS - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await outcome;
+    expect(values.size).toBe(0);
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(storage.removeItem).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+
+    finish();
+    await holder;
+    await expect(migrateLegacyAuthStorage(storage, locks)).resolves.toBeUndefined();
+    expect(values.size).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('tells an absent lock manager apart from a held one: absent only blocks a copy that needs it', async () => {
     const absent = fixture([[legacyKey, credentials]]);
     await expect(migrateLegacyAuthStorage(absent.storage, null)).rejects.toThrow('Could not preserve');

@@ -23,7 +23,7 @@ function serviceError(error: ServiceError, action: string): Error {
   if (error.message === 'TEXTDROP_INVALID_TEXT') return new Error('A snippet supports up to 1 MiB of UTF-8 text.');
   if (error.message === 'TEXTDROP_INVALID_PAGE') return new Error('The snippet ID is invalid. Create a new snippet and try again.');
   if (error.code === 'PGRST202' || error.code === 'PGRST205' || error.code === '42P01' || error.code === '42883') {
-    return new Error('TextDrop needs database setup. Run supabase/schema.sql once in the Supabase SQL editor; see webapps/everydayapps/apps/textdrop/supabase/README.md.');
+    return new Error('TextDrop needs database setup. Run supabase/schema.sql once in the Supabase SQL editor; see everydayapps/apps/textdrop/supabase/README.md.');
   }
   if (/anonymous.*(?:disabled|not allowed)|anonymous_provider_disabled/i.test(`${error.code ?? ''} ${error.message ?? ''}`)) {
     return new Error('Enable anonymous sign-ins in Supabase Authentication to share text snippets.');

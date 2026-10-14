@@ -3,7 +3,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-// webapps/code-organization.md keeps domain rules apart from storage, cloud and screen code. This makes that checkable.
+// everydayapps/code-organization.md keeps domain rules apart from storage, cloud and screen code. This makes that checkable.
 const root = fileURLToPath(new URL('../src/', import.meta.url));
 
 function sourceFiles(directory: string): string[] {
