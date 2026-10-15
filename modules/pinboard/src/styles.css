@@ -719,6 +719,9 @@ a {
   font-size: 34px;
   overflow-wrap: anywhere;
 }
+.board-heading > div:first-child {
+  min-width: 0;
+}
 .board-description {
   font-size: 12px;
   color: #93a08d;
@@ -1825,11 +1828,6 @@ a {
     padding-left: 28px;
     padding-right: 28px;
   }
-  .board-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 12px;
-  }
   .filters {
     gap: 5px;
   }
@@ -1999,11 +1997,13 @@ a {
   .board-heading h1 {
     font-size: 30px;
   }
-  .board-actions {
-    width: 100%;
+  .board-actions .button {
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
   }
-  .board-actions .primary {
-    margin-left: auto;
+  .board-actions .button span {
+    display: none;
   }
   .board-description {
     font-size: 11px;
@@ -2160,6 +2160,47 @@ a {
     animation-duration: 0.01ms !important;
     /* biome-ignore lint/complexity/noImportantStyles: reduced motion must beat every component rule. */
     transition-duration: 0.01ms !important;
+  }
+}
+
+.dialog.card-dialog {
+  width: min(520px, calc(100% - 32px));
+  padding: 20px;
+}
+.card-dialog .dialog-heading {
+  margin-bottom: 16px;
+}
+.card-dialog .dialog-heading h2 {
+  font-size: 23px;
+}
+.card-dialog .field {
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.card-dialog .field input,
+.card-dialog .field textarea,
+.card-dialog .field select {
+  padding: 8px 10px;
+}
+.card-dialog .field textarea {
+  min-height: 64px;
+}
+.card-dialog .form-grid {
+  gap: 0 12px;
+}
+.card-dialog .dialog-actions {
+  margin-top: 8px;
+  padding-top: 12px;
+}
+.card-dialog .record-actions {
+  width: auto;
+}
+@media (max-width: 420px) {
+  .dialog.card-dialog {
+    padding: 16px;
+  }
+  .card-dialog .record-actions {
+    width: 100%;
   }
 }
 

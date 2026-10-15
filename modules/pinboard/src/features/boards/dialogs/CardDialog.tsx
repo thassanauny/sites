@@ -123,6 +123,7 @@ export function CardDialog({
       busy={busy}
       onClose={discard.confirming ? discard.keepEditing : discard.close}
       wide={!discard.confirming}
+      className={discard.confirming ? '' : 'card-dialog'}
     >
       {discard.confirming ? (
         <DiscardDraft
@@ -169,7 +170,7 @@ export function CardDialog({
             onChange={setTitle}
           />
           {fieldVisible(fields, 'description') && (
-            <DescriptionField rows={4} value={description} onChange={setDescription} />
+            <DescriptionField rows={3} value={description} onChange={setDescription} />
           )}
           <div className="form-grid">
             <label className="field">

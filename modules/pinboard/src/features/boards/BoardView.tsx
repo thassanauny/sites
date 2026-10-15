@@ -79,13 +79,26 @@ export const BoardView = memo(function BoardView({
           {board.description && <p className="board-description">{board.description}</p>}
         </div>
         <div className="board-actions">
-          <button type="button" className="button secondary" onClick={onSettings} disabled={busy}>
+          <button
+            type="button"
+            className="button secondary"
+            aria-label="Settings"
+            title="Settings"
+            onClick={onSettings}
+            disabled={busy}
+          >
             <Settings2 size={16} />
             <span>Settings</span>
           </button>
-          <button type="button" className="button primary" onClick={onInvite}>
+          <button
+            type="button"
+            className="button primary"
+            aria-label="Invite people"
+            title="Invite people"
+            onClick={onInvite}
+          >
             <Users size={16} />
-            Invite people
+            <span>Invite people</span>
           </button>
         </div>
       </section>
