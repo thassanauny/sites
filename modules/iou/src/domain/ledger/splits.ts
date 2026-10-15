@@ -37,17 +37,20 @@ function splitProportionally(amount: number, memberIds: readonly string[], weigh
   return Object.fromEntries(memberIds.map((memberId, index) => [memberId, portions[index]!.amount]))
 }
 
+/** Read a percentage as exact hundredths, using the same rules for drafts and saved splits. */
+export function parsePercentage(input: string): bigint {
+  if (typeof input !== 'string' || input.length > 32 || !/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(input.trim())) {
+    fail('Enter a percentage from 0 to 100 with up to two decimal places for each selected person.')
+  }
+  const [whole = '', fraction = ''] = input.trim().split('.')
+  const value = BigInt(whole || '0') * 100n + BigInt(fraction.padEnd(2, '0') || '0')
+  if (value > 10_000n) fail('Each percentage must be between 0 and 100.')
+  return value
+}
+
 /** Percentages use exact hundredths and must total 100%. */
 export function splitByPercentages(amount: number, memberIds: readonly string[], percentages: readonly string[]): Record<string, number> {
-  const weights = percentages.map(input => {
-    if (typeof input !== 'string' || input.length > 32 || !/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(input.trim())) {
-      fail('Enter a percentage from 0 to 100 with up to two decimal places for each selected person.')
-    }
-    const [whole = '', fraction = ''] = input.trim().split('.')
-    const value = BigInt(whole || '0') * 100n + BigInt(fraction.padEnd(2, '0') || '0')
-    if (value > 10_000n) fail('Each percentage must be between 0 and 100.')
-    return value
-  })
+  const weights = percentages.map(parsePercentage)
   if (weights.reduce((sum, weight) => sum + weight, 0n) !== 10_000n) fail('Percentages must add up to exactly 100%.')
   return splitProportionally(amount, memberIds, weights)
 }

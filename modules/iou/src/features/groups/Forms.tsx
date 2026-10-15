@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, Plus, Trash2, ArrowRight } from 'lucide-react'
 import type { Group, Member, Transaction } from '../../domain/groups/types'
-import { CURRENCIES, currencyDigits, formatDecimal, formatMoney, parseAmount, splitByPercentages, splitByShares, splitEqually } from '../../domain/ledger/calculations'
+import { CURRENCIES, currencyDigits, formatDecimal, formatMoney, parseAmount, parsePercentage, splitByPercentages, splitByShares, splitEqually } from '../../domain/ledger/calculations'
 import { GROUP_ICONS, CATEGORIES, Avatar } from '../../ui/components'
 import { FormError, SubmitButton, useSubmission } from '../../ui/forms'
 import { InfoIcon } from '../../ui/InfoIcon'
@@ -186,6 +186,10 @@ const SPLIT_MODES = [
 ] as const
 type SplitMode = (typeof SPLIT_MODES)[number]['id']
 
+function parseSplitAmount(value: string, currency: string): number {
+  return /^(?:0(?:\.0{1,2})?|\.0{1,2})$/.test(value) ? 0 : parseAmount(value, currency)
+}
+
 export function ExpenseForm({ group, yourId, onSubmit }: { group: Group; yourId?: string; onSubmit: (transaction: Transaction) => Promise<void> }) {
   const [transactionId] = useState(() => crypto.randomUUID())
   const [description, setDescription] = useState('')
@@ -200,23 +204,59 @@ export function ExpenseForm({ group, yourId, onSubmit }: { group: Group; yourId?
     percentage: {},
     shares: Object.fromEntries(group.members.map(member => [member.id, '1'])),
   }))
+  const people = group.members.map(member => member.id).filter(id => participants.includes(id))
+  let percentageLeft: bigint | null = null
+  if (mode === 'percentage') {
+    try {
+      percentageLeft = 10_000n - people.reduce((sum, id) => sum + parsePercentage(drafts.percentage[id]?.trim() || '0'), 0n)
+    } catch {
+      /* Invalid drafts must not produce a misleading remaining percentage. */
+    }
+  }
+  let amountLeft: bigint | null = null
+  if (mode === 'exact' && amount.trim()) {
+    try {
+      amountLeft = BigInt(parseAmount(amount, group.currency)) - people.reduce((sum, id) => sum + BigInt(parseSplitAmount(drafts.exact[id]?.trim() || '0', group.currency)), 0n)
+    } catch {
+      /* Invalid totals or drafts must not produce a misleading remaining amount. */
+    }
+  }
   const calculateShares = (minor: number): Record<string, number> => {
     // Rounding ties follow the member list, not the order the boxes were ticked, so the odd cent is reproducible.
-    const people = group.members.map(member => member.id).filter(id => participants.includes(id))
     if (!people.length) throw new Error('Choose at least one person to split with.')
     if (mode === 'equal') return splitEqually(minor, people)
-    const values = people.map(id => (drafts[mode][id] || '').trim())
+    const values = people.map(id => drafts[mode][id]?.trim() || (mode === 'shares' ? '1' : ''))
     if (mode === 'percentage') return splitByPercentages(minor, people, values)
     if (mode === 'shares') return splitByShares(minor, people, values)
-    const shares = Object.fromEntries(people.map((id, index) => [id, /^0(?:\.0{1,2})?$/.test(values[index]!) ? 0 : parseAmount(values[index]!, group.currency)]))
+    const shares = Object.fromEntries(people.map((id, index) => [id, parseSplitAmount(values[index]!, group.currency)]))
     if (Object.values(shares).reduce((sum, value) => sum + value, 0) !== minor) throw new Error('The individual amounts must add up to the expense amount.')
     return shares
   }
   let preview: Record<string, number> = {}
   try {
-    preview = calculateShares(parseAmount(amount, group.currency))
+    const minor = parseAmount(amount, group.currency)
+    if (mode === 'percentage') {
+      const rounded =
+        percentageLeft === 0n
+          ? splitByPercentages(
+              minor,
+              people,
+              people.map(id => drafts.percentage[id]?.trim() || '0'),
+            )
+          : null
+      for (const id of people) {
+        try {
+          const percentage = parsePercentage(drafts.percentage[id] || '')
+          preview[id] = rounded?.[id] ?? Number((BigInt(minor) * percentage + 5_000n) / 10_000n)
+        } catch {
+          /* Keep other people's previews visible while this percentage is incomplete or invalid. */
+        }
+      }
+    } else {
+      preview = calculateShares(minor)
+    }
   } catch {
-    /* Incomplete or invalid splits have no preview yet. */
+    /* An invalid expense total or split has no preview yet. */
   }
   const { error, busy, submit, clearError } = useSubmission(async () => {
     const minor = parseAmount(amount, group.currency)
@@ -225,7 +265,7 @@ export function ExpenseForm({ group, yourId, onSubmit }: { group: Group; yourId?
     await onSubmit({ id: transactionId, type: 'expense', description: description.trim(), amount: minor, paidBy, shares, category, date, createdAt: new Date().toISOString() })
   })
   return (
-    <form className="form-stack" onSubmit={submit} onChange={clearError}>
+    <form className="form-stack expense-form" onSubmit={submit} onChange={clearError}>
       <label>
         Description
         <input placeholder="What was it for?" value={description} onChange={e => setDescription(e.target.value)} required maxLength={160} />
@@ -289,11 +329,17 @@ export function ExpenseForm({ group, yourId, onSubmit }: { group: Group; yourId?
               <label className="checkbox-label">
                 <input
                   type="checkbox"
+                  aria-label={m.name}
                   checked={participants.includes(m.id)}
                   onChange={() => setParticipants(participants.includes(m.id) ? participants.filter(id => id !== m.id) : [...participants, m.id])}
                 />
                 <Avatar member={m} index={i} small />
-                <span>{m.name}</span>
+                <span className="split-person">
+                  <span>{m.name}</span>
+                  {participants.includes(m.id) && (mode === 'percentage' || mode === 'shares') && (
+                    <output className="split-preview">{preview[m.id] === undefined ? '—' : formatMoney(preview[m.id], group.currency)}</output>
+                  )}
+                </span>
               </label>
               {participants.includes(m.id) &&
                 (mode === 'equal' ? (
@@ -311,12 +357,25 @@ export function ExpenseForm({ group, yourId, onSubmit }: { group: Group; yourId?
                       />
                       {mode === 'percentage' && <span aria-hidden="true">%</span>}
                     </div>
-                    {mode !== 'exact' && <output className="split-preview">{preview[m.id] === undefined ? '—' : formatMoney(preview[m.id], group.currency)}</output>}
                   </div>
                 ))}
             </div>
           ))}
         </div>
+        {mode === 'percentage' && people.length > 0 && (
+          <output className={`split-remaining${percentageLeft === null || percentageLeft < 0n ? ' warning' : ''}`} aria-label="Percentage remaining" aria-live="polite">
+            {percentageLeft === null ? 'Check percentage values' : `${Number(percentageLeft < 0n ? -percentageLeft : percentageLeft) / 100}% ${percentageLeft < 0n ? 'over' : 'left'}`}
+          </output>
+        )}
+        {mode === 'exact' && people.length > 0 && (
+          <output className={`split-remaining${amount.trim() && (amountLeft === null || amountLeft < 0n) ? ' warning' : ''}`} aria-label="Amount remaining" aria-live="polite">
+            {!amount.trim()
+              ? 'Enter expense amount'
+              : amountLeft === null
+                ? 'Check amount values'
+                : `${formatMoney(amountLeft < 0n ? -amountLeft : amountLeft, group.currency)} ${amountLeft < 0n ? 'over' : 'left'}`}
+          </output>
+        )}
         <span className="field-hint">
           {mode === 'equal'
             ? 'Any leftover satang or cents are distributed one at a time.'
@@ -324,7 +383,7 @@ export function ExpenseForm({ group, yourId, onSubmit }: { group: Group; yourId?
               ? `Enter each person’s amount in ${group.currency}. All amounts must equal the total.`
               : mode === 'percentage'
                 ? 'Enter percentages totaling 100%. Rounding keeps every satang or cent accounted for.'
-                : 'Enter whole-number shares. For a total of 30, shares of 3, 2, and 1 split into 15, 10, and 5.'}
+                : 'Enter whole-number shares; blank means 1. For a total of 30, shares of 3, 2, and 1 split into 15, 10, and 5.'}
         </span>
       </fieldset>
       <FormError error={error} />
@@ -411,15 +470,17 @@ export function SettingsForm({ group, yourId, onSubmit, onExport }: { group: Gro
     await onSubmit({ name: name.trim(), description: description.trim(), members: cleaned, icon: icon.id, color: icon.color, yourId: identity })
   })
   return (
-    <form className="form-stack" onSubmit={submit}>
-      <label>
-        Group name
-        <input value={name} onChange={e => setName(e.target.value)} required maxLength={80} />
-      </label>
-      <label>
-        Description
-        <input value={description} onChange={e => setDescription(e.target.value)} maxLength={500} />
-      </label>
+    <form className="form-stack settings-form" onSubmit={submit}>
+      <div className="form-columns settings-details">
+        <label>
+          Group name
+          <input value={name} onChange={e => setName(e.target.value)} required maxLength={80} />
+        </label>
+        <label>
+          Description
+          <input value={description} onChange={e => setDescription(e.target.value)} maxLength={500} />
+        </label>
+      </div>
       <div className="fixed-currency">
         <span>Group currency</span>
         <strong>{group.currency}</strong>
@@ -486,11 +547,13 @@ export function SettingsForm({ group, yourId, onSubmit, onExport }: { group: Gro
         </select>
         <span className="field-hint">Used for your balance on this device.</span>
       </label>
-      <button className="button secondary full" type="button" onClick={onExport}>
-        Export group CSV
-      </button>
       <FormError error={error} />
-      <SubmitButton busy={busy}>Save changes</SubmitButton>
+      <div className="settings-form-actions">
+        <button className="button secondary full" type="button" onClick={onExport}>
+          Export group CSV
+        </button>
+        <SubmitButton busy={busy}>Save changes</SubmitButton>
+      </div>
     </form>
   )
 }

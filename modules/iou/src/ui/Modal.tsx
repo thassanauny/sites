@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 
-export function Modal({ title, subtitle, children, onClose }: { title: string; subtitle?: string; children: ReactNode; onClose: () => void }) {
+export function Modal({ title, subtitle, children, onClose, compact = false }: { title: string; subtitle?: string; children: ReactNode; onClose: () => void; compact?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     const element = dialog.current!
@@ -17,7 +17,7 @@ export function Modal({ title, subtitle, children, onClose }: { title: string; s
     // biome-ignore lint/a11y/useKeyWithClickEvents: the click only closes on the backdrop; Escape is handled by onCancel
     <dialog
       ref={dialog}
-      className="modal"
+      className={`modal${compact ? ' compact-modal' : ''}`}
       onCancel={event => {
         event.preventDefault()
         onClose()

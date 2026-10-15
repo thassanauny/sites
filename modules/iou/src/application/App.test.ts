@@ -111,6 +111,31 @@ const setVisibility = async (state: DocumentVisibilityState) => {
   })
 }
 
+describe('personal balance presentation', () => {
+  it.each([
+    ['amy', 500, 'YOU OWE', true, 'Paid 0.00 Your share 5.00'],
+    ['ben', 500, 'YOU GET BACK', false, 'Paid 10.00 Your share 5.00'],
+    ['amy', 0, 'YOUR BALANCE', false, 'Paid 0.00 Your share 0.00'],
+    [undefined, 500, 'YOUR BALANCE', false, 'Choose your member name in group settings.'],
+  ] as const)('shows the matching balance state for member %s and share %s', async (memberId, amyShare, label, owes, details) => {
+    const group = makeGroup('a', {
+      transactions: [
+        { id: 'expense', type: 'expense', description: 'Dinner', amount: 1000, paidBy: 'ben', shares: { amy: amyShare, ben: 1000 - amyShare }, category: 'food', date: '2026-10-15', createdAt: stamp },
+      ],
+    })
+    saveStore({ ...emptyStore(), groups: [group], cloudRevisions: { a: 1 }, memberByGroup: memberId ? { a: memberId } : {} })
+    serverHas(group)
+    window.history.replaceState(null, '', `#/group/${group.inviteCode}`)
+    await mount()
+    const summary = host.querySelector('.personal-balance')!
+    expect(summary.querySelector('.eyebrow')?.textContent).toBe(label)
+    expect(summary.classList.contains('owes')).toBe(owes)
+    expect(summary.querySelector('strong')?.textContent).toContain(memberId ? (amyShare === 0 ? '0.00' : '5.00') : 'Who are you?')
+    expect(summary.querySelector('.balance-currency')?.textContent).toBe(memberId ? 'THB' : undefined)
+    expect(host.querySelector('.balance-details')?.textContent?.replace(/\s+/g, ' ')).toBe(details)
+  })
+})
+
 describe('device storage shared with other tabs', () => {
   it('shows groups another tab saved after its storage event', async () => {
     saveStore(cached('a'))
@@ -453,8 +478,45 @@ describe('long transaction logs', () => {
   })
 })
 
+describe('creating a shared group', () => {
+  it.each([
+    ['#/', true],
+    ['#/groups', true],
+    ['#/', false],
+    ['#/groups', false],
+  ] as const)('pins a new group created from %s with online=%s and preserves other tabs’ pin changes', async (hash, online) => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(online)
+    saveStore({ ...cached('a', 'b'), pinnedIds: ['a'] })
+    serverHas(makeGroup('a'), makeGroup('b'))
+    cloud.create.mockImplementation(async (group: Group) => ({ group: { ...group, inviteCode: 'c'.repeat(32) }, revision: 1 }))
+    window.history.replaceState(null, '', hash)
+    await mount()
+    await click(hash === '#/groups' ? host.querySelector('[aria-label="Create group"]') : button('Create a group'))
+    await typeInto(host.querySelector('input[placeholder="e.g. Bangkok weekend"]'), 'Trip')
+    await typeInto(host.querySelector('input[aria-label="Your name"]'), 'Amy')
+    saveStore({ ...loadStore().store, pinnedIds: ['b'] })
+    await submit(host.querySelector('dialog form'))
+    const saved = loadStore().store
+    const created = saved.groups.find(group => group.name === 'Trip')!
+    expect(created).toBeDefined()
+    expect(saved.pinnedIds).toEqual(['b', created.id])
+    expect(saved.memberByGroup[created.id]).toBe(created.members[0]!.id)
+    expect(saved.outbox).toHaveLength(online ? 0 : 1)
+    expect(cloud.create).toHaveBeenCalledTimes(online ? 1 : 0)
+    expect(host.querySelector('dialog')).toBeNull()
+    await act(async () => {
+      window.location.hash = '/'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(host.querySelector('[aria-label="Unpin Trip"]')).not.toBeNull()
+    expect(host.querySelector('[aria-label="Open Group b"]')).not.toBeNull()
+    expect(host.querySelector('[aria-label="Open Group a"]')).toBeNull()
+  })
+})
+
 describe('editing a shared group', () => {
   it('adds an expense to the open group, queues it durably and uploads it', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] })
     saveStore(cached('a'))
     cloud.save.mockImplementation(async (group: Group, revision: number) => ({ group, revision: revision + 1 }))
     serverHas(makeGroup('a'))
@@ -471,6 +533,14 @@ describe('editing a shared group', () => {
     expect(saved.cloudRevisions.a).toBe(2)
     expect(host.querySelector('.toast')?.textContent).toContain('Expense added')
     expect(host.querySelector('dialog')).toBeNull()
+    await act(async () => {
+      vi.advanceTimersByTime(1999)
+    })
+    expect(host.querySelector('.toast')?.textContent).toContain('Expense added')
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(host.querySelector('.toast')).toBeNull()
   })
 
   describe('when this device’s clock is behind the group’s latest edit', () => {

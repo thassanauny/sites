@@ -66,6 +66,7 @@ export function GroupPage({
 }: GroupPageProps) {
   const yourBalance = balances.find(b => b.member.id === yourId)
   const spent = useMemo(() => totalSpent(group), [group])
+  const expenseCount = group.transactions.filter(t => t.type === 'expense').length
   return (
     <>
       <div className="group-breadcrumb">
@@ -75,11 +76,11 @@ export function GroupPage({
         </button>
         <span>
           <span className="tiny-dot" />
-          {unsynced ? 'Saved on this device' : synced ? 'Automatically synced' : 'Shared group'}
+          {unsynced ? 'Saved on this device' : synced ? 'Synced' : 'Shared group'}
         </span>
       </div>
       <section className="group-heading">
-        <GroupIcon id={group.icon} color={group.color} large />
+        <GroupIcon id={group.icon} color={group.color} />
         <div className="group-heading-text">
           <div className="group-title-line">
             <h1>{group.name}</h1>
@@ -87,65 +88,69 @@ export function GroupPage({
               <Pin size={19} />
             </button>
           </div>
-          <p>{group.description || 'Good people. Shared expenses.'}</p>
-        </div>
-        <div className="group-heading-footer">
           <div className="group-meta">
-            <span>
-              <Users size={14} />
-              {group.members.length} members
-            </span>
+            <span>{group.members.length} members</span>
             <span className="meta-dot">·</span>
-            <span>
-              <LockKeyhole size={13} />
-              {group.currency}
-            </span>
-          </div>
-          <div className="group-top-actions">
-            <button type="button" className="button secondary compact" onClick={onInvite}>
-              <Link size={16} />
-              <span>Invite</span>
-            </button>
-            <button type="button" className="icon-button settings-button" onClick={onSettings} aria-label="Group settings">
-              <Settings2 size={20} />
-            </button>
+            <span>{group.currency}</span>
           </div>
         </div>
+        <div className="group-top-actions">
+          <button type="button" className="icon-button group-invite" onClick={onInvite} aria-label="Invite">
+            <Link size={18} />
+            <span className="group-invite-label">Invite</span>
+          </button>
+          <button type="button" className="icon-button group-settings" onClick={onSettings} aria-label="Group settings">
+            <Settings2 size={20} />
+          </button>
+        </div>
+        {group.description.trim() && <p className="group-description">{group.description}</p>}
       </section>
       <section className="group-summary">
-        <div className="personal-balance">
-          <div>
-            <span className="eyebrow">{yourBalance ? (yourBalance.balance > 0 ? 'YOU GET BACK' : yourBalance.balance < 0 ? 'YOU OWE' : 'YOUR BALANCE') : 'YOUR BALANCE'}</span>
-            <strong>{yourBalance ? formatMoney(Math.abs(yourBalance.balance), group.currency) : 'Who are you?'}</strong>
-            <p>
-              {yourBalance
-                ? yourBalance.balance === 0
-                  ? 'You’re all settled up. Nice.'
-                  : yourBalance.balance > 0
-                    ? 'You picked up the tab. Your group has your back.'
-                    : 'A little to settle, a lot of good memories.'
-                : 'Choose your member name in group settings.'}
-            </p>
-            {!yourBalance && (
-              <button type="button" className="text-button" onClick={onSettings}>
-                Choose your name
-                <ArrowRight size={14} />
-              </button>
-            )}
+        <div className={`personal-balance${yourBalance && yourBalance.balance < 0 ? ' owes' : ''}`}>
+          <div className="balance-overview">
+            <div className="balance-main">
+              <span className="eyebrow">{yourBalance ? (yourBalance.balance > 0 ? 'YOU GET BACK' : yourBalance.balance < 0 ? 'YOU OWE' : 'YOUR BALANCE') : 'YOUR BALANCE'}</span>
+              <strong className="balance-amount">
+                {yourBalance && (
+                  <>
+                    <small className="balance-currency">{group.currency}</small>{' '}
+                  </>
+                )}
+                {yourBalance ? formatMoney(Math.abs(yourBalance.balance), group.currency, { includeCurrency: false }) : 'Who are you?'}
+              </strong>
+              {!yourBalance && (
+                <button type="button" className="text-button" onClick={onSettings}>
+                  Choose your name
+                  <ArrowRight size={14} />
+                </button>
+              )}
+              <p className="balance-details">
+                {yourBalance ? (
+                  <>
+                    <span>Paid {formatMoney(yourBalance.paid, group.currency, { includeCurrency: false })}</span>{' '}
+                    <span>Your share {formatMoney(yourBalance.share, group.currency, { includeCurrency: false })}</span>
+                  </>
+                ) : (
+                  'Choose your member name in group settings.'
+                )}
+              </p>
+            </div>
+            <div className="balance-art" aria-hidden="true">
+              <Wallet size={42} strokeWidth={1.25} />
+              <span>
+                <Check size={17} strokeWidth={1.8} />
+              </span>
+            </div>
           </div>
-          <div className="balance-art">
-            <Wallet size={41} strokeWidth={1.25} />
+          <div className="group-total">
             <span>
-              <Check size={15} />
+              Group spending
+              <small>
+                {expenseCount} {expenseCount === 1 ? 'expense' : 'expenses'}
+              </small>
             </span>
+            <strong>{formatMoney(spent, group.currency)}</strong>
           </div>
-        </div>
-        <div className="group-total">
-          <span>Total group spending</span>
-          <strong>{formatMoney(spent, group.currency)}</strong>
-          <span>
-            {group.transactions.filter(t => t.type === 'expense').length} expenses · {group.currency}
-          </span>
         </div>
       </section>
       <div className="group-toolbar">

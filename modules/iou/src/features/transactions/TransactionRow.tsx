@@ -4,6 +4,7 @@ import type { Group, Transaction } from '../../domain/groups/types'
 import { formatMoney } from '../../domain/ledger/calculations'
 import { CATEGORIES } from '../../ui/components'
 import { dateLabel } from '../../ui/format'
+import { SplitDetails } from './SplitDetails'
 
 interface TransactionRowProps {
   transaction: Transaction
@@ -33,10 +34,16 @@ export const TransactionRow = memo(function TransactionRow({ transaction: t, gro
           </button>
         )}
         <strong>{isExpense ? t.description : `${memberName(t.fromId)} paid ${memberName(t.toId)}`}</strong>
-        <span>
-          {isExpense ? `${memberName(t.paidBy)} paid · Split ${Object.keys(t.shares).length} ways` : t.note || 'Payment recorded'}
+        <div className="transaction-meta">
+          {isExpense ? (
+            <>
+              {memberName(t.paidBy)} paid · <SplitDetails expense={t} group={group} />
+            </>
+          ) : (
+            t.note || 'Payment recorded'
+          )}
           <span className="transaction-date"> · {dateLabel(t.date)}</span>
-        </span>
+        </div>
       </div>
       <div className="transaction-amount">
         <strong>

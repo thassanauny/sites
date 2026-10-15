@@ -23,8 +23,8 @@ interface SettingsDialogProps {
 /** Group settings, with the confirmation for removing the group from this device. */
 export function SettingsDialog({ group, removing, yourId, pending, published, travelDefault, onClose, onSave, onExport, onRemoving, onRemove }: SettingsDialogProps) {
   return (
-    <Modal title={removing ? 'Remove from this device?' : 'Group settings'} subtitle={removing ? group.name : 'A few details that make it yours.'} onClose={onClose}>
-      <div hidden={removing}>
+    <Modal title={removing ? 'Remove from this device?' : 'Group settings'} subtitle={removing ? group.name : undefined} onClose={onClose} compact={!removing}>
+      <div className="settings-dialog-content" hidden={removing}>
         <SettingsForm group={group} yourId={yourId} onSubmit={onSave} onExport={onExport} />
         <div className="device-group-actions">
           <p>Remove this group from your lists on this device. Everyone else keeps access.</p>

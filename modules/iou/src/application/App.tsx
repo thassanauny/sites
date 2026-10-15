@@ -46,7 +46,7 @@ export default function App() {
   const [page, setPage] = useState(() => route(launchHash))
   const currentRoute = useRef(page)
   const [modal, setModal] = useState<ModalState | null>(null)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState<{ message: string; duration?: number } | null>(null)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<GroupFilter>('all')
   const [logFilter, setLogFilter] = useState<TransactionFilter>('all')
@@ -60,7 +60,7 @@ export default function App() {
   const canEdit = !!group && cloudConfigured && !recoveryRequired
   const pendingCount = store.outbox.length + store.pendingJoins.length
   const footerMessage = pendingCount ? 'Saved on this device. Waiting to sync.' : cloudConfigured ? 'Shared with your group. Kept in sync.' : 'Connect Supabase to create and join groups.'
-  const notify = (message: string) => setToast(message)
+  const notify = (message: string, duration = 4500) => setToast({ message, duration })
   const unreadableNotice =
     group && unreadableSharedIds.includes(group.id)
       ? 'This group’s shared copy could not be read by this version of iou, so it is not updating. Your changes stay on this device. Update iou to try again.'
@@ -104,7 +104,7 @@ export default function App() {
   }, [])
   useEffect(() => {
     if (!toast) return
-    const timer = window.setTimeout(() => setToast(''), 4500)
+    const timer = window.setTimeout(() => setToast(null), toast.duration ?? 4500)
     return () => window.clearTimeout(timer)
   }, [toast])
   const documentTitle = group ? `${group.name} · iou` : page.groups ? 'Groups · iou' : page.transactions ? 'Transactions · iou' : 'iou · Split it. Settle it.'
@@ -120,7 +120,7 @@ export default function App() {
     try {
       await action()
     } catch (err) {
-      setToast(errorMessage(err))
+      setToast({ message: errorMessage(err) })
     }
   }, [])
   const resetSavedData = () => {
@@ -159,7 +159,8 @@ export default function App() {
   const saveNewGroup = async (draft: Group) => {
     if (session.view().recoveryRequired) throw new Error('Recover or reset your saved data before creating a group.')
     if (!cloudConfigured) throw new Error('Connect Supabase before creating a shared group.')
-    session.commit(queueGroup(session.latest(), draft, draft.members[0].id))
+    const next = queueGroup(session.latest(), draft, draft.members[0].id)
+    session.commit({ ...next, pinnedIds: next.pinnedIds.includes(draft.id) ? next.pinnedIds : [...next.pinnedIds, draft.id] })
     closeModal()
     navigate(draft.inviteCode)
     notify('Group saved on this device. Its invitation will be ready after syncing.')
@@ -196,7 +197,7 @@ export default function App() {
     }
     await updateGroup(group.id, latest => ({ ...latest, transactions: [...latest.transactions, transaction] }))
     closeModal()
-    notify(transaction.type === 'expense' ? 'Expense added. The balances are up to date.' : 'Payment recorded. One less loose end.')
+    notify(transaction.type === 'expense' ? 'Expense added. The balances are up to date.' : 'Payment recorded. One less loose end.', transaction.type === 'expense' ? 2000 : 4500)
   }
   const saveSettings = async (values: SettingsValues) => {
     if (!group || modal?.type !== 'settings') return
@@ -212,7 +213,7 @@ export default function App() {
         const base = session.latest()
         const pinned = base.pinnedIds.includes(id)
         session.commit({ ...base, pinnedIds: pinned ? base.pinnedIds.filter(p => p !== id) : [...base.pinnedIds, id] })
-        setToast(pinned ? 'Group unpinned.' : 'Pinned to your home screen.')
+        setToast({ message: pinned ? 'Group unpinned.' : 'Pinned to your home screen.' })
       }),
     [session, runAction],
   )
@@ -483,8 +484,8 @@ export default function App() {
       {toast && (
         <div className="toast" role="status">
           <Check size={18} />
-          <span>{toast}</span>
-          <button type="button" className="icon-button" aria-label="Dismiss message" onClick={() => setToast('')}>
+          <span>{toast.message}</span>
+          <button type="button" className="icon-button" aria-label="Dismiss message" onClick={() => setToast(null)}>
             <X size={15} />
           </button>
         </div>
@@ -506,7 +507,7 @@ export default function App() {
         </Modal>
       )}
       {modal?.type === 'expense' && group && (
-        <Modal title="Add an expense" subtitle={`A little spent together. ${group.currency} only.`} onClose={closeModal}>
+        <Modal title="Add an expense" subtitle={`A little spent together. ${group.currency} only.`} onClose={closeModal} compact>
           <ExpenseForm group={group} yourId={yourId} onSubmit={addTransaction} />
         </Modal>
       )}
