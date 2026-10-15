@@ -147,7 +147,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       where n.nspname in ('public','private') and p.proname like 'pinboard_%'
       order by n.nspname, p.proname
     `);
-    assert.equal(permissions.rows.length, 15);
+    assert.equal(permissions.rows.length, 17);
     for (const permission of permissions.rows) {
       assert.equal(permission.anonymous, false, permission.proname);
       assert.equal(permission.public, false, permission.proname);
@@ -995,6 +995,382 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     assert.deepEqual(stored.rows[0].cards, [original]);
   });
 
+  test('shared field visibility and custom values survive hiding, renaming and a schema refresh', async () => {
+    await identity(creator);
+    const board = await createBoard('Custom fields');
+    const fieldId = randomUUID();
+    const settings = {
+      hidden: ['assignee', 'labels'],
+      custom: [{ id: fieldId, title: 'Project link', hidden: false }],
+    };
+    const configured = await mutate(board.id, {
+      type: 'update_board',
+      patch: { card_fields: settings },
+    });
+    assert.deepEqual(configured.card_fields, settings);
+    assert.equal(configured.revision, board.revision + 1);
+    const original = card({
+      assignee: 'Alex',
+      labels: ['Keep'],
+      customFields: { [fieldId]: 'Plan' },
+    });
+    const created = await mutate(board.id, { type: 'create_card', card: original });
+    const hidden = { ...settings, custom: [{ id: fieldId, title: 'Reference', hidden: true }] };
+    const saved = await mutate(board.id, { type: 'update_board', patch: { card_fields: hidden } });
+    assert.deepEqual(saved.cards, created.cards);
+    assert.deepEqual(saved.cards[0], original);
+    assert.deepEqual(
+      await mutate(board.id, { type: 'update_board', patch: { card_fields: hidden } }),
+      saved,
+    );
+    await database.exec('reset role');
+    await database.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
+    await identity(creator);
+    assert.deepEqual(await join(board.invite_code), saved);
+    assert.deepEqual(
+      (
+        await database.query('select card_fields from public.pinboard_boards where id = $1', [
+          board.id,
+        ])
+      ).rows[0].card_fields,
+      hidden,
+    );
+    await identity(stranger);
+    assert.deepEqual(
+      (
+        await database.query('select card_fields from public.pinboard_boards where id = $1', [
+          board.id,
+        ])
+      ).rows,
+      [],
+    );
+    await assert.rejects(
+      mutate(board.id, { type: 'update_board', patch: { card_fields: settings } }),
+      /PINBOARD_ACCESS_DENIED/,
+    );
+  });
+
+  test('custom value patches merge independent fields and keep ordinary card edits intact', async () => {
+    await identity(creator);
+    const board = await createBoard();
+    const firstId = randomUUID();
+    const secondId = randomUUID();
+    await mutate(board.id, {
+      type: 'update_board',
+      patch: {
+        card_fields: {
+          hidden: [],
+          custom: [
+            { id: firstId, title: 'Team', hidden: false },
+            { id: secondId, title: 'Reference', hidden: false },
+          ],
+        },
+      },
+    });
+    const original = card({ customFields: { [firstId]: 'Supply', [secondId]: 'First' } });
+    await mutate(board.id, { type: 'create_card', card: original });
+    await identity(collaborator);
+    await join(board.invite_code);
+    await mutate(board.id, {
+      type: 'update_card',
+      id: original.id,
+      patch: { title: 'Renamed', customFields: { [secondId]: 'Second' } },
+    });
+    await identity(creator);
+    const saved = await mutate(board.id, {
+      type: 'update_card',
+      id: original.id,
+      patch: { customFields: { [firstId]: 'Platform' } },
+    });
+    assert.equal(saved.cards[0].title, 'Renamed');
+    assert.deepEqual(saved.cards[0].customFields, { [firstId]: 'Platform', [secondId]: 'Second' });
+    const cleared = await mutate(board.id, {
+      type: 'update_card',
+      id: original.id,
+      patch: { customFields: { [firstId]: '' } },
+    });
+    assert.deepEqual(cleared.cards[0].customFields, { [firstId]: '', [secondId]: 'Second' });
+    const moved = await mutate(board.id, {
+      type: 'move_card',
+      id: original.id,
+      columnId: 'doing',
+      position: 1024,
+    });
+    assert.deepEqual(moved.cards[0].customFields, cleared.cards[0].customFields);
+  });
+
+  test('a stale settings editor retains newly added fields and their values', async () => {
+    await identity(creator);
+    const board = await createBoard();
+    const first = { id: randomUUID(), title: 'Team', hidden: false };
+    const second = { id: randomUUID(), title: 'Reference', hidden: false };
+    await mutate(board.id, {
+      type: 'update_board',
+      patch: { card_fields: { hidden: [], custom: [first] } },
+    });
+    const original = card({ customFields: { [first.id]: 'Keep this' } });
+    await mutate(board.id, { type: 'create_card', card: original });
+    const saved = await mutate(board.id, {
+      type: 'update_board',
+      patch: { card_fields: { hidden: ['priority'], custom: [second] } },
+    });
+    assert.deepEqual(saved.card_fields.custom, [second, first]);
+    assert.deepEqual(saved.cards, [original]);
+    const updated = await mutate(board.id, {
+      type: 'update_board',
+      patch: { card_fields: { hidden: [], custom: [{ ...first, hidden: true }] } },
+    });
+    assert.deepEqual(updated.card_fields.custom, [{ ...first, hidden: true }, second]);
+    assert.deepEqual(updated.cards, [original]);
+  });
+
+  test('saved assignees survive stale settings, retries and membership reads without creating cards', async () => {
+    await identity(creator);
+    const board = await createBoard();
+    await mutate(board.id, { type: 'add_assignee', name: 'Alex' });
+    await identity(collaborator);
+    await join(board.invite_code);
+    const operation = { type: 'add_assignee', name: 'Sam' };
+    const saved = await mutate(board.id, operation);
+    assert.deepEqual(saved.card_fields.assignees, ['Alex', 'Sam']);
+    assert.deepEqual(saved.cards, []);
+    assert.deepEqual(await mutate(board.id, operation), saved);
+    await identity(creator);
+    const legacy = await mutate(board.id, {
+      type: 'update_board',
+      patch: { card_fields: { hidden: ['labels'], custom: [] } },
+    });
+    assert.deepEqual(legacy.card_fields.assignees, ['Alex', 'Sam']);
+    for (const assignees of [
+      null,
+      [''],
+      ['Alex', 'Alex'],
+      ['x'.repeat(81)],
+      [42],
+      Array.from({ length: 2001 }, (_, i) => `Person ${i}`),
+    ])
+      await assert.rejects(
+        mutate(board.id, {
+          type: 'update_board',
+          patch: { title: 'Must roll back', card_fields: { hidden: [], custom: [], assignees } },
+        }),
+        /PINBOARD_INVALID_OPERATION/,
+      );
+    assert.deepEqual(await join(board.invite_code), legacy);
+  });
+
+  test('deleting assignees unassigns active and archived cards and rejects stale assignments', async () => {
+    await identity(creator);
+    const board = await createBoard();
+    const first = card({ assignee: 'Alex' });
+    const old = card({ assignee: 'Alex', archived: true });
+    const other = card({ assignee: 'Sam' });
+    for (const item of [first, old, other])
+      await mutate(board.id, { type: 'create_card', card: item });
+    const saved = await mutate(board.id, { type: 'delete_assignee', name: 'Alex' });
+    assert.deepEqual(saved.card_fields.assignees, ['Sam']);
+    assert.deepEqual(saved.cards, [{ ...first, assignee: '' }, { ...old, assignee: '' }, other]);
+    assert.deepEqual(await mutate(board.id, { type: 'delete_assignee', name: 'Alex' }), saved);
+    const stale = await mutate(board.id, {
+      type: 'update_board',
+      patch: { card_fields: { hidden: ['labels'], custom: [], assignees: ['Alex', 'Sam'] } },
+    });
+    assert.deepEqual(stale.card_fields.assignees, ['Sam']);
+    assert.deepEqual(stale.cards, saved.cards);
+    await assert.rejects(
+      mutate(board.id, {
+        type: 'update_card',
+        id: first.id,
+        patch: { title: 'Must roll back', assignee: 'Alex' },
+      }),
+      /PINBOARD_ASSIGNEE_NOT_FOUND/,
+    );
+    await assert.rejects(
+      mutate(board.id, { type: 'create_card', card: card({ assignee: 'Alex' }) }),
+      /PINBOARD_ASSIGNEE_NOT_FOUND/,
+    );
+    assert.deepEqual(await join(board.invite_code), stale);
+    const readded = await mutate(board.id, { type: 'add_assignee', name: 'Alex' });
+    assert.deepEqual(readded.card_fields.assignees, ['Sam', 'Alex']);
+    assert.deepEqual(readded.cards, saved.cards);
+    for (const type of ['add_assignee', 'delete_assignee'])
+      for (const name of ['', 'x'.repeat(81), null, 42])
+        await assert.rejects(mutate(board.id, { type, name }), /PINBOARD_INVALID_OPERATION/);
+    await identity(stranger);
+    await assert.rejects(
+      mutate(board.id, { type: 'delete_assignee', name: 'Sam' }),
+      /PINBOARD_ACCESS_DENIED/,
+    );
+  });
+
+  test('invalid field settings and custom values roll back every part of the edit', async () => {
+    await identity(creator);
+    const board = await createBoard();
+    const fieldId = randomUUID();
+    const field = { id: fieldId, title: 'Team', hidden: false };
+    const settings = { hidden: [], custom: [field] };
+    await mutate(board.id, { type: 'update_board', patch: { card_fields: settings } });
+    const original = card({ customFields: { [fieldId]: 'Keep' } });
+    const before = await mutate(board.id, { type: 'create_card', card: original });
+    for (const invalid of [
+      null,
+      { ...settings, hidden: ['title'] },
+      { ...settings, hidden: ['labels', 'labels'] },
+      { ...settings, custom: [{ ...field, title: 'Priority' }] },
+      { ...settings, custom: [{ ...field, title: 'x'.repeat(41) }] },
+      { ...settings, custom: [field, { ...field, id: randomUUID(), title: ' team ' }] },
+      { ...settings, custom: [{ ...field, hidden: 'yes' }] },
+      { ...settings, extra: true },
+      {
+        ...settings,
+        custom: Array.from({ length: 13 }, (_, index) => ({
+          ...field,
+          id: randomUUID(),
+          title: `Field ${index}`,
+        })),
+      },
+    ])
+      await assert.rejects(
+        mutate(board.id, {
+          type: 'update_board',
+          patch: { title: 'Must roll back', card_fields: invalid },
+        }),
+        /PINBOARD_INVALID_OPERATION/,
+      );
+    for (const customFields of [
+      null,
+      [],
+      { [fieldId]: 42 },
+      { [fieldId]: 'x'.repeat(1001) },
+      { [randomUUID()]: 'Unknown' },
+      { __proto__: null, bad: 'No' },
+    ])
+      await assert.rejects(
+        mutate(board.id, {
+          type: 'update_card',
+          id: original.id,
+          patch: { title: 'Must roll back', customFields },
+        }),
+        /PINBOARD_INVALID_OPERATION/,
+      );
+    await assert.rejects(
+      mutate(board.id, {
+        type: 'create_card',
+        card: card({ customFields: { [randomUUID()]: 'Unknown' } }),
+      }),
+      /PINBOARD_INVALID_OPERATION/,
+    );
+    assert.deepEqual(await join(board.invite_code), before);
+  });
+
+  test('archiving and restoring retain independent edits, survive column removal and never revive deletions', async () => {
+    await identity(creator);
+    const board = await createBoard();
+    const fieldId = randomUUID();
+    await mutate(board.id, {
+      type: 'update_board',
+      patch: {
+        card_fields: { hidden: [], custom: [{ id: fieldId, title: 'Team', hidden: false }] },
+      },
+    });
+    const original = card({
+      assignee: 'Alex',
+      customFields: { [fieldId]: 'Keep' },
+      labels: ['Work'],
+      dueDate: '2030-10-15',
+    });
+    await mutate(board.id, { type: 'create_card', card: original });
+    await identity(collaborator);
+    await join(board.invite_code);
+    await mutate(board.id, {
+      type: 'update_card',
+      id: original.id,
+      patch: { title: 'Changed elsewhere' },
+    });
+    await identity(creator);
+    const operation = { type: 'update_card', id: original.id, patch: { archived: true } };
+    const archived = await mutate(board.id, operation);
+    assert.deepEqual(archived.cards, [{ ...original, title: 'Changed elsewhere', archived: true }]);
+    assert.deepEqual(await mutate(board.id, operation), archived);
+    for (const invalid of [null, 'true', 1, {}]) {
+      await assert.rejects(
+        mutate(board.id, {
+          type: 'update_card',
+          id: original.id,
+          patch: { title: 'Must roll back', archived: invalid },
+        }),
+        /PINBOARD_INVALID_OPERATION/,
+      );
+      await assert.rejects(
+        mutate(board.id, { type: 'create_card', card: card({ archived: invalid }) }),
+        /PINBOARD_INVALID_OPERATION/,
+      );
+    }
+    assert.deepEqual(await join(board.invite_code), archived);
+    const moved = await mutate(board.id, {
+      type: 'delete_column',
+      id: 'todo',
+      targetColumnId: 'done',
+    });
+    assert.equal(moved.cards[0].archived, true);
+    assert.equal(moved.cards[0].columnId, 'done');
+    const restored = await mutate(board.id, {
+      type: 'update_card',
+      id: original.id,
+      patch: { archived: false },
+    });
+    assert.deepEqual(restored.cards, [{ ...moved.cards[0], archived: false }]);
+    await database.exec('reset role');
+    await database.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
+    await identity(collaborator);
+    assert.deepEqual(await join(board.invite_code), restored);
+    await mutate(board.id, operation);
+    await mutate(board.id, { type: 'delete_card', id: original.id });
+    await assert.rejects(
+      mutate(board.id, { type: 'update_card', id: original.id, patch: { archived: false } }),
+      /PINBOARD_CARD_NOT_FOUND/,
+    );
+    assert.deepEqual((await join(board.invite_code)).cards, []);
+  });
+
+  test('same-column moves persist fractional order and retain another member’s independent edits', async () => {
+    await identity(creator);
+    const board = await createBoard();
+    const first = card({ title: 'First', position: 1024 });
+    const middle = card({ title: 'Middle', position: 2048 });
+    const last = card({ title: 'Last', position: 3072 });
+    for (const item of [first, middle, last])
+      await mutate(board.id, { type: 'create_card', card: item });
+    await identity(collaborator);
+    await join(board.invite_code);
+    await mutate(board.id, {
+      type: 'update_card',
+      id: last.id,
+      patch: { title: 'Renamed', assignee: 'Sam' },
+    });
+    await identity(creator);
+    const moved = await mutate(board.id, {
+      type: 'move_card',
+      id: last.id,
+      columnId: 'todo',
+      position: 1536.5,
+    });
+    const saved = await join(board.invite_code);
+    assert.deepEqual(saved, moved);
+    assert.deepEqual(
+      saved.cards.filter((item) => item.id !== last.id),
+      [first, middle],
+    );
+    assert.deepEqual(
+      saved.cards.find((item) => item.id === last.id),
+      { ...last, title: 'Renamed', assignee: 'Sam', position: 1536.5 },
+    );
+    assert.deepEqual(
+      [...saved.cards].sort((a, b) => a.position - b.position).map((item) => item.title),
+      ['First', 'Renamed', 'Middle'],
+    );
+  });
+
   test('removing a column appends its cards after the destination cards in their original order', async () => {
     await identity(creator);
     const board = await createBoard();
@@ -1166,7 +1542,8 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     await database.exec('reset role');
     await database.exec(`create or replace function private.pinboard_board_json(p_board public.pinboard_boards)
       returns jsonb language sql immutable security invoker set search_path = '' as $$
-        select to_jsonb(p_board) - array['created_by', 'deleted_card_ids', 'deleted_column_ids'];
+        -- Model the old schema, before card_fields was an added optional column.
+        select to_jsonb(p_board) - array['created_by', 'deleted_card_ids', 'deleted_column_ids', 'card_fields'];
       $$`);
     const volatility = async () =>
       (

@@ -10,9 +10,9 @@ export function HelpDialog({ busy, onClose }: { busy: boolean; onClose: () => vo
           <strong> Invite people</strong> to share its code. Anyone with the code can join and edit.
         </p>
         <p>
-          Add cards and drag them between columns. On a phone or with a keyboard, use the menu at
-          the bottom of a card to move it. Change column order in Board settings; the arrows save
-          each move.
+          Drag cards above or below another card to change their order, or between columns. On a
+          phone or with a keyboard, use a card’s up/down arrows to reorder it and its menu to change
+          columns. Add columns and change their order in Board settings; the arrows save each move.
         </p>
         <p>
           Boards sync every five seconds. When two people edit the same field, the last change

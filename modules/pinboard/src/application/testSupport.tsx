@@ -135,13 +135,33 @@ function dataTransfer() {
     getData: (type: string) => data.get(type) ?? '',
   };
 }
-function dragEvent(type: string, transfer: ReturnType<typeof dataTransfer>) {
-  const event = new Event(type, { bubbles: true, cancelable: true });
+function dragEvent(type: string, transfer: ReturnType<typeof dataTransfer>, clientY = 0) {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientY });
   Object.defineProperty(event, 'dataTransfer', { value: transfer });
   return event;
 }
+/** Drop above/below a card, including on one of its nested controls. */
+export async function dragCardToCard(
+  title: string,
+  targetTitle: string,
+  edge: 'before' | 'after',
+  drop = true,
+) {
+  const tile = button(`Edit ${title}`).closest('article')!;
+  const target = button(`Edit ${targetTitle}`);
+  const transfer = dataTransfer();
+  const clientY = edge === 'before' ? -1 : 1;
+  await act(async () => {
+    tile.dispatchEvent(dragEvent('dragstart', transfer));
+    target.dispatchEvent(dragEvent('dragover', transfer, clientY));
+  });
+  if (drop)
+    await act(async () => {
+      target.dispatchEvent(dragEvent('drop', transfer, clientY));
+    });
+}
 /** Drag a card tile over a column and optionally drop it there. */
-export async function dragCard(title: string, columnTitle: string, drop = true) {
+export async function dragCard(title: string, columnTitle: string, drop = true, clientY = 0) {
   const tile = button(`Edit ${title}`).closest('article')!;
   const target = document.querySelector(`main section[aria-label="${columnTitle}"]`)!;
   const transfer = dataTransfer();
@@ -149,11 +169,11 @@ export async function dragCard(title: string, columnTitle: string, drop = true) 
     tile.dispatchEvent(dragEvent('dragstart', transfer));
   });
   await act(async () => {
-    target.dispatchEvent(dragEvent('dragover', transfer));
+    target.dispatchEvent(dragEvent('dragover', transfer, clientY));
   });
   if (drop) {
     await act(async () => {
-      target.dispatchEvent(dragEvent('drop', transfer));
+      target.dispatchEvent(dragEvent('drop', transfer, clientY));
     });
   }
 }

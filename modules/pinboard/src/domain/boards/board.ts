@@ -2,12 +2,15 @@ import type {
   Board,
   BoardHead,
   Card,
+  CardDropTarget,
+  CardFieldSettings,
   CardPatch,
   CardPriority,
   Column,
   ColumnColor,
   Operation,
 } from './types';
+import { FIELD_LIMITS, OPTIONAL_CARD_FIELDS, sameCustomValues, sameFieldSettings } from './fields';
 
 export const COLUMN_COLORS: readonly ColumnColor[] = [
   'slate',
@@ -40,6 +43,7 @@ const BOARD_KEYS = [
   'revision',
   'created_at',
   'updated_at',
+  'card_fields',
 ];
 const COLUMN_KEYS = ['id', 'title', 'color'];
 const CARD_KEYS = [
@@ -52,6 +56,8 @@ const CARD_KEYS = [
   'assignee',
   'dueDate',
   'labels',
+  'customFields',
+  'archived',
 ];
 const CARD_PATCH_KEYS = CARD_KEYS.filter((key) => key !== 'id');
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
@@ -191,6 +197,68 @@ function labels(input: unknown): string[] {
   return Array.from(input, (label) => text(label, 'Label', LIMITS.label));
 }
 
+export function readCardFieldSettings(input: unknown): CardFieldSettings {
+  const value = record(input, 'Card field settings', ['hidden', 'custom', 'assignees']);
+  if (
+    !Array.isArray(value.hidden) ||
+    value.hidden.length > OPTIONAL_CARD_FIELDS.length ||
+    !Array.isArray(value.custom) ||
+    value.custom.length > FIELD_LIMITS.custom
+  )
+    fail(`Choose supported fields and at most ${FIELD_LIMITS.custom} custom fields.`);
+  const hidden = Array.from(value.hidden, (id) => {
+    const field = OPTIONAL_CARD_FIELDS.find((field) => field.id === id);
+    if (!field) fail('Choose a supported card field.');
+    return field.id;
+  });
+  if (new Set(hidden).size !== hidden.length) fail('Card fields must be unique.');
+  const custom = Array.from(value.custom, (item) => {
+    const field = record(item, 'Custom field', ['id', 'title', 'hidden']);
+    if (typeof field.hidden !== 'boolean') fail('Choose whether the custom field is visible.');
+    return {
+      id: validateUuid(field.id, 'Custom field ID'),
+      title: text(field.title, 'Field name', FIELD_LIMITS.title),
+      hidden: field.hidden,
+    };
+  });
+  if (new Set(custom.map((field) => field.id)).size !== custom.length)
+    fail('Custom field IDs must be unique.');
+  const names = custom.map((field) => field.title.trim().toLowerCase());
+  if (
+    new Set(names).size !== names.length ||
+    names.some((name) =>
+      [
+        'card title',
+        'column',
+        ...OPTIONAL_CARD_FIELDS.map((field) => field.title.toLowerCase()),
+      ].includes(name),
+    )
+  )
+    fail('Give each custom field a different name from the existing fields.');
+  let assignees: string[] | undefined;
+  if (value.assignees !== undefined) {
+    if (!Array.isArray(value.assignees) || value.assignees.length > FIELD_LIMITS.assignees)
+      fail(`Boards support up to ${FIELD_LIMITS.assignees} saved assignees.`);
+    assignees = Array.from(value.assignees, (name) => text(name, 'Assignee', LIMITS.assignee));
+    if (new Set(assignees).size !== assignees.length) fail('Assignee names must be unique.');
+  }
+  return { hidden, custom, ...(assignees ? { assignees } : {}) };
+}
+
+function customValues(input: unknown): Record<string, string> {
+  if (!input || typeof input !== 'object' || Array.isArray(input))
+    fail('Custom fields must be an object.');
+  const value = record(input, 'Custom fields', Object.keys(input));
+  if (Object.keys(value).length > FIELD_LIMITS.custom)
+    fail(`Cards support up to ${FIELD_LIMITS.custom} custom fields.`);
+  const values: Record<string, string> = {};
+  for (const id of Object.keys(value)) {
+    if (validateUuid(id, 'Custom field ID') !== id) fail('Custom field IDs must be lowercase.');
+    values[id] = text(value[id], 'Custom field value', FIELD_LIMITS.value, false);
+  }
+  return values;
+}
+
 function readColumn(input: unknown): Column {
   const value = record(input, 'Column', COLUMN_KEYS);
   return {
@@ -202,6 +270,8 @@ function readColumn(input: unknown): Column {
 
 function readCard(input: unknown): Card {
   const value = record(input, 'Card', CARD_KEYS);
+  if (value.archived !== undefined && typeof value.archived !== 'boolean')
+    fail('Choose whether the card is archived.');
   return {
     id: validateUuid(value.id, 'Card ID'),
     title: text(value.title, 'Card title', LIMITS.title),
@@ -212,6 +282,8 @@ function readCard(input: unknown): Card {
     assignee: text(value.assignee, 'Assignee', LIMITS.assignee, false),
     dueDate: calendarDate(value.dueDate),
     labels: labels(value.labels),
+    ...(value.customFields === undefined ? {} : { customFields: customValues(value.customFields) }),
+    ...(value.archived === undefined ? {} : { archived: value.archived }),
   };
 }
 
@@ -238,6 +310,10 @@ export function readBoard(input: unknown): Board {
   const columnIds = new Set(columns.map((column) => column.id));
   if (columnIds.size !== columns.length) fail('Column IDs must be unique.');
   const cards = Array.from(value.cards, readCard);
+  const settings = value.card_fields == null ? undefined : readCardFieldSettings(value.card_fields);
+  const fieldIds = new Set(settings?.custom.map((field) => field.id));
+  if (cards.some((card) => Object.keys(card.customFields ?? {}).some((id) => !fieldIds.has(id))))
+    fail('Each custom card value must belong to a configured field.');
   if (new Set(cards.map((card) => card.id)).size !== cards.length) fail('Card IDs must be unique.');
   if (cards.some((card) => !columnIds.has(card.columnId)))
     fail('Each card must belong to an existing column.');
@@ -258,6 +334,7 @@ export function readBoard(input: unknown): Board {
     revision,
     created_at: createdAt,
     updated_at: updatedAt,
+    ...(settings ? { card_fields: settings } : {}),
   };
 }
 
@@ -284,9 +361,13 @@ export function readInviteCode(input: string): string {
   return normalizeInviteCode(link ? link[1] : input);
 }
 
+export function activeCards(board: Board): Card[] {
+  return board.cards.filter((card) => !card.archived);
+}
+
 export function sortedCards(board: Board, id: string): Card[] {
   return board.cards
-    .filter((card) => card.columnId === id)
+    .filter((card) => card.columnId === id && !card.archived)
     .sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
 }
 
@@ -298,11 +379,60 @@ export function nextPosition(board: Board, id: string): number {
   return Math.min(maximum + 1_024, LIMITS.position);
 }
 
+/** Use the existing atomic move operation, including active cards hidden by filters. */
+export function placeCard(
+  board: Board,
+  id: string,
+  columnId: string,
+  target?: CardDropTarget,
+): Operation | undefined {
+  const card = board.cards.find((item) => item.id === id);
+  if (!card || card.archived || target?.id === id) return;
+  if (!board.columns.some((column) => column.id === columnId)) return;
+  const ordered = sortedCards(board, columnId);
+  const remaining = ordered.filter((item) => item.id !== id);
+  let index = remaining.length;
+  if (target) {
+    const targetIndex = remaining.findIndex((item) => item.id === target.id);
+    // A refresh may have moved or deleted the drop target while the drag was in progress.
+    if (targetIndex < 0) return;
+    index = targetIndex + (target.edge === 'after' ? 1 : 0);
+  }
+  if (card.columnId === columnId && ordered.findIndex((item) => item.id === id) === index) return;
+  const previous = remaining[index - 1];
+  const next = remaining[index];
+  const position = previous
+    ? next
+      ? previous.position + (next.position - previous.position) / 2
+      : Math.min(previous.position + 1_024, LIMITS.position)
+    : next
+      ? next.position / 2
+      : 1_024;
+  const placed = { ...card, position };
+  const compare = (left: Card, right: Card) =>
+    left.position - right.position || left.id.localeCompare(right.id);
+  // Equal ranks and floating-point limits must never report success at the wrong position.
+  if ((previous && compare(previous, placed) >= 0) || (next && compare(placed, next) >= 0))
+    throw new Error('There is no space at this position. Try another place in the column.');
+  return { type: 'move_card', id, columnId, position };
+}
+
 /** Include fields the editor changed, preserving other members' independent edits. */
 export function cardPatch(original: Card, edited: Card): CardPatch {
   const patch: CardPatch = {};
   for (const key of CARD_PATCH_KEYS as (keyof CardPatch)[]) {
-    if (key === 'labels') {
+    if (key === 'customFields') {
+      const values: Record<string, string> = {};
+      for (const id of new Set([
+        ...Object.keys(original.customFields ?? {}),
+        ...Object.keys(edited.customFields ?? {}),
+      ])) {
+        const before = original.customFields?.[id] ?? '';
+        const after = edited.customFields?.[id] ?? '';
+        if (before !== after) values[id] = after;
+      }
+      if (Object.keys(values).length) patch.customFields = values;
+    } else if (key === 'labels') {
       if (
         original.labels.length !== edited.labels.length ||
         original.labels.some((label, index) => label !== edited.labels[index])
@@ -324,9 +454,11 @@ function sameCard(left: Card, right: Card): boolean {
     left.position === right.position &&
     left.priority === right.priority &&
     left.assignee === right.assignee &&
+    Boolean(left.archived) === Boolean(right.archived) &&
     left.dueDate === right.dueDate &&
     left.labels.length === right.labels.length &&
-    left.labels.every((label, index) => label === right.labels[index])
+    left.labels.every((label, index) => label === right.labels[index]) &&
+    sameCustomValues(left.customFields, right.customFields)
   );
 }
 
@@ -364,10 +496,18 @@ function shareBoard(previous: Board, next: Board): Board {
     previous.description === next.description &&
     previous.revision === next.revision &&
     previous.created_at === next.created_at &&
-    previous.updated_at === next.updated_at
+    previous.updated_at === next.updated_at &&
+    sameFieldSettings(previous.card_fields, next.card_fields)
   )
     return previous;
-  return { ...next, columns, cards };
+  return {
+    ...next,
+    columns,
+    cards,
+    ...(sameFieldSettings(previous.card_fields, next.card_fields) && previous.card_fields
+      ? { card_fields: previous.card_fields }
+      : {}),
+  };
 }
 
 /** A delayed refresh must never undo a newer successful save; unchanged parts keep their identity. */
@@ -379,7 +519,7 @@ export function acceptBoard(current: Board | undefined, incoming: Board): Board 
 function readPatch(input: unknown, kind: 'board' | 'column' | 'card'): Record<string, unknown> {
   const allowed =
     kind === 'board'
-      ? ['title', 'description']
+      ? ['title', 'description', 'card_fields']
       : kind === 'column'
         ? ['title', 'color']
         : CARD_PATCH_KEYS;
@@ -419,6 +559,16 @@ function readPatch(input: unknown, kind: 'board' | 'column' | 'card'): Record<st
       case 'labels':
         patch.labels = labels(value.labels);
         break;
+      case 'customFields':
+        patch.customFields = customValues(value.customFields);
+        break;
+      case 'archived':
+        if (typeof value.archived !== 'boolean') fail('Choose whether the card is archived.');
+        patch.archived = value.archived;
+        break;
+      case 'card_fields':
+        patch.card_fields = readCardFieldSettings(value.card_fields);
+        break;
     }
   }
   return patch;
@@ -435,9 +585,14 @@ export function validateOperation(input: unknown): Operation {
     'columnId',
     'columnIds',
     'position',
+    'name',
   ]);
   const only = (keys: string[]) => record(input, 'Board action', ['type', ...keys]);
   switch (value.type) {
+    case 'add_assignee':
+    case 'delete_assignee':
+      only(['name']);
+      return { type: value.type, name: text(value.name, 'Assignee', LIMITS.assignee) };
     case 'update_board':
       only(['patch']);
       return { type: value.type, patch: readPatch(value.patch, 'board') };

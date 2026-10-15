@@ -37,7 +37,7 @@ describe('Pinboard UI: invitations and routes', () => {
     await click('Invite people');
     expect(field('Invitation link').value).toBe(`http://localhost/#join/${board.invite_code}`);
     await click('Close dialog');
-    await click('Workspace');
+    await click('Open workspace');
     await click('Join with a code');
     await fill(
       'Invitation code or link',

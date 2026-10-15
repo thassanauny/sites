@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Board, Card, Column, Operation } from '../domain/boards/types';
-import { nextPosition } from '../domain/boards/board';
+import type { Board, Card, CardDropTarget, Column, Operation } from '../domain/boards/types';
+import { activeCards, nextPosition, placeCard, sortedCards } from '../domain/boards/board';
 import {
   cloudConfigured,
   createBoard,
@@ -292,16 +292,6 @@ export function useWorkspace() {
     },
     [setModal],
   );
-  const addColumn = useCallback(() => {
-    const current = boardRef.current;
-    if (current)
-      setModal({
-        type: 'column',
-        board: current,
-        isNew: true,
-        column: { id: crypto.randomUUID(), title: '', color: 'blue' },
-      });
-  }, [setModal]);
   const openCard = useCallback(
     (card: Card) => {
       const current = boardRef.current;
@@ -333,31 +323,44 @@ export function useWorkspace() {
     [setModal],
   );
   // A drop that arrives while another save runs, or offline, is answered by `action` with a message.
+  const dropCard = useCallback(
+    (cardId: string, columnId: string, target?: CardDropTarget) => {
+      const current = boardRef.current;
+      if (!current) return;
+      try {
+        const operation = placeCard(current, cardId, columnId, target);
+        if (operation) void save(current.id, operation);
+      } catch (failure) {
+        setError(message(failure));
+      }
+    },
+    [save, setError],
+  );
   const moveCard = useCallback(
     (card: Card, columnId: string) => {
-      const current = boardRef.current;
-      if (!current || card.columnId === columnId) return;
-      void save(current.id, {
-        type: 'move_card',
-        id: card.id,
-        columnId,
-        position: nextPosition(current, columnId),
-      });
+      if (card.columnId !== columnId) dropCard(card.id, columnId);
     },
-    [save],
+    [dropCard],
   );
-  /** A card dropped on a column; the drag carried only its ID. */
-  const dropCard = useCallback(
-    (cardId: string, columnId: string) => {
-      const card = boardRef.current?.cards.find((item) => item.id === cardId);
-      if (card) moveCard(card, columnId);
+  const reorderCard = useCallback(
+    (card: Card, direction: -1 | 1) => {
+      const current = boardRef.current;
+      const liveCard = current?.cards.find((item) => item.id === card.id);
+      if (!current || !liveCard || liveCard.archived) return;
+      const cards = sortedCards(current, liveCard.columnId);
+      const neighbor = cards[cards.findIndex((item) => item.id === card.id) + direction];
+      if (neighbor)
+        dropCard(card.id, liveCard.columnId, {
+          id: neighbor.id,
+          edge: direction === -1 ? 'before' : 'after',
+        });
     },
-    [moveCard],
+    [dropCard],
   );
   const refreshNow = useCallback(() => void refresh(true), [refresh]);
   const dismissError = useCallback(() => setError(''), [setError]);
   const boardList = [...visibleBoards].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  const workspaceCardCount = boardList.reduce((total, item) => total + item.cards.length, 0);
+  const workspaceCardCount = boardList.reduce((total, item) => total + activeCards(item).length, 0);
   // The open dialog edits a snapshot; these follow the live board and this device's removals.
   const modalBoard =
     modal && 'board' in modal ? boards.find((item) => item.id === modal.board.id) : undefined;
@@ -399,11 +402,11 @@ export function useWorkspace() {
     openSettings,
     openInvite,
     openColumn,
-    addColumn,
     openCard,
     addCard,
     moveCard,
     dropCard,
+    reorderCard,
     save,
   };
 }

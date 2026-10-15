@@ -6,12 +6,14 @@ export function Dialog({
   busy,
   onClose,
   wide = false,
+  className = '',
 }: {
   title: string;
   children: ReactNode;
   busy: boolean;
   onClose: () => void;
   wide?: boolean;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   // Read while rendering: React focuses an `autoFocus` field before any effect runs.
@@ -40,7 +42,7 @@ export function Dialog({
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      className={wide ? 'dialog wide' : 'dialog'}
+      className={`dialog${wide ? ' wide' : ''}${className ? ` ${className}` : ''}`}
       onCancel={(event) => {
         event.preventDefault();
         if (!busy) onClose();

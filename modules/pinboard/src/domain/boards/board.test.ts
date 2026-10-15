@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { Board, Card } from './types';
 import {
   acceptBoard,
+  activeCards,
   cardPatch,
   LIMITS,
   nextPosition,
+  placeCard,
   normalizeInviteCode,
   readInviteCode,
   readBoard,
@@ -41,6 +43,89 @@ const board: Board = {
 };
 
 describe('board data and concurrent updates', () => {
+  it('retains archive state through reads and polls while excluding it from active ordering', () => {
+    const archived = { ...card, archived: true };
+    const next = { ...card, id: '33333333-3333-4333-8333-333333333333', position: 2048 };
+    const source = readBoard({ ...board, cards: [archived, next], revision: 2 });
+    expect(source.cards).toEqual([archived, next]);
+    expect(activeCards(source)).toEqual([next]);
+    expect(sortedCards(source, 'todo')).toEqual([next]);
+    expect(placeCard(source, archived.id, 'done')).toBeUndefined();
+    expect(acceptBoard(board, source).cards[0]?.archived).toBe(true);
+    expect(cardPatch(card, archived)).toEqual({ archived: true });
+    expect(
+      validateOperation({ type: 'update_card', id: card.id, patch: { archived: false } }),
+    ).toEqual({ type: 'update_card', id: card.id, patch: { archived: false } });
+    for (const value of [null, 'true', 1]) {
+      expect(() => readBoard({ ...board, cards: [{ ...card, archived: value }] })).toThrow(
+        'archived',
+      );
+      expect(() =>
+        validateOperation({ type: 'update_card', id: card.id, patch: { archived: value } }),
+      ).toThrow('archived');
+    }
+  });
+  it('places cards between neighbors without rewriting their fields, including hidden cards', () => {
+    const middle = { ...card, id: '22222222-2222-4222-8222-222222222222', position: 2048 };
+    const last = { ...card, id: '33333333-3333-4333-8333-333333333333', position: 3072 };
+    const source = { ...board, cards: [last, card, middle] };
+    expect(placeCard(source, last.id, 'todo', { id: middle.id, edge: 'before' })).toEqual({
+      type: 'move_card',
+      id: last.id,
+      columnId: 'todo',
+      position: 1536,
+    });
+    expect(placeCard(source, card.id, 'todo', { id: middle.id, edge: 'after' })).toEqual({
+      type: 'move_card',
+      id: card.id,
+      columnId: 'todo',
+      position: 2560,
+    });
+    expect(source.cards).toEqual([last, card, middle]);
+    expect(placeCard(source, last.id, 'todo')).toBeUndefined();
+    expect(placeCard(source, last.id, 'todo', { id: last.id, edge: 'after' })).toBeUndefined();
+    expect(placeCard(source, card.id, 'todo', { id: middle.id, edge: 'before' })).toBeUndefined();
+    expect(placeCard(source, last.id, 'done', { id: middle.id, edge: 'before' })).toBeUndefined();
+    expect(placeCard(source, 'deleted', 'todo')).toBeUndefined();
+    expect(placeCard(source, last.id, 'deleted')).toBeUndefined();
+  });
+
+  it('supports fractional ranks and rejects exhausted positions instead of saving the wrong order', () => {
+    const first = { ...card, position: 0.5 };
+    const second = { ...card, id: '22222222-2222-4222-8222-222222222222', position: 0.75 };
+    const moved = { ...card, id: '33333333-3333-4333-8333-333333333333', columnId: 'done' };
+    const source = { ...board, cards: [first, second, moved] };
+    expect(placeCard(source, moved.id, 'todo', { id: second.id, edge: 'before' })).toMatchObject({
+      position: 0.625,
+    });
+    expect(placeCard(source, moved.id, 'todo', { id: first.id, edge: 'before' })).toMatchObject({
+      position: 0.25,
+    });
+    for (const [low, high] of [
+      [0, 0],
+      [1024, 1024],
+      [1 + Number.EPSILON, 1 + 2 * Number.EPSILON],
+    ]) {
+      const packed = {
+        ...source,
+        cards: [{ ...first, position: low! }, { ...second, position: high! }, moved],
+      };
+      expect(() => placeCard(packed, moved.id, 'todo', { id: second.id, edge: 'before' })).toThrow(
+        'no space',
+      );
+    }
+    const full = { ...source, cards: [{ ...first, position: LIMITS.position }, moved] };
+    expect(placeCard(full, moved.id, 'todo')).toMatchObject({ position: LIMITS.position });
+    const noRoom = {
+      ...source,
+      cards: [
+        { ...second, position: LIMITS.position },
+        { ...first, columnId: 'done' },
+      ],
+    };
+    expect(() => placeCard(noRoom, first.id, 'todo')).toThrow('no space');
+  });
+
   it('accepts codes and invitation links while rejecting incomplete or unrelated links', () => {
     const code = 'a'.repeat(32);
     for (const input of [

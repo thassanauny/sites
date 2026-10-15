@@ -157,12 +157,13 @@ describe('Pinboard UI: removing a board from this device', () => {
     ['Edit Buy coffee', 'Card title', 'Save'],
     ['Settings for To do', 'Column name', 'Save'],
     ['Add a card', 'Card title', 'Save'],
-    ['Add column', 'Column name', 'Save'],
+    ['Add column', 'New column name', 'Create column'],
   ])(
     'preserves and recovers the %s draft after cross-tab removal',
     async (opener, label, saveButton) => {
       const populated = { ...board, cards: [card] };
       await mount([populated]);
+      if (opener === 'Add column') await click('Settings');
       await click(opener);
       await fill(label, 'Unsaved work');
       await removeInAnotherTab();

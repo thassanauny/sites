@@ -1,5 +1,23 @@
 export type ColumnColor = 'slate' | 'blue' | 'amber' | 'emerald' | 'rose' | 'violet';
 export type CardPriority = 'low' | 'medium' | 'high';
+export interface CardFilters {
+  query: string;
+  priority: string;
+  assignee: string;
+}
+export type OptionalCardField = 'description' | 'priority' | 'assignee' | 'dueDate' | 'labels';
+
+export interface CustomCardField {
+  id: string;
+  title: string;
+  hidden: boolean;
+}
+
+export interface CardFieldSettings {
+  hidden: OptionalCardField[];
+  custom: CustomCardField[];
+  assignees?: string[];
+}
 
 export interface Column {
   id: string;
@@ -18,6 +36,8 @@ export interface Card {
   /** Empty when no deadline is set; otherwise a calendar date in YYYY-MM-DD. */
   dueDate: string;
   labels: string[];
+  customFields?: Record<string, string>;
+  archived?: boolean;
 }
 
 export interface Board {
@@ -30,6 +50,8 @@ export interface Board {
   revision: number;
   created_at: string;
   updated_at: string;
+  /** Absent on boards that have never customized their fields. */
+  card_fields?: CardFieldSettings;
 }
 
 /** A board's identity and version, read cheaply to find out which boards changed. */
@@ -40,11 +62,18 @@ export interface BoardHead {
 
 export type CardPatch = Partial<Omit<Card, 'id'>>;
 
+/** A drop places the moving card immediately before or after this card. */
+export interface CardDropTarget {
+  id: string;
+  edge: 'before' | 'after';
+}
+
 /** Operations touch only their own fields; the server serializes edits to a board. */
 export type Operation =
+  | { type: 'add_assignee' | 'delete_assignee'; name: string }
   | {
       type: 'update_board';
-      patch: Partial<Pick<Board, 'title' | 'description'>>;
+      patch: Partial<Pick<Board, 'title' | 'description' | 'card_fields'>>;
     }
   | { type: 'add_column'; column: Column }
   | {

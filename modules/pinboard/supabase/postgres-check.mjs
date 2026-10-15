@@ -290,6 +290,95 @@ async function main() {
     assert.equal(independent.revision, firstPatch.revision + 1);
     console.log('PASS: concurrent field patches retain independent edits.');
 
+    const firstField = { id: randomUUID(), title: 'Team', hidden: false };
+    const secondField = { id: randomUUID(), title: 'Reference', hidden: false };
+    const cardFields = { hidden: [], custom: [firstField, secondField] };
+    const customCard = {
+      id: randomUUID(),
+      title: 'Shared custom fields',
+      description: '',
+      columnId: 'todo',
+      position: 1024,
+      priority: 'medium',
+      assignee: '',
+      dueDate: '',
+      labels: [],
+      customFields: { [firstField.id]: 'Original', [secondField.id]: 'Original' },
+    };
+    await sql(`${session(creator)}
+      ${mutation(board.id, { type: 'update_board', patch: { card_fields: cardFields } })}
+      ${mutation(board.id, { type: 'create_card', card: customCard })} commit;`);
+    const [firstValues, secondValues] = await race(
+      `${session(creator)} ${mutation(board.id, {
+        type: 'update_card',
+        id: customCard.id,
+        patch: { position: 2048, customFields: { [firstField.id]: 'Supply' } },
+      })}`,
+      `${session(collaborator)} ${mutation(board.id, {
+        type: 'update_card',
+        id: customCard.id,
+        patch: { title: 'Reviewed', customFields: { [secondField.id]: 'Accepted' } },
+      })}`,
+    );
+    assert.equal(secondValues.code, 0, secondValues.stderr);
+    const customSaved = boardResult(secondValues.stdout);
+    assert.equal(customSaved.revision, firstValues.revision + 1);
+    assert.equal(customSaved.cards[0].title, 'Reviewed');
+    assert.equal(customSaved.cards[0].position, 2048);
+    assert.deepEqual(customSaved.cards[0].customFields, {
+      [firstField.id]: 'Supply',
+      [secondField.id]: 'Accepted',
+    });
+    console.log('PASS: concurrent custom values and independent card edits survive.');
+
+    const addedA = { id: randomUUID(), title: 'Estimate', hidden: false };
+    const addedB = { id: randomUUID(), title: 'Milestone', hidden: false };
+    const [, secondSettings] = await race(
+      `${session(creator)} ${mutation(board.id, { type: 'update_board', patch: { card_fields: { ...cardFields, custom: [...cardFields.custom, addedA] } } })}`,
+      `${session(collaborator)} ${mutation(board.id, { type: 'update_board', patch: { card_fields: { ...cardFields, custom: [...cardFields.custom, addedB] } } })}`,
+    );
+    assert.equal(secondSettings.code, 0, secondSettings.stderr);
+    const fieldsSaved = boardResult(secondSettings.stdout);
+    assert.deepEqual(
+      new Set(fieldsSaved.card_fields.custom.map((field) => field.id)),
+      new Set([firstField.id, secondField.id, addedA.id, addedB.id]),
+    );
+    assert.deepEqual(fieldsSaved.cards, customSaved.cards);
+    console.log('PASS: concurrent custom field additions retain both definitions and values.');
+
+    const [, secondAssignees] = await race(
+      `${session(creator)} ${mutation(board.id, { type: 'add_assignee', name: 'Alex' })}`,
+      `${session(collaborator)} ${mutation(board.id, { type: 'add_assignee', name: 'Sam' })}`,
+    );
+    assert.equal(secondAssignees.code, 0, secondAssignees.stderr);
+    assert.deepEqual(
+      new Set(boardResult(secondAssignees.stdout).card_fields.assignees),
+      new Set(['Alex', 'Sam']),
+    );
+    console.log('PASS: concurrent assignee additions retain both names.');
+
+    const [, staleAssignees] = await race(
+      `${session(creator)} ${mutation(board.id, { type: 'delete_assignee', name: 'Alex' })}`,
+      `${session(collaborator)} ${mutation(board.id, { type: 'update_board', patch: { card_fields: { ...cardFields, assignees: ['Alex', 'Sam'] } } })}`,
+    );
+    assert.equal(staleAssignees.code, 0, staleAssignees.stderr);
+    assert.deepEqual(boardResult(staleAssignees.stdout).card_fields.assignees, ['Sam']);
+    console.log('PASS: a waiting stale settings save cannot revive a deleted assignee.');
+
+    const [, secondArchive] = await race(
+      `${session(creator)} ${mutation(board.id, { type: 'update_card', id: customCard.id, patch: { archived: true } })}`,
+      `${session(collaborator)} ${mutation(board.id, { type: 'update_card', id: customCard.id, patch: { title: 'Edited while archived' } })}`,
+    );
+    assert.equal(secondArchive.code, 0, secondArchive.stderr);
+    const archivedCard = boardResult(secondArchive.stdout).cards[0];
+    assert.equal(archivedCard.archived, true);
+    assert.equal(archivedCard.title, 'Edited while archived');
+    assert.deepEqual(archivedCard.customFields, customSaved.cards[0].customFields);
+    await sql(
+      `${session(creator)} ${mutation(board.id, { type: 'update_card', id: customCard.id, patch: { archived: false } })} commit;`,
+    );
+    console.log('PASS: archiving retains a concurrent card edit and custom values.');
+
     const [firstOrder, secondOrder] = await race(
       `${session(creator)} ${mutation(board.id, { type: 'reorder_columns', columnIds: ['done', 'todo', 'doing'] })}`,
       `${session(collaborator)} ${mutation(board.id, { type: 'reorder_columns', columnIds: ['doing', 'done', 'todo'] })}`,

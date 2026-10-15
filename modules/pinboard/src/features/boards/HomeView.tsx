@@ -1,5 +1,6 @@
 import { ArrowRight, CalendarDays, Check, Link, LoaderCircle, Plus, Users } from 'lucide-react';
 import type { Board } from '../../domain/boards/types';
+import { activeCards } from '../../domain/boards/board';
 
 export function HomeView({
   boards,
@@ -85,7 +86,7 @@ export function HomeView({
                   <p>{item.description || 'A fresh space for good ideas.'}</p>
                   <div>
                     <span>
-                      {item.cards.length} cards · {item.columns.length} columns
+                      {activeCards(item).length} cards · {item.columns.length} columns
                     </span>
                     <Users size={15} />
                   </div>

@@ -18,8 +18,10 @@ describe('Pinboard UI: keyboard focus and labelled controls', () => {
       'returns focus to "%s" after its dialog closes',
       async (name) => {
         await mount([populated], board.invite_code, strict);
-        const opener = button(name);
+        if (name === 'Join with a code') await click('Open workspace');
+        const opener = button(name === 'Add column' ? 'Settings' : name);
         opener.focus();
+        if (name === 'Add column') await click('Settings');
         await click(name);
         expect(document.querySelector('dialog')).not.toBeNull();
         expect(document.activeElement).not.toBe(opener);
@@ -64,7 +66,7 @@ describe('Pinboard UI: keyboard focus and labelled controls', () => {
 
   it('presents the column colours as one named group and leaves no label without a control', async () => {
     await mount([populated]);
-    await click('Add column');
+    await click('Settings for To do');
     const group = document.querySelector<HTMLElement>('dialog [role="group"]')!;
     expect(document.getElementById(group.getAttribute('aria-labelledby')!)?.textContent).toBe(
       'Column color',

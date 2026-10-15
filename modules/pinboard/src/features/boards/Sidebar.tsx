@@ -1,36 +1,56 @@
-import { Columns3, LayoutDashboard, Link, Plus, Users } from 'lucide-react';
+import { Columns3, Plus } from 'lucide-react';
 import type { Board } from '../../domain/boards/types';
+import { cardFields, fieldVisible } from '../../domain/boards/fields';
+import { activeCards } from '../../domain/boards/board';
 
 export function Sidebar({
   boards,
   activeId,
+  visibleCardCount,
   atHome,
   showEmptyHint,
   disabled,
   status,
   statusTitle,
-  version,
   onHome,
   onOpen,
   onCreate,
-  onJoin,
 }: {
   boards: Board[];
   activeId?: string;
+  visibleCardCount: number;
   atHome: boolean;
   showEmptyHint: boolean;
   disabled: boolean;
   status: string;
   statusTitle?: string;
-  version: string;
   onHome: () => void;
   onOpen: (board: Board) => void;
   onCreate: () => void;
-  onJoin: () => void;
 }) {
+  const today = new Date().toLocaleDateString('en-CA');
+  const currentBoard = boards.find((board) => board.id === activeId);
+  const cards = currentBoard ? activeCards(currentBoard) : [];
+  const showDueDates = currentBoard ? fieldVisible(cardFields(currentBoard), 'dueDate') : false;
+  const columnCounts = new Map(currentBoard?.columns.map((column) => [column.id, 0]));
+  let dueToday = 0;
+  let overdue = 0;
+  if (currentBoard) {
+    for (const card of cards) {
+      columnCounts.set(card.columnId, (columnCounts.get(card.columnId) ?? 0) + 1);
+      if (showDueDates && card.dueDate === today) dueToday += 1;
+      else if (showDueDates && card.dueDate && card.dueDate < today) overdue += 1;
+    }
+  }
   return (
     <aside className="sidebar">
-      <button type="button" className="brand" onClick={onHome}>
+      <button
+        type="button"
+        className="brand"
+        onClick={onHome}
+        aria-label="Open workspace"
+        aria-current={atHome ? 'page' : undefined}
+      >
         <span className="brand-mark">
           <Columns3 size={23} strokeWidth={2.5} />
         </span>
@@ -39,15 +59,6 @@ export function Sidebar({
         </span>
       </button>
       <p className="brand-subtitle">A place for your projects.</p>
-      <button
-        type="button"
-        className={`nav-home ${atHome ? 'active' : ''}`}
-        aria-current={atHome ? 'page' : undefined}
-        onClick={onHome}
-      >
-        <LayoutDashboard size={18} />
-        Workspace
-      </button>
       <div className="sidebar-section">
         <span>YOUR BOARDS</span>
         <button
@@ -71,7 +82,7 @@ export function Sidebar({
           >
             <span className="board-nav-dot" />
             <span>{item.title}</span>
-            <span className="board-nav-count">{item.cards.length}</span>
+            <span className="board-nav-count">{activeCards(item).length}</span>
           </button>
         ))}
         {showEmptyHint && (
@@ -83,22 +94,51 @@ export function Sidebar({
         )}
       </nav>
       <div className="sidebar-bottom">
-        <div className="together-note">
-          <Users size={21} />
-          <strong>Made for small projects.</strong>
-          <p>
-            Keep track on your own,
-            <br />
-            with a partner, or with a few people.
-          </p>
-        </div>
-        <button type="button" className="button join-button" onClick={onJoin} disabled={disabled}>
-          <Link size={16} />
-          Join with a code
-        </button>
+        {currentBoard && (
+          <section className="sidebar-overview" aria-label="Current board overview">
+            <h2>At a glance</h2>
+            <dl>
+              <div>
+                <dt>Columns</dt>
+                <dd>{currentBoard.columns.length}</dd>
+              </div>
+              <div>
+                <dt>Cards</dt>
+                <dd>{cards.length}</dd>
+              </div>
+              {showDueDates && (
+                <div>
+                  <dt>Due today</dt>
+                  <dd>{dueToday}</dd>
+                </div>
+              )}
+              {showDueDates && (
+                <div>
+                  <dt>Overdue</dt>
+                  <dd className={overdue ? 'overdue' : undefined}>{overdue}</dd>
+                </div>
+              )}
+            </dl>
+            <ul className="sidebar-column-counts" aria-label="Cards by column">
+              {currentBoard.columns.map((column) => (
+                <li key={column.id} className={`color-${column.color}`}>
+                  <span className="column-dot" aria-hidden="true" />
+                  <span className="sidebar-column-name" title={column.title}>
+                    {column.title}
+                  </span>
+                  <strong>{columnCounts.get(column.id)}</strong>
+                </li>
+              ))}
+            </ul>
+            <div className="sidebar-board-meta">
+              <p className="sidebar-visible-cards">
+                Showing {visibleCardCount} of {cards.length} {cards.length === 1 ? 'card' : 'cards'}
+              </p>
+            </div>
+          </section>
+        )}
         <div className="sidebar-footer">
           <span title={statusTitle}>{status}</span>
-          <span>v{version}</span>
         </div>
       </div>
     </aside>

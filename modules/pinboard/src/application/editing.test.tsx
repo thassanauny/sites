@@ -256,11 +256,12 @@ describe('Pinboard UI: editing boards, columns and cards', () => {
       ['Edit Buy coffee', 'Card title', 'Card details'],
       ['Settings for To do', 'Column name', 'Column settings'],
       ['Add a card', 'Card title', 'A new thing to do.'],
-      ['Add column', 'Column name', 'Make a little more room.'],
+      ['Add column', 'New column name', 'Board settings'],
     ] as const;
 
     it.each(forms)('%s closes at once while nothing was changed', async (opener, _label, title) => {
       await mount([populated]);
+      if (opener === 'Add column') await click('Settings');
       await click(opener);
       expect(heading()).toBe(title);
       await click('Close dialog');
@@ -269,6 +270,7 @@ describe('Pinboard UI: editing boards, columns and cards', () => {
 
     it.each(forms)('%s asks before unsaved edits are thrown away', async (opener, label, title) => {
       await mount([populated]);
+      if (opener === 'Add column') await click('Settings');
       await click(opener);
       await fill(label, 'Unsaved work');
       await click('Close dialog');
@@ -369,8 +371,14 @@ describe('Pinboard UI: editing boards, columns and cards', () => {
     await mount([populated]);
     const searchBox = () =>
       document.querySelector<HTMLInputElement>('input[aria-label="Search cards"]')!;
+    const visibleCount = () => document.querySelector('.sidebar-visible-cards')?.textContent;
+    expect(visibleCount()).toContain('Showing 1 of 1 card');
+    expect(document.querySelector('.app-footer time')?.getAttribute('datetime')).toBe(
+      board.updated_at,
+    );
     await search('coffee');
     expect(searchBox().value).toBe('coffee');
+    expect(visibleCount()).toContain('Showing 1 of 1 card');
     expect(document.querySelector('.filter-summary')?.textContent).toContain(
       'Showing 1 of 1 cards',
     );
@@ -380,11 +388,13 @@ describe('Pinboard UI: editing boards, columns and cards', () => {
     expect(searchBox().value).toBe('');
     expect(document.querySelector('.filter-summary')).toBeNull();
     await search('tea');
+    expect(visibleCount()).toContain('Showing 0 of 1 card');
     expect(document.querySelector('.filter-summary')?.textContent).toContain(
       'Showing 0 of 1 cards',
     );
     await navigateHash(`#board/${board.invite_code}`);
     expect(searchBox().value).toBe('');
+    expect(visibleCount()).toContain('Showing 1 of 1 card');
     expect(document.querySelector('.filter-summary')).toBeNull();
   });
 });

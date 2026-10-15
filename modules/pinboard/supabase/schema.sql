@@ -77,6 +77,69 @@ exception when others then return false;
 end;
 $$;
 
+create or replace function private.pinboard_valid_card_fields(p_value jsonb)
+returns boolean language plpgsql immutable security invoker set search_path = '' as $$
+declare
+  field jsonb;
+  ids text[] := '{}'::text[];
+  names text[] := array['card title','column','description','priority','assignee','due date','labels'];
+begin
+  if not (p_value ?& array['hidden','custom'])
+    or not private.pinboard_allowed_keys(p_value, array['hidden','custom','assignees'])
+    or jsonb_typeof(p_value->'hidden') is distinct from 'array'
+    or jsonb_typeof(p_value->'custom') is distinct from 'array'
+    or jsonb_array_length(p_value->'hidden') > 5
+    or jsonb_array_length(p_value->'custom') > 12
+  then return false; end if;
+  for field in select value from jsonb_array_elements(p_value->'hidden') loop
+    if jsonb_typeof(field) is distinct from 'string'
+      or (field #>> '{}') not in ('description','priority','assignee','dueDate','labels')
+      or (field #>> '{}') = any(ids) then return false; end if;
+    ids := array_append(ids, field #>> '{}');
+  end loop;
+  ids := '{}'::text[];
+  for field in select value from jsonb_array_elements(p_value->'custom') loop
+    if not private.pinboard_has_keys(field, array['id','title','hidden'])
+      or not coalesce(private.pinboard_valid_uuid(field->'id'), false)
+      or not private.pinboard_valid_text(field->'title', 40)
+      or jsonb_typeof(field->'hidden') is distinct from 'boolean'
+      or (field->>'id') = any(ids)
+      or lower(btrim(field->>'title')) = any(names)
+    then return false; end if;
+    ids := array_append(ids, field->>'id');
+    names := array_append(names, lower(btrim(field->>'title')));
+  end loop;
+  if p_value ? 'assignees' then
+    if jsonb_typeof(p_value->'assignees') is distinct from 'array'
+      or jsonb_array_length(p_value->'assignees') > 2000 then return false; end if;
+    ids := '{}'::text[];
+    for field in select value from jsonb_array_elements(p_value->'assignees') loop
+      if not private.pinboard_valid_text(field, 80) or (field #>> '{}') = any(ids)
+        then return false; end if;
+      ids := array_append(ids, field #>> '{}');
+    end loop;
+  end if;
+  return true;
+exception when others then return false;
+end;
+$$;
+
+create or replace function private.pinboard_valid_custom_values(p_value jsonb)
+returns boolean language plpgsql immutable security invoker set search_path = '' as $$
+declare field_id text; field_value jsonb; field_count integer := 0;
+begin
+  if jsonb_typeof(p_value) is distinct from 'object' then return false; end if;
+  for field_id, field_value in select key, value from jsonb_each(p_value) loop
+    field_count := field_count + 1;
+    if field_count > 12 or not coalesce(private.pinboard_valid_uuid(to_jsonb(field_id)), false)
+      or not private.pinboard_valid_text(field_value, 1000, false)
+    then return false; end if;
+  end loop;
+  return true;
+exception when others then return false;
+end;
+$$;
+
 create or replace function private.pinboard_valid_state(p_columns jsonb, p_cards jsonb)
 returns boolean language plpgsql immutable security invoker set search_path = '' as $$
 declare
@@ -101,7 +164,10 @@ begin
     column_ids := array_append(column_ids, column_value->>'id');
   end loop;
   for card_value in select value from jsonb_array_elements(p_cards) loop
-    if not private.pinboard_has_keys(card_value, array['id','title','description','columnId','position','priority','assignee','dueDate','labels'])
+    if not (card_value ?& array['id','title','description','columnId','position','priority','assignee','dueDate','labels'])
+      or not private.pinboard_allowed_keys(card_value, array['id','title','description','columnId','position','priority','assignee','dueDate','labels','customFields','archived'])
+      or (card_value ? 'archived' and jsonb_typeof(card_value->'archived') is distinct from 'boolean')
+      or (card_value ? 'customFields' and not private.pinboard_valid_custom_values(card_value->'customFields'))
       or not coalesce(private.pinboard_valid_uuid(card_value->'id'), false)
       or not private.pinboard_valid_text(card_value->'title', 160)
       or not private.pinboard_valid_text(card_value->'description', 10000, false)
@@ -142,6 +208,10 @@ create table if not exists public.pinboard_boards (
   check (private.pinboard_valid_state(columns, cards))
 );
 
+-- Null keeps untouched boards and older RPC result shapes intact.
+alter table public.pinboard_boards add column if not exists card_fields jsonb
+  check (card_fields is null or private.pinboard_valid_card_fields(card_fields));
+
 create table if not exists public.pinboard_board_access (
   board_id uuid not null references public.pinboard_boards(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -157,7 +227,7 @@ alter table public.pinboard_board_access enable row level security;
 revoke all on public.pinboard_boards, public.pinboard_board_access from public, anon, authenticated;
 -- Members read board rows only through these columns: `created_by` and the deletion
 -- receipts stay server-side. The client's explicit column list matches this one.
-grant select (id, invite_code, title, description, columns, cards, revision, created_at, updated_at)
+grant select (id, invite_code, title, description, columns, cards, revision, created_at, updated_at, card_fields)
   on public.pinboard_boards to authenticated;
 grant select on public.pinboard_board_access to authenticated;
 
@@ -185,7 +255,8 @@ returns jsonb language sql stable security invoker set search_path = '' as $$
     'revision', p_board.revision,
     'created_at', p_board.created_at,
     'updated_at', p_board.updated_at
-  );
+  ) || case when p_board.card_fields is null then '{}'::jsonb
+    else jsonb_build_object('card_fields', p_board.card_fields) end;
 $$;
 
 create or replace function private.pinboard_create_board(p_id uuid, p_title text, p_description text)
@@ -264,6 +335,7 @@ declare
   new_deleted_column_ids text[];
   new_title text;
   new_description text;
+  new_card_fields jsonb;
   operation_type text;
   target_index integer;
   patch jsonb;
@@ -289,12 +361,13 @@ begin
   new_deleted_column_ids := board_row.deleted_column_ids;
   new_title := board_row.title;
   new_description := board_row.description;
+  new_card_fields := board_row.card_fields;
   patch := p_operation->'patch';
   entity_id := p_operation->>'id';
 
   if operation_type = 'update_board' then
     if not private.pinboard_has_keys(p_operation, array['type','patch'])
-      or not private.pinboard_allowed_keys(patch, array['title','description'])
+      or not private.pinboard_allowed_keys(patch, array['title','description','card_fields'])
     then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
     if patch ? 'title' then
       if not private.pinboard_valid_text(patch->'title', 160) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
@@ -304,6 +377,55 @@ begin
       if not private.pinboard_valid_text(patch->'description', 10000, false) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
       new_description := patch->>'description';
     end if;
+    if patch ? 'card_fields' then
+      if not private.pinboard_valid_card_fields(patch->'card_fields')
+        then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
+      -- A stale settings editor cannot remove fields another member added.
+      select jsonb_set(patch->'card_fields', '{custom}', (patch->'card_fields'->'custom') ||
+        coalesce(jsonb_agg(current_fields.value order by current_fields.ordinality) filter (where not exists (
+          select 1 from jsonb_array_elements(patch->'card_fields'->'custom') supplied
+          where supplied->>'id' = current_fields.value->>'id'
+        )), '[]'::jsonb)) into new_card_fields
+        from jsonb_array_elements(coalesce(new_card_fields->'custom', '[]'::jsonb)) with ordinality as current_fields;
+      -- Only dedicated name operations change this list, so stale settings cannot revive a deletion.
+      if board_row.card_fields ? 'assignees' then
+        new_card_fields := jsonb_set(new_card_fields, '{assignees}', board_row.card_fields->'assignees');
+      else
+        new_card_fields := new_card_fields - 'assignees';
+      end if;
+      if not private.pinboard_valid_card_fields(new_card_fields)
+        then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
+    end if;
+  elsif operation_type in ('add_assignee', 'delete_assignee') then
+    if not private.pinboard_has_keys(p_operation, array['type','name'])
+      or not private.pinboard_valid_text(p_operation->'name', 80)
+    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
+    new_card_fields := coalesce(new_card_fields, '{"hidden":[],"custom":[]}'::jsonb);
+    if not (new_card_fields ? 'assignees') then
+      new_card_fields := jsonb_set(new_card_fields, '{assignees}', (
+        select coalesce(jsonb_agg(to_jsonb(name) order by name), '[]'::jsonb) from (
+          select distinct value->>'assignee' as name from jsonb_array_elements(new_cards)
+          where value->>'assignee' <> ''
+        ) names
+      ));
+    end if;
+    if operation_type = 'add_assignee' then
+      if not (new_card_fields->'assignees' @> jsonb_build_array(p_operation->'name')) then
+        new_card_fields := jsonb_set(new_card_fields, '{assignees}',
+          (new_card_fields->'assignees') || jsonb_build_array(p_operation->'name'));
+      end if;
+    else
+      new_card_fields := jsonb_set(new_card_fields, '{assignees}', (
+        select coalesce(jsonb_agg(value order by ordinality), '[]'::jsonb)
+        from jsonb_array_elements(new_card_fields->'assignees') with ordinality
+        where value <> p_operation->'name'
+      ));
+      select coalesce(jsonb_agg(case when value->>'assignee' = p_operation->>'name'
+        then jsonb_set(value, '{assignee}', '""'::jsonb) else value end order by ordinality), '[]'::jsonb)
+        into new_cards from jsonb_array_elements(new_cards) with ordinality;
+    end if;
+    if not private.pinboard_valid_card_fields(new_card_fields)
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
   elsif operation_type = 'add_column' then
     if not private.pinboard_has_keys(p_operation, array['type','column'])
       or not private.pinboard_valid_state(jsonb_build_array(p_operation->'column'), '[]'::jsonb)
@@ -379,7 +501,7 @@ begin
   elsif operation_type in ('update_card','move_card') then
     if operation_type = 'update_card' then
       if not private.pinboard_has_keys(p_operation, array['type','id','patch'])
-        or not private.pinboard_allowed_keys(patch, array['title','description','columnId','position','priority','assignee','dueDate','labels'])
+        or not private.pinboard_allowed_keys(patch, array['title','description','columnId','position','priority','assignee','dueDate','labels','customFields','archived'])
       then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
     else
       if not private.pinboard_has_keys(p_operation, array['type','id','columnId','position'])
@@ -396,6 +518,13 @@ begin
     if coalesce(private.pinboard_valid_column_id(patch->'columnId'), false)
       and not exists (select 1 from jsonb_array_elements(new_columns) where value->>'id' = patch->>'columnId')
     then raise exception 'PINBOARD_COLUMN_NOT_FOUND' using errcode = 'P0001'; end if;
+    if patch ? 'customFields' then
+      if not private.pinboard_valid_custom_values(patch->'customFields')
+        then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
+      -- Custom values are independent fields, so concurrent edits to different IDs survive.
+      patch := jsonb_set(patch, '{customFields}',
+        coalesce(new_cards->target_index->'customFields', '{}'::jsonb) || (patch->'customFields'));
+    end if;
     new_cards := jsonb_set(new_cards, array[target_index::text], (new_cards->target_index) || patch);
   elsif operation_type = 'delete_card' then
     if not private.pinboard_has_keys(p_operation, array['type','id'])
@@ -414,19 +543,32 @@ begin
 
   if not private.pinboard_valid_state(new_columns, new_cards)
     then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
+  if new_card_fields ? 'assignees' and (
+    (operation_type = 'create_card' and p_operation->'card'->>'assignee' <> ''
+      and not (new_card_fields->'assignees' @> jsonb_build_array(p_operation->'card'->'assignee')))
+    or (operation_type = 'update_card' and patch ? 'assignee' and patch->>'assignee' <> ''
+      and not (new_card_fields->'assignees' @> jsonb_build_array(patch->'assignee')))
+  ) then raise exception 'PINBOARD_ASSIGNEE_NOT_FOUND' using errcode = 'P0001'; end if;
+  if exists (
+    select 1 from jsonb_array_elements(new_cards) card,
+      lateral jsonb_object_keys(coalesce(card->'customFields', '{}'::jsonb)) as values_by_field(field_id)
+    where not exists (select 1 from jsonb_array_elements(coalesce(new_card_fields->'custom', '[]'::jsonb)) field
+      where field->>'id' = values_by_field.field_id)
+  ) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
   -- A board may not grow past about 2 MB of columns and cards; shrinking edits always pass,
   -- so an older, larger board can still be cleaned up.
-  if octet_length(new_columns::text) + octet_length(new_cards::text) > 2000000
-    and octet_length(new_columns::text) + octet_length(new_cards::text)
-      > octet_length(board_row.columns::text) + octet_length(board_row.cards::text)
+  if octet_length(new_columns::text) + octet_length(new_cards::text) + octet_length(coalesce(new_card_fields, 'null'::jsonb)::text) > 2000000
+    and octet_length(new_columns::text) + octet_length(new_cards::text) + octet_length(coalesce(new_card_fields, 'null'::jsonb)::text)
+      > octet_length(board_row.columns::text) + octet_length(board_row.cards::text) + octet_length(coalesce(board_row.card_fields, 'null'::jsonb)::text)
   then raise exception 'PINBOARD_BOARD_TOO_LARGE' using errcode = 'P0001'; end if;
   if new_columns is distinct from board_row.columns or new_cards is distinct from board_row.cards
     or new_title is distinct from board_row.title or new_description is distinct from board_row.description
+    or new_card_fields is distinct from board_row.card_fields
   then
     if board_row.revision = 9007199254740991 then raise exception 'PINBOARD_BOARD_LIMIT' using errcode = 'P0001'; end if;
     update public.pinboard_boards set columns = new_columns, cards = new_cards,
       deleted_card_ids = new_deleted_card_ids, deleted_column_ids = new_deleted_column_ids,
-      title = new_title, description = new_description, revision = revision + 1, updated_at = clock_timestamp()
+      title = new_title, description = new_description, card_fields = new_card_fields, revision = revision + 1, updated_at = clock_timestamp()
       where id = board_row.id returning * into board_row;
   end if;
   return private.pinboard_board_json(board_row);
@@ -452,6 +594,7 @@ revoke all on function private.pinboard_has_keys(jsonb,text[]), private.pinboard
   private.pinboard_valid_text(jsonb,integer,boolean), private.pinboard_valid_uuid(jsonb),
   private.pinboard_valid_column_id(jsonb), private.pinboard_valid_date(jsonb),
   private.pinboard_valid_position(jsonb), private.pinboard_valid_state(jsonb,jsonb),
+  private.pinboard_valid_card_fields(jsonb), private.pinboard_valid_custom_values(jsonb),
   private.pinboard_board_json(public.pinboard_boards), private.pinboard_create_board(uuid,text,text),
   private.pinboard_join_board(text), private.pinboard_mutate_board(uuid,jsonb)
   from public, anon, authenticated;

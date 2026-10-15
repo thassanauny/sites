@@ -1,4 +1,4 @@
-import { Check, ChevronRight, CircleHelp, LoaderCircle, Settings2, WifiOff, X } from 'lucide-react';
+import { Check, CircleHelp, LoaderCircle, Settings2, WifiOff, X } from 'lucide-react';
 import { BoardDialog } from '../features/boards/BoardDialog';
 import { BoardView } from '../features/boards/BoardView';
 import { HomeView } from '../features/boards/HomeView';
@@ -6,6 +6,7 @@ import { Sidebar } from '../features/boards/Sidebar';
 import { cloudConfigured } from '../infrastructure/cloud/boards';
 import { SESSION_CORRUPT_MESSAGE } from '../infrastructure/auth/migrateSession';
 import { useWorkspace } from './useWorkspace';
+import { useBoardFilters } from './useBoardFilters';
 import { version } from '../../package.json';
 export default function App() {
   const {
@@ -43,13 +44,15 @@ export default function App() {
     openSettings,
     openInvite,
     openColumn,
-    addColumn,
     openCard,
     addCard,
     moveCard,
     dropCard,
+    reorderCard,
     save,
   } = useWorkspace();
+  const { filters, setFilters, clearFilters, orderedCards, columnCards, filteredCount } =
+    useBoardFilters(board, navigations);
   // Compared by value, so the board is rendered again at midnight to mark newly overdue cards.
   const today = new Date().toLocaleDateString('en-CA');
   return (
@@ -57,6 +60,7 @@ export default function App() {
       <Sidebar
         boards={boardList}
         activeId={board?.id}
+        visibleCardCount={filteredCount}
         atHome={!selectedCode}
         showEmptyHint={loaded && visibleCount === 0}
         disabled={disabled}
@@ -70,25 +74,12 @@ export default function App() {
                 : 'Connecting…'
         }
         statusTitle={lastSync ? `Last synced ${lastSync.toLocaleString()}` : undefined}
-        version={version}
         onHome={() => navigate()}
         onOpen={navigate}
         onCreate={() => setModal({ type: 'create' })}
-        onJoin={() => setModal({ type: 'join' })}
       />
       <main className="main">
         <header className="topbar">
-          <div className="breadcrumb">
-            {board ? (
-              <>
-                <span>Workspace</span>
-                <ChevronRight size={14} />
-                <strong>{board.title}</strong>
-              </>
-            ) : (
-              <strong>Workspace</strong>
-            )}
-          </div>
           <div className="topbar-actions">
             <span className={`connection ${offline || error ? 'offline' : ''}`}>
               <span />
@@ -158,17 +149,22 @@ export default function App() {
             disabled={disabled}
             refreshDisabled={refreshDisabled}
             refreshing={refreshing}
-            resetKey={navigations}
+            filters={filters}
+            orderedCards={orderedCards}
+            columnCards={columnCards}
+            filteredCount={filteredCount}
+            onFiltersChange={setFilters}
+            onClearFilters={clearFilters}
             today={today}
             onRefresh={refreshNow}
             onSettings={openSettings}
             onInvite={openInvite}
             onAddCard={addCard}
-            onAddColumn={addColumn}
             onEditColumn={openColumn}
             onEditCard={openCard}
             onMoveCard={moveCard}
             onDropCard={dropCard}
+            onReorderCard={reorderCard}
           />
         ) : (
           <HomeView
@@ -182,6 +178,20 @@ export default function App() {
             onOpen={navigate}
           />
         )}
+        <footer className="app-footer">
+          {board && (
+            <span title="When a card, column, or board setting was last changed.">
+              Last board change:{' '}
+              <time dateTime={board.updated_at}>
+                {new Date(board.updated_at).toLocaleString(undefined, {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                })}
+              </time>
+            </span>
+          )}
+          <span className="app-version">pinboard · {version}</span>
+        </footer>
       </main>
       {notice && (
         <div className="toast" role="status">

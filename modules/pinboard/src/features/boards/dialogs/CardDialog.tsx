@@ -1,6 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import type { Board, Card, Operation } from '../../../domain/boards/types';
-import { LIMITS, cardPatch, nextPosition } from '../../../domain/boards/board';
+import { cardPatch, nextPosition } from '../../../domain/boards/board';
+import {
+  boardAssignees,
+  cardFields,
+  FIELD_LIMITS,
+  fieldVisible,
+} from '../../../domain/boards/fields';
 import { Dialog } from '../../../ui/Dialog';
 import { message } from '../../../ui/message';
 import {
@@ -45,18 +51,22 @@ export function CardDialog({
   const [card, setCard] = useState<Card>(initial);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const { localError, setLocalError, copy } = useDialogMessages(onNotice);
+  const liveBoard = currentBoard ?? board;
+  const fields = cardFields(liveBoard);
   const edited = {
     ...card,
     title: title.trim(),
-    description: description.trim(),
-    assignee: card.assignee.trim(),
-    labels: [...new Set(card.labels.map((label) => label.trim()).filter(Boolean))],
+    description: fieldVisible(fields, 'description') ? description.trim() : description,
+    assignee: fieldVisible(fields, 'assignee') ? card.assignee.trim() : card.assignee,
+    labels: fieldVisible(fields, 'labels')
+      ? [...new Set(card.labels.map((label) => label.trim()).filter(Boolean))]
+      : card.labels,
   };
   const patch = cardPatch(initial, edited);
   const discard = useDraftClose(removed || Object.keys(patch).length > 0, closeModal);
   const locked = busy || offline || removed;
-  const liveBoard = currentBoard ?? board;
   const currentColumns = liveBoard.columns;
+  const assignees = boardAssignees(liveBoard);
   const draftText = [
     title,
     description,
@@ -65,6 +75,7 @@ export function CardDialog({
     `Assignee: ${card.assignee}`,
     `Due date: ${card.dueDate}`,
     `Labels: ${card.labels.join(', ')}`,
+    ...fields.custom.map((field) => `${field.title}: ${card.customFields?.[field.id] ?? ''}`),
   ].join('\n');
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -87,6 +98,22 @@ export function CardDialog({
   async function remove() {
     if (locked) return;
     if (await onSave(board.id, { type: 'delete_card', id: initial.id })) closeModal();
+  }
+  async function archive() {
+    if (locked || isNew) return;
+    setLocalError('');
+    try {
+      if (
+        await onSave(board.id, {
+          type: 'update_card',
+          id: initial.id,
+          patch: { ...patch, archived: true },
+        })
+      )
+        closeModal();
+    } catch (failure) {
+      setLocalError(message(failure));
+    }
   }
   return (
     <Dialog
@@ -132,6 +159,7 @@ export function CardDialog({
           submitLabel="Save"
           deleteLabel={isNew ? undefined : 'Delete'}
           onDelete={isNew ? undefined : () => setConfirmDelete(true)}
+          onArchive={isNew ? undefined : () => void archive()}
           onSubmit={(event) => void submit(event)}
         >
           <TitleField
@@ -140,7 +168,9 @@ export function CardDialog({
             placeholder="What needs doing?"
             onChange={setTitle}
           />
-          <DescriptionField rows={4} value={description} onChange={setDescription} />
+          {fieldVisible(fields, 'description') && (
+            <DescriptionField rows={4} value={description} onChange={setDescription} />
+          )}
           <div className="form-grid">
             <label className="field">
               Column
@@ -166,50 +196,91 @@ export function CardDialog({
                 ))}
               </select>
             </label>
-            <label className="field">
-              Priority
-              <select
-                value={card.priority}
-                onChange={(event) =>
-                  setCard({
-                    ...card,
-                    priority: event.target.value as Card['priority'],
-                  })
-                }
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </label>
-            <label className="field">
-              Assignee <span className="optional">optional</span>
-              <input
-                value={card.assignee}
-                maxLength={LIMITS.assignee}
-                placeholder="A name"
-                onChange={(event) => setCard({ ...card, assignee: event.target.value })}
-              />
-            </label>
-            <label className="field">
-              Due date <span className="optional">optional</span>
-              <input
-                type="date"
-                min="0001-01-01"
-                max="9999-12-31"
-                value={card.dueDate}
-                onChange={(event) => setCard({ ...card, dueDate: event.target.value })}
-              />
-            </label>
+            {fieldVisible(fields, 'priority') && (
+              <label className="field">
+                Priority
+                <select
+                  value={card.priority}
+                  onChange={(event) =>
+                    setCard({
+                      ...card,
+                      priority: event.target.value as Card['priority'],
+                    })
+                  }
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </label>
+            )}
+            {fieldVisible(fields, 'assignee') && (
+              <label className="field">
+                Assignee <span className="optional">optional</span>
+                <select
+                  value={card.assignee ? `name:${card.assignee}` : ''}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setCard({
+                      ...card,
+                      assignee: value.slice('name:'.length),
+                    });
+                  }}
+                >
+                  <option value="">Unassigned</option>
+                  {card.assignee && !assignees.includes(card.assignee) && (
+                    <option value={`name:${card.assignee}`} disabled>
+                      {card.assignee} — removed
+                    </option>
+                  )}
+                  {assignees.map((name) => (
+                    <option key={name} value={`name:${name}`}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {fieldVisible(fields, 'dueDate') && (
+              <label className="field">
+                Due date <span className="optional">optional</span>
+                <input
+                  type="date"
+                  min="0001-01-01"
+                  max="9999-12-31"
+                  value={card.dueDate}
+                  onChange={(event) => setCard({ ...card, dueDate: event.target.value })}
+                />
+              </label>
+            )}
           </div>
-          <label className="field">
-            Labels <span className="optional">optional · separated by commas</span>
-            <input
-              value={card.labels.join(',')}
-              onChange={(event) => setCard({ ...card, labels: event.target.value.split(',') })}
-              placeholder="Design, personal, this week"
-            />
-          </label>
+          {fieldVisible(fields, 'labels') && (
+            <label className="field">
+              Labels <span className="optional">optional · separated by commas</span>
+              <input
+                value={card.labels.join(',')}
+                onChange={(event) => setCard({ ...card, labels: event.target.value.split(',') })}
+                placeholder="Design, personal, this week"
+              />
+            </label>
+          )}
+          {fields.custom
+            .filter((field) => !field.hidden)
+            .map((field) => (
+              <label className="field" key={field.id}>
+                {field.title} <span className="optional">optional</span>
+                <input
+                  value={card.customFields?.[field.id] ?? ''}
+                  maxLength={FIELD_LIMITS.value}
+                  onChange={(event) =>
+                    setCard({
+                      ...card,
+                      customFields: { ...card.customFields, [field.id]: event.target.value },
+                    })
+                  }
+                />
+              </label>
+            ))}
           {confirmDelete && (
             <div className="delete-confirm">
               <p>Delete this card? This cannot be undone.</p>

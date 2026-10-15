@@ -21,8 +21,13 @@ export const cloudConfigured = Boolean(supabaseUrl && supabaseKey);
 
 /** Rows requested per page; the API may return fewer. */
 const PAGE_SIZE = 100;
-const BOARD_COLUMNS =
+const LEGACY_BOARD_COLUMNS =
   'id,invite_code,title,description,columns,cards,revision,created_at,updated_at';
+const BOARD_COLUMNS = `${LEGACY_BOARD_COLUMNS},card_fields`;
+let fieldSettingsAvailable = true;
+const boardColumns = () => (fieldSettingsAvailable ? BOARD_COLUMNS : LEGACY_BOARD_COLUMNS);
+const missingCardFields = (error: ServiceError) =>
+  ['42703', 'PGRST204'].includes(error.code ?? '') && /card_fields/.test(error.message ?? '');
 /** A stalled connection must end in an error instead of leaving every edit waiting. */
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -97,6 +102,8 @@ function serviceError(error: ServiceError, action: string): Error {
     return new Error('That column was removed. Refresh the board and choose another column.');
   if (error.message === 'PINBOARD_CARD_NOT_FOUND')
     return new Error('That card was removed. Refresh the board to see the latest changes.');
+  if (error.message === 'PINBOARD_ASSIGNEE_NOT_FOUND')
+    return new Error('That assignee was removed. Choose another name or Unassigned.');
   if (
     error.code === 'PGRST202' ||
     error.code === 'PGRST205' ||
@@ -223,7 +230,13 @@ async function readPages<T extends { id: string }>(
         .order('id', { ascending: true })
         .range(offset, offset + PAGE_SIZE - 1),
     );
-    if (error) throw serviceError(error, 'load your boards');
+    if (error) {
+      if (select === BOARD_COLUMNS && missingCardFields(error)) {
+        fieldSettingsAvailable = false;
+        return readPages(LEGACY_BOARD_COLUMNS, read);
+      }
+      throw serviceError(error, 'load your boards');
+    }
     if (
       !Array.isArray(data) ||
       !Number.isSafeInteger(count) ||
@@ -256,11 +269,17 @@ async function readBoardsById(ids: string[]): Promise<Board[]> {
     const { data, error } = await call('load your boards', () =>
       getClient()
         .from('pinboard_boards')
-        .select(BOARD_COLUMNS)
+        .select(boardColumns())
         .in('id', wanted)
         .order('id', { ascending: true }),
     );
-    if (error) throw serviceError(error, 'load your boards');
+    if (error) {
+      if (fieldSettingsAvailable && missingCardFields(error)) {
+        fieldSettingsAvailable = false;
+        continue;
+      }
+      throw serviceError(error, 'load your boards');
+    }
     if (!Array.isArray(data) || data.length === 0) throw listChanged();
     for (const row of data) {
       const board = readCloudBoard(row);
@@ -279,7 +298,7 @@ async function readBoardsById(ids: string[]): Promise<Board[]> {
  */
 export async function loadBoards(known: readonly Board[] = []): Promise<Board[]> {
   await initializeCloud();
-  if (known.length === 0) return readPages(BOARD_COLUMNS, readCloudBoard);
+  if (known.length === 0) return readPages(boardColumns(), readCloudBoard);
   const heads = await readPages('id,revision', readCloudHead);
   const held = new Map(known.map((board) => [board.id, board]));
   const changed = heads
@@ -334,7 +353,32 @@ export async function mutateBoard(boardId: string, operation: Operation): Promis
       p_operation: payload,
     }),
   );
-  if (error) throw serviceError(error, 'save your changes');
+  if (error) {
+    if (
+      (payload.type === 'add_assignee' || payload.type === 'delete_assignee') &&
+      error.message === 'PINBOARD_INVALID_OPERATION'
+    )
+      throw new Error(
+        'Assignee settings need a database update. Run Pinboard’s schema.sql in Supabase, then reload the app. Your settings draft is kept here.',
+      );
+    if (
+      payload.type === 'update_card' &&
+      'archived' in payload.patch &&
+      error.message === 'PINBOARD_INVALID_OPERATION'
+    )
+      throw new Error(
+        'Archiving needs a database update. Run Pinboard’s schema.sql in Supabase, then reload the app. Your card draft is kept here.',
+      );
+    if (
+      payload.type === 'update_board' &&
+      payload.patch.card_fields &&
+      error.message === 'PINBOARD_INVALID_OPERATION'
+    )
+      throw new Error(
+        'Card field settings need a database update. Run Pinboard’s schema.sql in Supabase, then reload the app. Your settings draft is kept here.',
+      );
+    throw serviceError(error, 'save your changes');
+  }
   const board = readCloudBoard(data);
   if (board.id !== id)
     throw new Error('The server returned a different board. Refresh the app and try again.');

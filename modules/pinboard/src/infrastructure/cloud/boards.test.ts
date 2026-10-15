@@ -318,6 +318,101 @@ describe('online board sharing', () => {
     expect(mock.rpc).not.toHaveBeenCalled();
   });
 
+  it('falls back only for the missing field-settings column on an older database', async () => {
+    mock.range.mockResolvedValueOnce({
+      data: null,
+      error: { code: '42703', message: 'column pinboard_boards.card_fields does not exist' },
+      count: null,
+    });
+    mock.range.mockResolvedValueOnce({ data: [board], error: null, count: 1 });
+    const cloud = await import('./boards');
+    await expect(cloud.loadBoards()).resolves.toEqual([board]);
+    expect(mock.select).toHaveBeenNthCalledWith(
+      1,
+      'id,invite_code,title,description,columns,cards,revision,created_at,updated_at,card_fields',
+      { count: 'exact' },
+    );
+    expect(mock.select).toHaveBeenNthCalledWith(
+      2,
+      'id,invite_code,title,description,columns,cards,revision,created_at,updated_at',
+      { count: 'exact' },
+    );
+    mock.range.mockResolvedValueOnce({
+      data: null,
+      error: { code: '42501', message: 'permission denied' },
+      count: null,
+    });
+    await expect(cloud.loadBoards()).rejects.toThrow('permission denied');
+    expect(mock.range).toHaveBeenCalledTimes(3);
+  });
+
+  it('falls back for changed-board reads without losing the held board list', async () => {
+    mock.range.mockResolvedValueOnce({
+      data: [{ id: board.id, revision: 2 }],
+      error: null,
+      count: 1,
+    });
+    mock.orderIds.mockResolvedValueOnce({
+      data: null,
+      error: { code: '42703', message: 'card_fields does not exist' },
+    });
+    mock.orderIds.mockResolvedValueOnce({ data: [{ ...board, revision: 2 }], error: null });
+    const cloud = await import('./boards');
+    await expect(cloud.loadBoards([board])).resolves.toEqual([{ ...board, revision: 2 }]);
+    expect(mock.orderIds).toHaveBeenCalledTimes(2);
+  });
+
+  it('explains the required schema update when an older database rejects field settings', async () => {
+    mock.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '22023', message: 'PINBOARD_INVALID_OPERATION' },
+    });
+    const cloud = await import('./boards');
+    await expect(
+      cloud.mutateBoard(board.id, {
+        type: 'update_board',
+        patch: { card_fields: { hidden: ['assignee'], custom: [] } },
+      }),
+    ).rejects.toThrow('database update');
+  });
+
+  it('explains the required schema update when an older database rejects archive flags', async () => {
+    mock.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '22023', message: 'PINBOARD_INVALID_OPERATION' },
+    });
+    const cloud = await import('./boards');
+    await expect(
+      cloud.mutateBoard(board.id, {
+        type: 'update_card',
+        id: '11111111-1111-4111-8111-111111111111',
+        patch: { archived: true },
+      }),
+    ).rejects.toThrow('Archiving needs a database update');
+  });
+
+  it('explains assignee setup and rejects a removed assignment with a useful message', async () => {
+    const cloud = await import('./boards');
+    mock.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '22023', message: 'PINBOARD_INVALID_OPERATION' },
+    });
+    await expect(
+      cloud.mutateBoard(board.id, { type: 'add_assignee', name: 'Sam' }),
+    ).rejects.toThrow('Assignee settings need a database update');
+    mock.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: 'P0001', message: 'PINBOARD_ASSIGNEE_NOT_FOUND' },
+    });
+    await expect(
+      cloud.mutateBoard(board.id, {
+        type: 'update_card',
+        id: '11111111-1111-4111-8111-111111111111',
+        patch: { assignee: 'Sam' },
+      }),
+    ).rejects.toThrow('Choose another name or Unassigned');
+  });
+
   it('loads every joined board through RLS with stable pagination even under a smaller API cap', async () => {
     const boards = [
       board,
@@ -338,7 +433,7 @@ describe('online board sharing', () => {
     await expect(cloud.loadBoards()).resolves.toEqual(boards);
     expect(mock.from).toHaveBeenCalledWith('pinboard_boards');
     expect(mock.select).toHaveBeenCalledWith(
-      'id,invite_code,title,description,columns,cards,revision,created_at,updated_at',
+      'id,invite_code,title,description,columns,cards,revision,created_at,updated_at,card_fields',
       { count: 'exact' },
     );
     expect(mock.order).toHaveBeenCalledWith('id', { ascending: true });
@@ -377,7 +472,9 @@ describe('online board sharing', () => {
       const result = await cloud.loadBoards(held);
       expect(mock.select.mock.calls).toEqual([
         ['id,revision', { count: 'exact' }],
-        ['id,invite_code,title,description,columns,cards,revision,created_at,updated_at'],
+        [
+          'id,invite_code,title,description,columns,cards,revision,created_at,updated_at,card_fields',
+        ],
       ]);
       expect(mock.inIds).toHaveBeenCalledWith('id', [second.id, third.id]);
       expect(mock.orderIds).toHaveBeenCalledWith('id', { ascending: true });
@@ -408,7 +505,7 @@ describe('online board sharing', () => {
       });
       await expect(cloud.loadBoards([])).resolves.toEqual([board, second]);
       expect(mock.select).toHaveBeenLastCalledWith(
-        'id,invite_code,title,description,columns,cards,revision,created_at,updated_at',
+        'id,invite_code,title,description,columns,cards,revision,created_at,updated_at,card_fields',
         { count: 'exact' },
       );
     });

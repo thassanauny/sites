@@ -1,7 +1,7 @@
 {
   "name": "pinboard",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.19",
   "type": "module",
   "engines": {
     "node": ">=24"

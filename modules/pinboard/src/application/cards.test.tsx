@@ -11,11 +11,14 @@ import {
   click,
   deferred,
   dragCard,
+  dragCardToCard,
   field,
   fill,
   installHarness,
   mount,
   moveWithMenu,
+  refresh,
+  search,
   uuid,
 } from './testSupport';
 import type { Board, Card } from '../domain/boards/types';
@@ -31,11 +34,199 @@ const packBags: Card = {
   position: 3072,
 };
 const populated: Board = { ...board, cards: [card, packBags] };
+const sameColumn: Board = {
+  ...board,
+  cards: [card, { ...packBags, columnId: 'todo' }],
+};
 const column = (title: string) => document.querySelector(`main section[aria-label="${title}"]`)!;
 const titlesIn = (name: string) =>
   [...column(name).querySelectorAll('.task-card h3')].map((item) => item.textContent);
 
 describe('Pinboard UI: cards and columns', () => {
+  it.each(['before', 'after'] as const)(
+    'reorders a card dropped %s another card and keeps it after refresh',
+    async (edge) => {
+      await mount([sameColumn]);
+      const title = edge === 'before' ? 'Pack bags' : 'Buy coffee';
+      const target = edge === 'before' ? 'Buy coffee' : 'Pack bags';
+      const id = edge === 'before' ? packBags.id : card.id;
+      const position = edge === 'before' ? 512 : 4096;
+      const saved = {
+        ...sameColumn,
+        revision: 2,
+        cards: sameColumn.cards.map((item) => (item.id === id ? { ...item, position } : item)),
+      };
+      cloud.mutateBoard.mockResolvedValue(saved);
+      await dragCardToCard(title, target, edge, false);
+      expect(button(`Edit ${target}`).closest('article')!.className).toContain(`drop-${edge}`);
+      await dragCardToCard(title, target, edge);
+      expect(cloud.mutateBoard).toHaveBeenCalledTimes(1);
+      expect(cloud.mutateBoard).toHaveBeenCalledWith(board.id, {
+        type: 'move_card',
+        id,
+        columnId: 'todo',
+        position,
+      });
+      expect(titlesIn('To do')).toEqual(['Pack bags', 'Buy coffee']);
+      expect(document.querySelector('.drop-before, .drop-after')).toBeNull();
+      cloud.loadBoards.mockResolvedValue([saved]);
+      await refresh();
+      expect(titlesIn('To do')).toEqual(['Pack bags', 'Buy coffee']);
+    },
+  );
+
+  it('appends a card dropped on space in its own column, while self and unchanged drops do nothing', async () => {
+    await mount([sameColumn]);
+    await dragCardToCard('Buy coffee', 'Buy coffee', 'after');
+    await dragCardToCard('Buy coffee', 'Pack bags', 'before');
+    expect(cloud.mutateBoard).not.toHaveBeenCalled();
+    cloud.mutateBoard.mockResolvedValue({
+      ...sameColumn,
+      revision: 2,
+      cards: [{ ...card, position: 4096 }, sameColumn.cards[1]!],
+    });
+    await dragCard('Buy coffee', 'To do');
+    expect(cloud.mutateBoard).toHaveBeenCalledTimes(1);
+    expect(titlesIn('To do')).toEqual(['Pack bags', 'Buy coffee']);
+  });
+
+  it('treats the gap between cards as an insertion point', async () => {
+    const middle = { ...card, id: uuid(3), title: 'Middle', position: 2048 };
+    const source = { ...sameColumn, cards: [...sameColumn.cards, middle] };
+    await mount([source]);
+    for (const [index, title] of ['Buy coffee', 'Middle', 'Pack bags'].entries()) {
+      const tile = button(`Edit ${title}`).closest('article')!;
+      vi.spyOn(tile, 'getBoundingClientRect').mockReturnValue({
+        top: 100 + index * 120,
+        height: 100,
+      } as DOMRect);
+    }
+    cloud.mutateBoard.mockResolvedValueOnce({
+      ...source,
+      revision: 2,
+      cards: source.cards.map((item) =>
+        item.id === packBags.id ? { ...item, position: 1536 } : item,
+      ),
+    });
+    await dragCard('Pack bags', 'To do', true, 210);
+    expect(cloud.mutateBoard).toHaveBeenCalledWith(board.id, {
+      type: 'move_card',
+      id: packBags.id,
+      columnId: 'todo',
+      position: 1536,
+    });
+    expect(titlesIn('To do')).toEqual(['Buy coffee', 'Pack bags', 'Middle']);
+  });
+
+  it('reports an exhausted position without changing the board', async () => {
+    const first = { ...card, position: 0 };
+    const middle = { ...card, id: uuid(3), title: 'Middle', position: 0 };
+    // UUID ordering puts Middle before Buy coffee when both positions are zero.
+    await mount([{ ...sameColumn, cards: [first, middle, sameColumn.cards[1]!] }]);
+    await dragCardToCard('Pack bags', 'Buy coffee', 'before');
+    expect(cloud.mutateBoard).not.toHaveBeenCalled();
+    expect(titlesIn('To do')).toEqual(['Middle', 'Buy coffee', 'Pack bags']);
+    expect(document.body.textContent).toContain('There is no space at this position');
+  });
+
+  it('inserts into another column before a card instead of always appending', async () => {
+    await mount([populated]);
+    cloud.mutateBoard.mockResolvedValue({
+      ...populated,
+      revision: 2,
+      cards: [{ ...card, columnId: 'doing', position: 1536 }, packBags],
+    });
+    await dragCardToCard('Buy coffee', 'Pack bags', 'before');
+    expect(cloud.mutateBoard).toHaveBeenCalledWith(board.id, {
+      type: 'move_card',
+      id: card.id,
+      columnId: 'doing',
+      position: 1536,
+    });
+    expect(titlesIn('In progress')).toEqual(['Buy coffee', 'Pack bags']);
+  });
+
+  it('uses accessible up/down buttons and disables the two ends of a column', async () => {
+    await mount([sameColumn]);
+    expect(button('Move Buy coffee up').disabled).toBe(true);
+    expect(button('Move Pack bags down').disabled).toBe(true);
+    cloud.mutateBoard.mockResolvedValueOnce({
+      ...sameColumn,
+      revision: 2,
+      cards: [card, { ...sameColumn.cards[1]!, position: 512 }],
+    });
+    await click('Move Pack bags up');
+    expect(titlesIn('To do')).toEqual(['Pack bags', 'Buy coffee']);
+    expect(button('Move Pack bags up').disabled).toBe(true);
+    expect(button('Move Buy coffee down').disabled).toBe(true);
+    cloud.mutateBoard.mockResolvedValueOnce({ ...sameColumn, revision: 3 });
+    await click('Move Pack bags down');
+    expect(titlesIn('To do')).toEqual(['Buy coffee', 'Pack bags']);
+  });
+
+  it('keeps the original order after a failed reorder and lets the person retry', async () => {
+    await mount([sameColumn]);
+    cloud.mutateBoard.mockRejectedValueOnce(new Error('Connection lost'));
+    await click('Move Pack bags up');
+    expect(titlesIn('To do')).toEqual(['Buy coffee', 'Pack bags']);
+    expect(document.body.textContent).toContain('Connection lost');
+    cloud.mutateBoard.mockResolvedValueOnce({
+      ...sameColumn,
+      revision: 2,
+      cards: [card, { ...sameColumn.cards[1]!, position: 512 }],
+    });
+    await click('Move Pack bags up');
+    expect(titlesIn('To do')).toEqual(['Pack bags', 'Buy coffee']);
+  });
+
+  it('places filtered cards relative to the full column and preserves hidden cards', async () => {
+    const hidden = { ...card, id: uuid(3), title: 'Hidden', position: 2048 };
+    const filtered = {
+      ...sameColumn,
+      cards: [
+        { ...card, title: 'Visible coffee' },
+        hidden,
+        { ...sameColumn.cards[1]!, title: 'Visible bags' },
+      ],
+    };
+    await mount([filtered]);
+    await search('Visible');
+    cloud.mutateBoard.mockResolvedValueOnce({
+      ...filtered,
+      revision: 2,
+      cards: filtered.cards.map((item) =>
+        item.id === packBags.id ? { ...item, position: 512 } : item,
+      ),
+    });
+    await dragCardToCard('Visible bags', 'Visible coffee', 'before');
+    expect(cloud.mutateBoard).toHaveBeenCalledWith(board.id, {
+      type: 'move_card',
+      id: packBags.id,
+      columnId: 'todo',
+      position: 512,
+    });
+    await search('');
+    expect(titlesIn('To do')).toEqual(['Visible bags', 'Visible coffee', 'Hidden']);
+  });
+
+  it('disables reordering while a save is pending and while offline', async () => {
+    await mount([sameColumn]);
+    const saving = deferred<Board>();
+    cloud.mutateBoard.mockReturnValueOnce(saving.promise);
+    await click('Move Pack bags up');
+    expect(button('Move Pack bags up').disabled).toBe(true);
+    expect(button('Move Buy coffee down').disabled).toBe(true);
+    expect(button('Edit Buy coffee').closest<HTMLElement>('article')!.draggable).toBe(false);
+    await act(async () => saving.resolve({ ...sameColumn, revision: 2 }));
+    await act(async () => {
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+      window.dispatchEvent(new Event('offline'));
+    });
+    await dragCardToCard('Pack bags', 'Buy coffee', 'before');
+    expect(cloud.mutateBoard).toHaveBeenCalledTimes(1);
+    expect(button('Move Pack bags up').disabled).toBe(true);
+  });
+
   it('moves a card to the end of another column when it is dropped there', async () => {
     await mount([populated]);
     cloud.mutateBoard.mockResolvedValue({
@@ -173,16 +364,17 @@ describe('Pinboard UI: cards and columns', () => {
 
   it('adds a column with its name and chosen color', async () => {
     await mount([populated]);
+    await click('Settings');
     await click('Add column');
-    await fill('Column name', 'Review');
-    await click('rose');
+    await fill('New column name', 'Review');
+    await choose('New column color', 'rose');
     const added = { id: 'review', title: 'Review', color: 'rose' as const };
     cloud.mutateBoard.mockResolvedValue({
       ...populated,
       revision: 2,
       columns: [...populated.columns, added],
     });
-    await click('Save');
+    await click('Create column');
     expect(cloud.mutateBoard).toHaveBeenCalledWith(board.id, {
       type: 'add_column',
       column: {
@@ -191,15 +383,20 @@ describe('Pinboard UI: cards and columns', () => {
         color: 'rose',
       },
     });
+    await click('Close');
     expect(document.querySelector('dialog')).toBeNull();
     expect(document.querySelector('main section[aria-label="Review"]')).not.toBeNull();
   });
 
   it('starts a new column blue and sends only the column fields that changed', async () => {
     await mount([populated]);
+    await click('Settings');
     await click('Add column');
-    expect(button('blue').getAttribute('aria-pressed')).toBe('true');
-    await click('Cancel');
+    expect(document.querySelector<HTMLSelectElement>('.inline-column-editor select')!.value).toBe(
+      'blue',
+    );
+    await click('Cancel new column');
+    await click('Close');
     await click('Settings for To do');
     expect(field('Column name').value).toBe('To do');
     await click('Save');
@@ -237,6 +434,7 @@ describe('Pinboard UI: cards and columns', () => {
       color: 'slate' as const,
     }));
     await mount([{ ...board, columns, cards: [] }]);
+    await click('Settings');
     expect(button('Add column').disabled).toBe(true);
     expect(button('Add a card', column('Column 0')).disabled).toBe(false);
   });
@@ -255,6 +453,7 @@ describe('Pinboard UI: cards and columns', () => {
     for (const name of ['To do', 'In progress', 'Done']) {
       expect(button('Add a card', column(name)).disabled).toBe(true);
     }
+    await click('Settings');
     expect(button('Add column').disabled).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowRight, Check, Copy, LoaderCircle, Trash2 } from 'lucide-react';
+import { Archive, ArrowRight, Check, Copy, LoaderCircle, Trash2 } from 'lucide-react';
 import { LIMITS } from '../../../domain/boards/board';
 
 /** Inline error and clipboard state shared by the dialogs. */
@@ -214,6 +214,7 @@ export function EditorForm({
   submitIcon = 'check',
   deleteLabel,
   onDelete,
+  onArchive,
   onSubmit,
 }: {
   recovery?: ReactNode;
@@ -229,6 +230,7 @@ export function EditorForm({
   submitIcon?: 'check' | 'arrow';
   deleteLabel?: string;
   onDelete?: () => void;
+  onArchive?: () => void;
   onSubmit: (event: FormEvent) => void;
 }) {
   return (
@@ -243,16 +245,31 @@ export function EditorForm({
         <FormError>Reconnect to save. Your draft stays here while this page is open.</FormError>
       )}
       <div className="dialog-actions">
-        {onDelete && (
-          <button
-            className="button delete-button"
-            type="button"
-            disabled={locked}
-            onClick={onDelete}
-          >
-            <Trash2 size={16} />
-            {deleteLabel}
-          </button>
+        {(onDelete || onArchive) && (
+          <div className="record-actions">
+            {onDelete && (
+              <button
+                className="button delete-button"
+                type="button"
+                disabled={locked}
+                onClick={onDelete}
+              >
+                <Trash2 size={16} />
+                {deleteLabel}
+              </button>
+            )}
+            {onArchive && (
+              <button
+                className="button quiet"
+                type="button"
+                disabled={locked}
+                onClick={onArchive}
+                title="Save changes and archive card"
+              >
+                <Archive size={16} /> Archive
+              </button>
+            )}
+          </div>
         )}
         <button className="button quiet" type="button" onClick={onCancel} disabled={busy}>
           {cancelLabel}
