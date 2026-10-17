@@ -8,6 +8,16 @@ import { DeviceSnippets } from '../infrastructure/storage/deviceSnippets';
 useMountHarness();
 
 describe('TextDrop page controls', () => {
+  it('skips navigation without changing the snippet route or losing unsaved text', async () => {
+    await start(`#/p/${first.code}`);
+    edit('Keep this draft');
+    element('skip-link').click();
+    await flush();
+    expect(document.activeElement).toBe(element('main-content'));
+    expect(location.hash).toBe(`#/p/${first.code}`);
+    expect(element<HTMLTextAreaElement>('editor').value).toBe('Keep this draft');
+    expect(window.confirm).not.toHaveBeenCalled();
+  });
   it('preserves the draft when leaving is cancelled, and cancels pending autosave after confirmed navigation', async () => {
     await start(`#/p/${first.code}`);
     edit('Keep this draft');
@@ -150,13 +160,13 @@ describe('TextDrop page controls', () => {
     element('copy-text').click();
     const oldCreate = element('create');
     dispose!();
-    const loadCalls = vi.mocked(cloud.loadPage).mock.calls.length;
+    const loadCalls = vi.mocked(cloud.pollPage).mock.calls.length;
     window.dispatchEvent(new Event('focus'));
     window.dispatchEvent(new Event('online'));
     window.dispatchEvent(new Event('hashchange'));
     oldCreate.click();
     await vi.advanceTimersByTimeAsync(6000);
-    expect(cloud.loadPage).toHaveBeenCalledTimes(loadCalls);
+    expect(cloud.pollPage).toHaveBeenCalledTimes(loadCalls);
     expect(cloud.createPage).not.toHaveBeenCalled();
     await start();
     copying.resolve();

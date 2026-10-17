@@ -20,6 +20,14 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
   const { signal } = lifecycle;
   root.innerHTML = shell();
   const ui = shellElements(root);
+  ui.skipLink.addEventListener(
+    'click',
+    event => {
+      event.preventDefault();
+      ui.main.focus();
+    },
+    { signal },
+  );
   const editor = ui.editor;
   const codeInput = ui.joinCode;
   const { configured, version } = options;

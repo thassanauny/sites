@@ -4,12 +4,11 @@ import type { DeviceSnippet, TextDropPage } from '../domain/snippets/model';
 export interface Cloud {
   createPage(id: string): Promise<TextDropPage>;
   joinPage(code: string): Promise<TextDropPage>;
-  loadPage(id: string): Promise<TextDropPage>;
   /**
-   * Like `loadPage`, but resolves to `null` when the server still has `knownVersion`, so a poll of unchanged text
-   * costs a few bytes. It falls back to `loadPage` when the server has no conditional poll.
+   * Resolves to `null` when the server still has `knownVersion`, so a poll of unchanged text
+   * costs a few bytes. Requires the current database's conditional poll API.
    */
-  pollPage?(id: string, knownVersion: number): Promise<TextDropPage | null>;
+  pollPage(id: string, knownVersion: number): Promise<TextDropPage | null>;
   savePage(id: string, text: string): Promise<TextDropPage>;
   /** Sets a damaged saved session aside so the next request signs in again. Valid sessions are never touched. */
   startNewSession(): Promise<void>;

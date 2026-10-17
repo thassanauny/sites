@@ -1,0 +1,103 @@
+/* Everyday Apps visual foundation. IOU is the baseline; keep all four copies aligned. */
+:root {
+  --ea-paper: #f7f6f2;
+  --ea-surface: #fffefa;
+  --ea-jade: #0b6b57;
+  --ea-jade-dark: #075241;
+  --ea-ink: #283b33;
+  --ea-muted: #606d57;
+  --ea-line: #dedfd5;
+  --ea-soft: #e9eee4;
+  --ea-lavender: #e8e5f4;
+  --ea-peach: #faead6;
+  --ea-danger: #983c37;
+  --ea-focus: #8670aa;
+  --ea-font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ea-font-heading: Georgia, "Times New Roman", serif;
+  --paper: var(--ea-paper);
+  --white: var(--ea-surface);
+  --jade: var(--ea-jade);
+  --jade-dark: var(--ea-jade-dark);
+  --green: var(--ea-jade);
+  --green-dark: var(--ea-jade-dark);
+  --ink: var(--ea-ink);
+  --muted: var(--ea-muted);
+  --line: var(--ea-line);
+  --border: var(--ea-line);
+  --soft: var(--ea-soft);
+  --lavender: var(--ea-lavender);
+  --peach: var(--ea-peach);
+  font-family: var(--ea-font-body);
+  color: var(--ea-ink);
+  background: var(--ea-paper);
+}
+html, body { min-width: 320px; }
+body:has(dialog[open]) { overflow: hidden; }
+button, input, textarea, select { font-family: var(--ea-font-body); }
+h1, .brand { font-family: var(--ea-font-heading); }
+.brand { color: var(--ea-jade); }
+.brand-dot, .brand-period { color: #af8668; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 3px solid var(--ea-focus);
+  outline-offset: 3px;
+}
+.button {
+  min-height: 48px;
+  padding: 12px 19px;
+  gap: 9px;
+  border-radius: 12px;
+  border: 1px solid var(--ea-line);
+  background: var(--ea-surface);
+  color: var(--ea-jade-dark);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.button.primary { background: var(--ea-jade); border-color: var(--ea-jade); color: #fffef7; }
+.button.primary:hover:not(:disabled) { background: var(--ea-jade-dark); border-color: var(--ea-jade-dark); }
+.button.secondary { background: var(--ea-surface); border-color: #d4dbd1; color: var(--ea-jade-dark); }
+.button.secondary:hover:not(:disabled) { background: #edf1e7; border-color: #a5b5a8; }
+.button.danger { color: var(--ea-danger); background: #f8e9e6; border-color: #e6c5c0; }
+.icon-button { min-width: 44px; min-height: 44px; border-radius: 12px; }
+dialog { background: var(--ea-surface); color: var(--ea-ink); border-color: var(--ea-line); }
+dialog::backdrop { background: #18332e66; backdrop-filter: blur(4px); }
+.modal-heading h2,
+.modal-header h2,
+.dialog-heading h2 { font-family: var(--ea-font-heading); font-size: 27px; font-weight: 400; line-height: 1.2; letter-spacing: -0.65px; }
+dialog input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), dialog select {
+  min-height: 48px;
+  background: var(--ea-surface);
+  border: 1px solid var(--ea-line);
+  border-radius: 10px;
+}
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 10000;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: var(--ea-jade);
+  color: white;
+  transform: translateY(-160%);
+}
+.skip-link:focus { transform: translateY(0); }
+@media (max-width: 600px) {
+  dialog:is(.modal, .dialog, #snippet-dialog) {
+    position: fixed;
+    inset: auto 0 0;
+    margin: 0;
+    width: 100%;
+    max-width: none;
+    max-height: 90dvh;
+    border-radius: 24px 24px 0 0;
+    border-bottom: 0;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  dialog input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), dialog select, dialog textarea { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto; animation-duration: 0.01ms; transition-duration: 0.01ms; }
+}

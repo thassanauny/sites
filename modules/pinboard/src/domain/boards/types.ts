@@ -60,6 +60,9 @@ export interface BoardHead {
   revision: number;
 }
 
+/** Collection navigation never needs card text or field settings. */
+export type BoardSummary = Omit<Board, 'cards' | 'card_fields'> & { active_card_count: number };
+
 export type CardPatch = Partial<Omit<Card, 'id'>>;
 
 /** A drop places the moving card immediately before or after this card. */

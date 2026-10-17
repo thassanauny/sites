@@ -27,11 +27,11 @@ describe('TextDrop damaged saved session', () => {
 
   it('offers it in the notice when a poll finds the session damaged, and not for other errors', async () => {
     await start(`#/p/${first.code}`);
-    vi.mocked(cloud.loadPage).mockRejectedValueOnce(new Error('Poll failed'));
+    vi.mocked(cloud.pollPage).mockRejectedValueOnce(new Error('Poll failed'));
     await vi.advanceTimersByTimeAsync(3000);
     expect(element('notice-message').textContent).toBe('Poll failed');
     expect(element('new-session').hidden).toBe(true);
-    vi.mocked(cloud.loadPage).mockRejectedValueOnce(damaged());
+    vi.mocked(cloud.pollPage).mockRejectedValueOnce(damaged());
     await vi.advanceTimersByTimeAsync(6000);
     expect(element('notice-message').textContent).toContain('damaged');
     expect(element('new-session').hidden).toBe(false);

@@ -1,6 +1,5 @@
 import { ArrowRight, CalendarDays, Check, Link, LoaderCircle, Plus, Users } from 'lucide-react';
-import type { Board } from '../../domain/boards/types';
-import { activeCards } from '../../domain/boards/board';
+import type { BoardSummary } from '../../domain/boards/types';
 
 export function HomeView({
   boards,
@@ -12,14 +11,14 @@ export function HomeView({
   onJoin,
   onOpen,
 }: {
-  boards: Board[];
+  boards: BoardSummary[];
   loaded: boolean;
   disabled: boolean;
   cardCount: number;
   showCardCount: boolean;
   onCreate: () => void;
   onJoin: () => void;
-  onOpen: (board: Board) => void;
+  onOpen: (board: BoardSummary) => void;
 }) {
   return (
     <section className="home">
@@ -86,7 +85,7 @@ export function HomeView({
                   <p>{item.description || 'A fresh space for good ideas.'}</p>
                   <div>
                     <span>
-                      {activeCards(item).length} cards · {item.columns.length} columns
+                      {item.active_card_count} cards · {item.columns.length} columns
                     </span>
                     <Users size={15} />
                   </div>

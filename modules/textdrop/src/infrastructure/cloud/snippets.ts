@@ -23,7 +23,7 @@ function serviceError(error: ServiceError, action: string): Error {
   if (error.message === 'TEXTDROP_INVALID_TEXT') return new Error('A snippet supports up to 1 MiB of UTF-8 text.');
   if (error.message === 'TEXTDROP_INVALID_PAGE') return new Error('The snippet ID is invalid. Create a new snippet and try again.');
   if (error.code === 'PGRST202' || error.code === 'PGRST205' || error.code === '42P01' || error.code === '42883') {
-    return new Error('TextDrop needs database setup. Run supabase/schema.sql once in the Supabase SQL editor; see everydayapps/apps/textdrop/supabase/README.md.');
+    return new Error('TextDrop needs database setup or an update. Follow apps/textdrop/supabase/README.md, then reload the app.');
   }
   if (/anonymous.*(?:disabled|not allowed)|anonymous_provider_disabled/i.test(`${error.code ?? ''} ${error.message ?? ''}`)) {
     return new Error('Enable anonymous sign-ins in Supabase Authentication to share text snippets.');
@@ -72,8 +72,6 @@ export function createCloud(url: string, key: string): Cloud {
   const publicKey = key.trim();
   let client: SupabaseClient | undefined;
   let authentication: Promise<void> | undefined;
-  // Projects installed before `textdrop_poll_page` lack it; the first "not found" answer switches polls to a full load.
-  let pollAvailable = true;
 
   function getClient(): SupabaseClient {
     if (!projectUrl || !publicKey) throw new Error('Text sharing is not configured. Add the public Supabase settings and rebuild the app.');
@@ -127,35 +125,25 @@ export function createCloud(url: string, key: string): Cloud {
     }
   }
 
-  async function byId(action: string, name: string, id: string, text?: string): Promise<TextDropPage> {
-    const pageId = validateUuid(id);
-    const args: Record<string, string> = { p_id: pageId };
-    if (text !== undefined) args.p_text = text;
-    const page = await rpc(action, name, args);
-    if (page.id !== pageId) throw new Error('The server returned a different snippet. Refresh the app and try again.');
-    return page;
-  }
-
   return {
-    createPage: id => byId('create the snippet', 'textdrop_create_page', id),
+    createPage: async id => {
+      const pageId = validateUuid(id);
+      const page = await rpc('create the snippet', 'textdrop_create_page', { p_id: pageId });
+      if (page.id !== pageId) throw new Error('The server returned a different snippet. Refresh the app and try again.');
+      return page;
+    },
     joinPage: async code => {
       const normalized = normalizeCode(code);
       const page = await rpc('join the snippet', 'textdrop_join_page', { p_code: normalized });
       if (page.code !== normalized) throw new Error('The server returned a different code. Check the code and try again.');
       return page;
     },
-    loadPage: id => byId('load the snippet', 'textdrop_load_page', id),
     pollPage: async (id, knownVersion) => {
       const pageId = validateUuid(id);
-      if (!pollAvailable) return byId('load the snippet', 'textdrop_load_page', pageId);
       await initialize();
       const action = 'load the snippet';
       const { data, error } = await call(action, () => getClient().rpc('textdrop_poll_page', { p_id: pageId, p_known: knownVersion }));
-      if (error) {
-        if (error.code !== 'PGRST202' && error.code !== '42883') throw serviceError(error, action);
-        pollAvailable = false;
-        return byId(action, 'textdrop_load_page', pageId);
-      }
+      if (error) throw serviceError(error, action);
       if (isUnchanged(data, pageId, knownVersion)) return null;
       const page = parsePage(data);
       if (page.id !== pageId) throw new Error('The server returned a different snippet. Refresh the app and try again.');
@@ -167,6 +155,18 @@ export function createCloud(url: string, key: string): Cloud {
       client = undefined;
       authentication = undefined;
     },
-    savePage: async (id, text) => byId('save the snippet', 'textdrop_save_page', id, validateText(text)),
+    savePage: async (id, text) => {
+      const pageId = validateUuid(id);
+      const sent = validateText(text);
+      await initialize();
+      const action = 'save the snippet';
+      const { data, error } = await call(action, () => getClient().rpc('textdrop_save_page_receipt', { p_id: pageId, p_text: sent }));
+      if (error) throw serviceError(error, action);
+      if (!data || typeof data !== 'object' || Array.isArray(data) || Object.hasOwn(data, 'text')) throw new Error(INVALID_RESPONSE);
+      // The receipt acknowledges the exact literal text sent, under the same server save/lock rules.
+      const page = parsePage({ ...data, text: sent });
+      if (page.id !== pageId) throw new Error('The server returned a different snippet. Refresh the app and try again.');
+      return page;
+    },
   };
 }

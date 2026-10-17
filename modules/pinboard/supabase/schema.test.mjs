@@ -147,15 +147,18 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       where n.nspname in ('public','private') and p.proname like 'pinboard_%'
       order by n.nspname, p.proname
     `);
-    assert.equal(permissions.rows.length, 17);
+    assert.equal(permissions.rows.length, 18);
     for (const permission of permissions.rows) {
       assert.equal(permission.anonymous, false, permission.proname);
       assert.equal(permission.public, false, permission.proname);
       assert.equal(
         permission.signed_in,
-        ['pinboard_create_board', 'pinboard_join_board', 'pinboard_mutate_board'].includes(
-          permission.proname,
-        ),
+        [
+          'pinboard_create_board',
+          'pinboard_join_board',
+          'pinboard_mutate_board',
+          'pinboard_sync_summaries',
+        ].includes(permission.proname),
         permission.proname,
       );
     }
@@ -1542,8 +1545,8 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     await database.exec('reset role');
     await database.exec(`create or replace function private.pinboard_board_json(p_board public.pinboard_boards)
       returns jsonb language sql immutable security invoker set search_path = '' as $$
-        -- Model the old schema, before card_fields was an added optional column.
-        select to_jsonb(p_board) - array['created_by', 'deleted_card_ids', 'deleted_column_ids', 'card_fields'];
+        -- Model the old schema before optional settings and the computed summary count.
+        select to_jsonb(p_board) - array['created_by', 'deleted_card_ids', 'deleted_column_ids', 'card_fields', 'active_card_count'];
       $$`);
     const volatility = async () =>
       (
@@ -1726,6 +1729,55 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       (await mutate(board.id, { type: 'add_column', column: columnTwo })).columns.length,
       3,
     );
+  });
+
+  test('compact summaries maintain active counts without exposing card data or bypassing membership', async () => {
+    await identity(creator);
+    const board = await createBoard('Compact collection');
+    const first = card();
+    const archived = card({ archived: true });
+    await mutate(board.id, { type: 'create_card', card: first });
+    await mutate(board.id, { type: 'create_card', card: archived });
+    const summary = async () =>
+      (
+        await database.query('select * from public.pinboard_board_summaries where id=$1', [
+          board.id,
+        ])
+      ).rows;
+    assert.equal((await summary())[0].active_card_count, 1);
+    assert.equal('cards' in (await summary())[0], false);
+    assert.equal('card_fields' in (await summary())[0], false);
+    await mutate(board.id, { type: 'update_card', id: archived.id, patch: { archived: false } });
+    assert.equal((await summary())[0].active_card_count, 2);
+    await mutate(board.id, { type: 'delete_card', id: first.id });
+    assert.equal((await summary())[0].active_card_count, 1);
+    await mutate(board.id, { type: 'update_board', patch: { description: '😀'.repeat(400) } });
+    assert.equal(Array.from((await summary())[0].description).length, 240);
+    const sync = async (known) =>
+      (
+        await database.query('select public.pinboard_sync_summaries($1::jsonb) as result', [
+          JSON.stringify(known),
+        ])
+      ).rows[0].result;
+    const firstSync = await sync({});
+    assert.equal(firstSync.format, 1);
+    assert.ok(firstSync.boards.some((item) => item.id === board.id));
+    assert.ok(firstSync.boards.every((item) => !('cards' in item)));
+    const known = Object.fromEntries(firstSync.heads.map((head) => [head.id, head.revision]));
+    assert.deepEqual((await sync(known)).boards, []);
+    await mutate(board.id, { type: 'update_board', patch: { title: 'Changed summary' } });
+    const changed = await sync(known);
+    assert.equal(changed.boards.length, 1);
+    assert.equal(changed.boards[0].id, board.id);
+    await identity(stranger);
+    assert.deepEqual(await summary(), []);
+    assert.equal(
+      (await sync(known)).heads.some((head) => head.id === board.id),
+      false,
+    );
+    await identity(creator, 'anon');
+    await assert.rejects(summary(), (error) => error.code === '42501');
+    await assert.rejects(sync(known), (error) => error.code === '42501');
   });
 
   test('a board cannot grow past the size cap, but shrinking edits always work', async () => {

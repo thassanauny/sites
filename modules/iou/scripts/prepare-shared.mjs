@@ -10,7 +10,7 @@ import {
 const file = fileURLToPath(import.meta.url);
 const { checkCloudBuild } = await import(isShipped(file) ? './check-cloud-build.mjs' : '../apps/iou/scripts/check-cloud-build.mjs');
 const label = 'iou';
-const filesToCopy = ['Makefile', 'index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json', 'vite.config.ts', 'biome.json', '.env.example', 'supabase/schema.sql', 'scripts/check-cloud-build.mjs', 'scripts/publishing.test.mjs'];
+const filesToCopy = ['Makefile', 'index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json', 'vite.config.ts', 'biome.json', '.env.example', 'supabase/schema.sql', 'supabase/update-group-heads.sql', 'scripts/check-cloud-build.mjs', 'scripts/publishing.test.mjs'];
 const publicAssets = new Set(['logo.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png']);
 const baseExample = '\n# Optional: /repository-name/ for a GitHub project site, / for a custom domain.\n# Leaving this empty uses relative asset URLs for local previews.\nVITE_BASE_PATH=\n';
 // The Sites workflow runs this target; it only reads the prepared website.
@@ -57,7 +57,7 @@ const spec = {
 export const prepareIou = (app, target, run = execFileSync, options) => prepareManagedApp(spec, app, target, run, options);
 
 if (process.argv[1] && stat(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(file)) {
-  if (!process.argv[2]) { console.error('Use make -C everydayapps/publishing publish from the development repository root.'); process.exitCode = 1; }
+  if (!process.argv[2]) { console.error('Use make -C publishing publish from the development repository root.'); process.exitCode = 1; }
   else {
     const defaultApp = isShipped(file) ? join(dirname(file), '..') : join(dirname(file), '../apps/iou');
     try { prepareIou(resolve(process.argv[3] || defaultApp), resolve(process.argv[2])); }

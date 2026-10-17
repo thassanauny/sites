@@ -3,6 +3,7 @@
 import { act } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { cloud } from './cloudMock';
+import { summarizeBoard } from '../domain/boards/summary';
 import {
   advance,
   board,
@@ -27,9 +28,9 @@ installHarness();
 describe('Pinboard UI: synchronization and connectivity', () => {
   it('waits for the initial list in StrictMode before trying an existing invitation', async () => {
     const pending = deferred<Board[]>();
-    cloud.loadBoards.mockReturnValueOnce(pending.promise);
+    cloud.loadBoardList.mockReturnValueOnce(pending.promise);
     await mount([board], board.invite_code, true);
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(1);
     expect(cloud.joinBoard).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('Finding your boards…');
     await act(async () => {
@@ -42,7 +43,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
   it('keeps newer saved revisions when an older refresh arrives afterwards', async () => {
     await mount();
     const pending = deferred<Board[]>();
-    cloud.loadBoards.mockReturnValueOnce(pending.promise);
+    cloud.loadBoardList.mockReturnValueOnce(pending.promise);
     await refresh();
     await click('Settings');
     await fill('Board name', 'Newer saved title');
@@ -62,7 +63,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     await mount();
     await click('Settings');
     await fill('Board name', 'Still editing');
-    cloud.loadBoards.mockResolvedValueOnce([
+    cloud.loadBoardList.mockResolvedValueOnce([
       { ...board, revision: 2, columns: [...board.columns].reverse() },
     ]);
     await refresh();
@@ -73,10 +74,10 @@ describe('Pinboard UI: synchronization and connectivity', () => {
 
   it('drops boards absent from a complete refresh, retaining the list on failure', async () => {
     await mount([board], '');
-    cloud.loadBoards.mockRejectedValueOnce(new Error('Connection lost'));
+    cloud.loadBoardList.mockRejectedValueOnce(new Error('Connection lost'));
     await refresh();
     expect(document.querySelector('.board-preview')?.textContent).toContain('Weekend plans');
-    cloud.loadBoards.mockResolvedValueOnce([]);
+    cloud.loadBoardList.mockResolvedValueOnce([]);
     await refresh();
     expect(document.querySelector('.board-preview')).toBeNull();
   });
@@ -84,7 +85,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
   it('retains a board created while an older empty list is in flight', async () => {
     await mount([], '');
     const pending = deferred<Board[]>();
-    cloud.loadBoards.mockReturnValueOnce(pending.promise);
+    cloud.loadBoardList.mockReturnValueOnce(pending.promise);
     await refresh();
     await click('Create a board');
     await fill('Board name', 'Weekend plans');
@@ -130,7 +131,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
   it('does not attempt invitation access when sharing has no configuration', async () => {
     cloud.configured = false;
     await mount([], board.invite_code);
-    expect(cloud.loadBoards).not.toHaveBeenCalled();
+    expect(cloud.loadBoardList).not.toHaveBeenCalled();
     expect(cloud.joinBoard).not.toHaveBeenCalled();
     expect(document.querySelector('.connection')?.textContent).toBe('Setup needed');
     expect(document.querySelector('dialog')).toBeNull();
@@ -138,7 +139,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
 
   it('reports connection and sync status while loading, saving, failing and offline', async () => {
     const pending = deferred<Board[]>();
-    cloud.loadBoards.mockReturnValueOnce(pending.promise);
+    cloud.loadBoardList.mockReturnValueOnce(pending.promise);
     await mount();
     expect(status()).toBe('Syncing');
     expect(syncLabel()).toBe('Connecting…');
@@ -159,7 +160,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     });
     expect(status()).toBe('All changes saved');
 
-    cloud.loadBoards.mockRejectedValueOnce(new Error('Could not connect to shared boards.'));
+    cloud.loadBoardList.mockRejectedValueOnce(new Error('Could not connect to shared boards.'));
     await refresh();
     expect(status()).toBe('Sync unavailable');
     expect(syncLabel()).toBe('Sync paused');
@@ -182,14 +183,14 @@ describe('Pinboard UI: synchronization and connectivity', () => {
   it('offers Start a new session only for a damaged stored session, backs it up, then reconnects', async () => {
     await mount();
     expect(document.body.textContent).not.toContain('Start a new session');
-    cloud.loadBoards.mockRejectedValueOnce(new Error('Could not connect to shared boards.'));
+    cloud.loadBoardList.mockRejectedValueOnce(new Error('Could not connect to shared boards.'));
     await refresh();
     expect(document.body.textContent).not.toContain('Start a new session');
-    cloud.loadBoards.mockRejectedValueOnce(new Error(SESSION_CORRUPT_MESSAGE));
+    cloud.loadBoardList.mockRejectedValueOnce(new Error(SESSION_CORRUPT_MESSAGE));
     await refresh();
     expect(document.querySelector('.banner.error')?.textContent).toContain('Start a new session');
     cloud.startNewSession.mockResolvedValueOnce(undefined);
-    cloud.loadBoards.mockResolvedValue([board]);
+    cloud.loadBoardList.mockResolvedValue([board]);
     await click('Start a new session');
     expect(cloud.startNewSession).toHaveBeenCalledTimes(1);
     expect(document.querySelector('.banner.error')).toBeNull();
@@ -197,7 +198,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
 
   it('keeps the error and shows why when starting a new session fails', async () => {
     await mount();
-    cloud.loadBoards.mockRejectedValueOnce(new Error(SESSION_CORRUPT_MESSAGE));
+    cloud.loadBoardList.mockRejectedValueOnce(new Error(SESSION_CORRUPT_MESSAGE));
     await refresh();
     cloud.startNewSession.mockRejectedValueOnce(
       new Error('Could not start a new session. Check browser storage and reload.'),
@@ -211,16 +212,16 @@ describe('Pinboard UI: synchronization and connectivity', () => {
 
   it('retries from the error banner with a full refresh and lets the person dismiss the error', async () => {
     await mount();
-    cloud.loadBoards.mockRejectedValueOnce(new Error('Could not connect to shared boards.'));
+    cloud.loadBoardList.mockRejectedValueOnce(new Error('Could not connect to shared boards.'));
     await refresh();
     expect(document.querySelector('.banner.error')?.textContent).toContain(
       'Could not connect to shared boards.',
     );
     await click('Retry');
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(3);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(3);
     expect(document.querySelector('.banner.error')).toBeNull();
     expect(document.querySelector('.toast')?.textContent).toBe('Boards are up to date');
-    cloud.loadBoards.mockRejectedValueOnce(new Error('Could not connect again.'));
+    cloud.loadBoardList.mockRejectedValueOnce(new Error('Could not connect again.'));
     await refresh();
     expect(document.querySelector('.banner.error')?.textContent).toContain(
       'Could not connect again.',
@@ -231,15 +232,15 @@ describe('Pinboard UI: synchronization and connectivity', () => {
 
   it('refreshes on demand from the board toolbar', async () => {
     await mount();
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(1);
     await click('Refresh boards');
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(2);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(2);
     expect(document.querySelector('.toast')?.textContent).toBe('Boards are up to date');
   });
 
   it('clears a sync error when a later automatic refresh succeeds', async () => {
     await mount();
-    cloud.loadBoards.mockRejectedValueOnce(new Error('Could not connect to shared boards.'));
+    cloud.loadBoardList.mockRejectedValueOnce(new Error('Could not connect to shared boards.'));
     await refresh();
     expect(status()).toBe('Sync unavailable');
     expect(syncLabel()).toBe('Sync paused');
@@ -268,15 +269,15 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     expect(document.querySelector('.banner.error')).toBeNull();
   });
 
-  it('polls with the boards it already holds and downloads everything for a person’s refresh', async () => {
+  it('uses held summaries for both background and manual refreshes', async () => {
     await mount();
-    expect(cloud.loadBoards).toHaveBeenNthCalledWith(1, []);
+    expect(cloud.loadBoardList).toHaveBeenNthCalledWith(1, []);
     await advance(5000);
-    expect(cloud.loadBoards).toHaveBeenNthCalledWith(2, [board]);
+    expect(cloud.loadBoardList).toHaveBeenNthCalledWith(2, [summarizeBoard(board)]);
     await click('Refresh boards');
-    expect(cloud.loadBoards).toHaveBeenNthCalledWith(3, undefined);
+    expect(cloud.loadBoardList).toHaveBeenNthCalledWith(3, [summarizeBoard(board)]);
     await refresh();
-    expect(cloud.loadBoards).toHaveBeenNthCalledWith(4, [board]);
+    expect(cloud.loadBoardList).toHaveBeenNthCalledWith(4, [summarizeBoard(board)]);
   });
 
   it('polls every five seconds only while the page is visible', async () => {
@@ -286,19 +287,19 @@ describe('Pinboard UI: synchronization and connectivity', () => {
       configurable: true,
     });
     await advance(20_000);
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(1);
     Object.defineProperty(document, 'hidden', {
       value: false,
       configurable: true,
     });
     await advance(5000);
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(2);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(2);
   });
 
   it('waits longer between background refreshes after failures, up to a minute, and recovers after one succeeds', async () => {
     await mount();
-    const calls = () => cloud.loadBoards.mock.calls.length;
-    cloud.loadBoards.mockRejectedValue(new Error('Could not connect to shared boards.'));
+    const calls = () => cloud.loadBoardList.mock.calls.length;
+    cloud.loadBoardList.mockRejectedValue(new Error('Could not connect to shared boards.'));
     await advance(5000);
     expect(calls()).toBe(2);
     await advance(5000);
@@ -315,7 +316,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     expect(calls()).toBe(5);
     await advance(55_000);
     expect(calls()).toBe(5);
-    cloud.loadBoards.mockResolvedValue([board]);
+    cloud.loadBoardList.mockResolvedValue([board]);
     await advance(5000);
     expect(calls()).toBe(6);
     expect(document.querySelector('.banner.error')).toBeNull();
@@ -325,18 +326,18 @@ describe('Pinboard UI: synchronization and connectivity', () => {
 
   it('refreshes at once on focus or reconnecting even while polling is backing off', async () => {
     await mount();
-    cloud.loadBoards.mockRejectedValue(new Error('Could not connect to shared boards.'));
+    cloud.loadBoardList.mockRejectedValue(new Error('Could not connect to shared boards.'));
     await advance(5000);
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(2);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(2);
     await refresh();
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(3);
-    cloud.loadBoards.mockResolvedValue([board]);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(3);
+    cloud.loadBoardList.mockResolvedValue([board]);
     await act(async () => {
       window.dispatchEvent(new Event('online'));
     });
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(4);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(4);
     await advance(5000);
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(5);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(5);
   });
 
   it('stops polling and focus refreshes after unmounting', async () => {
@@ -344,12 +345,12 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5000);
     });
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(2);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(2);
     await unmount();
     await refresh();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10000);
     });
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(2);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(2);
   });
 });

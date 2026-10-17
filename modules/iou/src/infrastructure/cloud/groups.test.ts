@@ -4,14 +4,13 @@ import type { Group } from '../../domain/groups/types'
 const mock = vi.hoisted(() => {
   const getSession = vi.fn()
   const signInAnonymously = vi.fn()
-  const range = vi.fn()
   const inFilter = vi.fn()
-  const order = vi.fn(() => ({ range, in: inFilter }))
+  const order = vi.fn(() => ({ in: inFilter }))
   const select = vi.fn(() => ({ order }))
   const from = vi.fn(() => ({ select }))
   const rpc = vi.fn()
   const client = { auth: { getSession, signInAnonymously }, from, rpc }
-  return { getSession, signInAnonymously, range, inFilter, order, select, from, rpc, client, createClient: vi.fn(() => client) }
+  return { getSession, signInAnonymously, inFilter, order, select, from, rpc, client, createClient: vi.fn(() => client) }
 })
 
 vi.mock('@supabase/supabase-js', () => ({ createClient: mock.createClient }))
@@ -40,9 +39,8 @@ beforeEach(() => {
   vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'public-test-key')
   mock.getSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } }, error: null })
   mock.signInAnonymously.mockResolvedValue({ data: { session: { access_token: 'test-token' } }, error: null })
-  mock.range.mockResolvedValue({ data: [], error: null, count: 0 })
   mock.inFilter.mockResolvedValue({ data: [], error: null })
-  mock.rpc.mockResolvedValue({ data: { payload: group, version: 1 }, error: null })
+  mock.rpc.mockImplementation(async (name: string) => (name === 'iou_group_heads' ? { data: { format: 1, heads: [] }, error: null } : { data: { payload: group, version: 1 }, error: null }))
 })
 
 describe('shared group access', () => {
@@ -149,46 +147,64 @@ describe('shared group access', () => {
   })
 
   it('reads only the id and revision of every joined group when checking for changes', async () => {
-    mock.range.mockResolvedValue({ data: [{ id: group.id, version: '3' }], error: null, count: 1 })
+    mock.rpc.mockResolvedValue({ data: { format: 1, heads: [{ id: group.id, version: '3' }] }, error: null })
     const cloud = await import('./groups')
     await expect(cloud.loadCloudVersions()).resolves.toEqual([{ id: group.id, revision: 3 }])
-    expect(mock.from).toHaveBeenCalledWith('iou_groups')
-    expect(mock.select).toHaveBeenCalledWith('id,version', { count: 'exact' })
+    expect(mock.rpc).toHaveBeenCalledExactlyOnceWith('iou_group_heads')
+    expect(mock.from).not.toHaveBeenCalled()
   })
 
-  it('lists every joined group even when the API cap is smaller than a page', async () => {
-    const ids = ['trip-2026', 'trip-2027', 'trip-2028']
-    mock.range.mockResolvedValueOnce({ data: ids.slice(0, 2).map(id => ({ id, version: 1 })), error: null, count: 3 })
-    mock.range.mockResolvedValueOnce({ data: [{ id: ids[2], version: 1 }], error: null, count: 3 })
+  it('gets every revision in one compact request without table pagination or ledger payloads', async () => {
+    const heads = Array.from({ length: 1100 }, (_, at) => ({ id: `group-${at}`, version: 7 }))
+    mock.rpc.mockResolvedValue({ data: { format: 1, heads }, error: null })
     const cloud = await import('./groups')
-    await expect(cloud.loadCloudVersions()).resolves.toEqual(ids.map(id => ({ id, revision: 1 })))
-    expect(mock.order).toHaveBeenCalledWith('id', { ascending: true })
-    expect(mock.range.mock.calls).toEqual([
-      [0, 499],
-      [2, 501],
-    ])
+    await expect(cloud.loadCloudVersions()).resolves.toEqual(heads.map(({ id, version }) => ({ id, revision: version })))
+    expect(mock.rpc).toHaveBeenCalledExactlyOnceWith('iou_group_heads')
+    expect(mock.from).not.toHaveBeenCalled()
   })
 
-  it('rejects a failed later page instead of returning a partial successful sync', async () => {
-    mock.range.mockResolvedValueOnce({ data: [{ id: group.id, version: 1 }], error: null, count: 2 })
-    mock.range.mockResolvedValueOnce({ data: null, error: { message: 'Failed to fetch' }, count: null })
+  it.each(['PGRST202', '42883'])('reports missing revision setup without a table fallback (%s)', async code => {
     const cloud = await import('./groups')
-    await expect(cloud.loadCloudVersions()).rejects.toThrow('Check your connection')
+    mock.rpc.mockResolvedValue({ data: null, error: { code, message: 'missing function' } })
+    await expect(cloud.loadCloudVersions()).rejects.toThrow('database setup')
+    expect(mock.rpc).toHaveBeenCalledExactlyOnceWith('iou_group_heads')
+    expect(mock.from).not.toHaveBeenCalled()
   })
 
-  it('rejects an inconsistent list of revisions', async () => {
+  it('does not hide permission or malformed heads failures behind a fallback', async () => {
     const cloud = await import('./groups')
-    for (const reply of [
-      { data: [{ id: group.id, version: 0 }], error: null, count: 1 },
-      { data: [{ id: group.id, version: 1.5 }], error: null, count: 1 },
-      { data: [{ id: '__proto__', version: 1 }], error: null, count: 1 },
-      { data: [{ id: group.id, version: 1 }], error: null, count: 0 },
-      { data: [], error: null, count: 2 },
-      { data: null, error: null, count: 1 },
+    mock.rpc.mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'permission denied' } })
+    await expect(cloud.loadCloudVersions()).rejects.toThrow('permission denied')
+    for (const data of [
+      null,
+      { format: 2, heads: [] },
+      { format: 1, heads: null },
+      { format: 1, heads: [{ id: group.id, version: 0 }] },
+      {
+        format: 1,
+        heads: [
+          { id: group.id, version: 1 },
+          { id: group.id, version: 2 },
+        ],
+      },
     ]) {
-      mock.range.mockResolvedValueOnce(reply)
-      await expect(cloud.loadCloudVersions()).rejects.toThrow(/invalid group/)
+      mock.rpc.mockResolvedValueOnce({ data, error: null })
+      await expect(cloud.loadCloudVersions()).rejects.toThrow('invalid group')
     }
+    expect(mock.from).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid revision rows instead of accepting a partial list', async () => {
+    const cloud = await import('./groups')
+    for (const head of [
+      { id: group.id, version: 0 },
+      { id: group.id, version: 1.5 },
+      { id: '__proto__', version: 1 },
+    ]) {
+      mock.rpc.mockResolvedValueOnce({ data: { format: 1, heads: [head] }, error: null })
+      await expect(cloud.loadCloudVersions()).rejects.toThrow('invalid group')
+    }
+    expect(mock.from).not.toHaveBeenCalled()
   })
 
   it('reads the named groups through RLS and validates every received ledger', async () => {
@@ -251,7 +267,7 @@ describe('shared group access', () => {
   })
 
   it('reports a request that timed out like any other connection problem', async () => {
-    mock.range.mockResolvedValueOnce({ data: null, error: { message: 'TimeoutError: The request timed out.' }, count: null })
+    mock.rpc.mockResolvedValueOnce({ data: null, error: { message: 'TimeoutError: The request timed out.' } })
     const cloud = await import('./groups')
     await expect(cloud.loadCloudVersions()).rejects.toThrow('Check your connection')
   })

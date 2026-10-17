@@ -32,10 +32,10 @@ describe('Pinboard UI: rendering work', () => {
     const renders = cardRenders();
     await mount([populated]);
     expect(renders()).toBe(3);
-    cloud.loadBoards.mockResolvedValue([copy(populated)]);
+    cloud.loadBoardList.mockResolvedValue([copy(populated)]);
     await refresh();
     await advance(10_000);
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(4);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(4);
     expect(renders()).toBe(3);
   });
 
@@ -45,7 +45,7 @@ describe('Pinboard UI: rendering work', () => {
     const edited = copy(populated);
     edited.revision = 2;
     edited.cards[1]!.title = 'Two, edited';
-    cloud.loadBoards.mockResolvedValue([edited]);
+    cloud.loadBoardList.mockResolvedValue([edited]);
     await refresh();
     expect(document.body.textContent).toContain('Two, edited');
     expect(renders()).toBe(4);

@@ -116,7 +116,7 @@ describe('Pinboard UI: removing a board from this device', () => {
   it('does not restore a removed board from a refresh that was already in flight', async () => {
     await mount();
     const pending = deferred<Board[]>();
-    cloud.loadBoards.mockReturnValueOnce(pending.promise);
+    cloud.loadBoardList.mockReturnValueOnce(pending.promise);
     await refresh();
     await click('Settings');
     await click('Remove from this device');
@@ -323,7 +323,7 @@ describe('Pinboard UI: removing a board from this device', () => {
       throw new Error('SecurityError');
     });
     await mount();
-    expect(cloud.loadBoards).not.toHaveBeenCalled();
+    expect(cloud.loadBoardList).not.toHaveBeenCalled();
     expect(cloud.joinBoard).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('Could not read boards');
     read.mockRestore();
@@ -347,7 +347,7 @@ describe('Pinboard UI: removing a board from this device', () => {
       );
     });
     expect(reads).toHaveBeenCalledTimes(before);
-    expect(cloud.loadBoards).toHaveBeenCalledTimes(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(1);
     await unmount();
     await act(async () => {
       window.dispatchEvent(new StorageEvent('storage', { key: null }));

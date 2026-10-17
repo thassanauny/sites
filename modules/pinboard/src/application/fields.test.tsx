@@ -146,7 +146,7 @@ describe('Pinboard card fields and board controls', () => {
         },
       ],
     };
-    cloud.loadBoards.mockResolvedValueOnce([concurrent]);
+    cloud.loadBoardList.mockResolvedValueOnce([concurrent]);
     await refresh();
     cloud.mutateBoard.mockResolvedValueOnce({
       ...concurrent,
@@ -193,7 +193,7 @@ describe('Pinboard card fields and board controls', () => {
     await mount([configured]);
     await select('Filter priority', 'high');
     expect(document.querySelector('.task-card')).toBeNull();
-    cloud.loadBoards.mockResolvedValueOnce([
+    cloud.loadBoardList.mockResolvedValueOnce([
       { ...configured, revision: 2, card_fields: { ...settings, hidden: ['priority'] } },
     ]);
     await refresh();

@@ -1,7 +1,8 @@
-import { Check, CircleHelp, LoaderCircle, Settings2, WifiOff, X } from 'lucide-react';
+import { Check, LoaderCircle, Settings2, WifiOff, X } from 'lucide-react';
 import { BoardDialog } from '../features/boards/BoardDialog';
 import { BoardView } from '../features/boards/BoardView';
 import { HomeView } from '../features/boards/HomeView';
+import { WorkspaceHeader } from '../features/boards/WorkspaceHeader';
 import { Sidebar } from '../features/boards/Sidebar';
 import { cloudConfigured } from '../infrastructure/cloud/boards';
 import { SESSION_CORRUPT_MESSAGE } from '../infrastructure/auth/migrateSession';
@@ -16,6 +17,7 @@ export default function App() {
     workspaceCardCount,
     selectedCode,
     loaded,
+    loadingBoard,
     removalsReady,
     refreshing,
     busy,
@@ -57,11 +59,42 @@ export default function App() {
   const today = new Date().toLocaleDateString('en-CA');
   return (
     <div className="app-shell">
+      <button
+        type="button"
+        className="skip-link"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById('main-content')?.focus();
+        }}
+      >
+        Skip to content
+      </button>
+      <WorkspaceHeader
+        atHome={!selectedCode}
+        offline={offline || !!error}
+        status={
+          offline
+            ? 'Offline'
+            : !cloudConfigured
+              ? 'Setup needed'
+              : busy
+                ? 'Saving…'
+                : refreshing
+                  ? 'Syncing'
+                  : error
+                    ? 'Sync unavailable'
+                    : lastSync
+                      ? 'All changes saved'
+                      : 'Connecting'
+        }
+        onHome={() => navigate()}
+        onHelp={() => setModal({ type: 'help' })}
+      />
       <Sidebar
         boards={boardList}
         activeId={board?.id}
+        currentBoard={board}
         visibleCardCount={filteredCount}
-        atHome={!selectedCode}
         showEmptyHint={loaded && visibleCount === 0}
         disabled={disabled}
         status={
@@ -74,39 +107,10 @@ export default function App() {
                 : 'Connecting…'
         }
         statusTitle={lastSync ? `Last synced ${lastSync.toLocaleString()}` : undefined}
-        onHome={() => navigate()}
         onOpen={navigate}
         onCreate={() => setModal({ type: 'create' })}
       />
-      <main className="main">
-        <header className="topbar">
-          <div className="topbar-actions">
-            <span className={`connection ${offline || error ? 'offline' : ''}`}>
-              <span />
-              {offline
-                ? 'Offline'
-                : !cloudConfigured
-                  ? 'Setup needed'
-                  : busy
-                    ? 'Saving…'
-                    : refreshing
-                      ? 'Syncing'
-                      : error
-                        ? 'Sync unavailable'
-                        : lastSync
-                          ? 'All changes saved'
-                          : 'Connecting'}
-            </span>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Help"
-              onClick={() => setModal({ type: 'help' })}
-            >
-              <CircleHelp size={19} />
-            </button>
-          </div>
-        </header>
+      <main id="main-content" tabIndex={-1} className="main">
         {!cloudConfigured && (
           <div className="banner warning">
             <Settings2 size={18} />
@@ -166,6 +170,11 @@ export default function App() {
             onDropCard={dropCard}
             onReorderCard={reorderCard}
           />
+        ) : loadingBoard ? (
+          <section className="loading" role="status">
+            <LoaderCircle size={24} className="spin" />
+            Opening your board…
+          </section>
         ) : (
           <HomeView
             boards={boardList}

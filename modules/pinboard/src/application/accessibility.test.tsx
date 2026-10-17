@@ -10,6 +10,14 @@ installHarness();
 describe('Pinboard UI: keyboard focus and labelled controls', () => {
   const populated = { ...board, cards: [card] };
 
+  it('skips navigation without changing the active board route', async () => {
+    await mount([populated], board.invite_code);
+    const hash = location.hash;
+    await click('Skip to content');
+    expect(document.activeElement).toBe(document.getElementById('main-content'));
+    expect(location.hash).toBe(hash);
+  });
+
   describe.each([
     ['normally', false],
     ['under StrictMode', true],

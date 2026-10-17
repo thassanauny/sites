@@ -132,31 +132,18 @@ function readVersion(input: unknown): CloudVersion {
   return { id: row.id, revision: readRevision(row.version) }
 }
 
-const VERSION_PAGE_SIZE = 500
 // Large ledgers make large rows, so groups are downloaded a few at a time.
 const LOAD_CHUNK_SIZE = 10
 
 /** The revision of every joined group, without the ledgers: small enough to ask every few seconds. */
 export async function loadCloudVersions(): Promise<CloudVersion[]> {
   await initializeCloud()
-  // RLS filters these rows by auth.uid(); no global group list is readable.
-  const versions: CloudVersion[] = []
-  let offset = 0
-  for (;;) {
-    // ID order remains stable as other members edit groups during pagination.
-    const { data, error, count } = await getClient()
-      .from('iou_groups')
-      .select('id,version', { count: 'exact' })
-      .order('id', { ascending: true })
-      .range(offset, offset + VERSION_PAGE_SIZE - 1)
-    if (error) throw serviceError(error, 'load your shared groups')
-    if (!Array.isArray(data) || !Number.isSafeInteger(count) || count === null || count < 0 || offset + data.length > count || (data.length === 0 && offset < count)) {
-      throw new Error('The server returned an invalid group list.')
-    }
-    versions.push(...data.map(readVersion))
-    offset += data.length
-    if (offset >= count) return versions
-  }
+  const { data, error } = await getClient().rpc('iou_group_heads')
+  if (error) throw serviceError(error, 'load your shared groups')
+  if (data?.format !== 1 || !Array.isArray(data.heads)) throw new Error('The server returned an invalid group list.')
+  const versions: CloudVersion[] = data.heads.map(readVersion)
+  if (new Set(versions.map(({ id }) => id)).size !== versions.length) throw new Error('The server returned an invalid group list.')
+  return versions
 }
 
 /** The named groups. One whose data cannot be read is reported, not thrown, so it cannot block the others. */

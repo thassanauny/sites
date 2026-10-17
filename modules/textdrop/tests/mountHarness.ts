@@ -84,7 +84,7 @@ export function useMountHarness(): void {
     cloud = {
       createPage: vi.fn().mockResolvedValue(first),
       joinPage: vi.fn(async code => (code === second.code ? second : first)),
-      loadPage: vi.fn().mockResolvedValue(first),
+      pollPage: vi.fn().mockResolvedValue(first),
       savePage: vi.fn(async (_id, text) => ({ ...first, text, version: 2 })),
       startNewSession: vi.fn().mockResolvedValue(undefined),
     };

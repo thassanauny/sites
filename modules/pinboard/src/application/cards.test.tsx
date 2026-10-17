@@ -69,7 +69,7 @@ describe('Pinboard UI: cards and columns', () => {
       });
       expect(titlesIn('To do')).toEqual(['Pack bags', 'Buy coffee']);
       expect(document.querySelector('.drop-before, .drop-after')).toBeNull();
-      cloud.loadBoards.mockResolvedValue([saved]);
+      cloud.loadBoardList.mockResolvedValue([saved]);
       await refresh();
       expect(titlesIn('To do')).toEqual(['Pack bags', 'Buy coffee']);
     },

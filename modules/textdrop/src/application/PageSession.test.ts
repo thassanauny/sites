@@ -21,7 +21,7 @@ function setup(maxWait?: number) {
   const cloud: Cloud = {
     createPage: vi.fn(async () => page()),
     joinPage: vi.fn(async () => page()),
-    loadPage: vi.fn(async () => page()),
+    pollPage: vi.fn(async () => page()),
     savePage: vi.fn(async (_id: string, text: string) => page(text, 2)),
     startNewSession: vi.fn(async () => {}),
   };
@@ -77,7 +77,7 @@ describe('online page session', () => {
     const { cloud, session } = setup();
     const saving = deferred<TextDropPage>();
     vi.mocked(cloud.savePage).mockReturnValueOnce(saving.promise);
-    vi.mocked(cloud.loadPage).mockResolvedValueOnce(page('later browser save', 3));
+    vi.mocked(cloud.pollPage).mockResolvedValueOnce(page('later browser save', 3));
     await session.join(code);
     session.edit('my text');
     const saved = session.save();
@@ -94,7 +94,7 @@ describe('online page session', () => {
   it('rejects an older poll response after a newer save', async () => {
     const { cloud, session } = setup();
     const refresh = deferred<TextDropPage>();
-    vi.mocked(cloud.loadPage).mockReturnValueOnce(refresh.promise);
+    vi.mocked(cloud.pollPage).mockReturnValueOnce(refresh.promise);
     await session.join(code);
     const refreshing = session.refresh();
     session.edit('latest');
@@ -109,17 +109,17 @@ describe('online page session', () => {
   it('coalesces slow polls and allows another refresh after a failed request', async () => {
     const { cloud, session } = setup();
     const pending = deferred<TextDropPage>();
-    vi.mocked(cloud.loadPage).mockReturnValueOnce(pending.promise);
+    vi.mocked(cloud.pollPage).mockReturnValueOnce(pending.promise);
     await session.join(code);
     const polls = [session.refresh(), session.refresh(), session.refresh()];
     await Promise.resolve();
-    expect(cloud.loadPage).toHaveBeenCalledTimes(1);
+    expect(cloud.pollPage).toHaveBeenCalledTimes(1);
     pending.reject(new Error('Connection lost'));
     await Promise.all(polls);
     expect(session.state.error).toBe('Connection lost');
-    vi.mocked(cloud.loadPage).mockResolvedValueOnce(page('Latest shared text', 2));
+    vi.mocked(cloud.pollPage).mockResolvedValueOnce(page('Latest shared text', 2));
     await session.refresh();
-    expect(cloud.loadPage).toHaveBeenCalledTimes(2);
+    expect(cloud.pollPage).toHaveBeenCalledTimes(2);
     expect(session.state.draft).toBe('Latest shared text');
     expect(session.state.error).toBe('');
     session.dispose();
@@ -135,16 +135,16 @@ describe('online page session', () => {
     await expect(session.refresh()).resolves.toBe('unchanged');
     expect(listener).not.toHaveBeenCalled();
 
-    vi.mocked(cloud.loadPage).mockResolvedValueOnce(page('Newer text', 2));
+    vi.mocked(cloud.pollPage).mockResolvedValueOnce(page('Newer text', 2));
     await expect(session.refresh()).resolves.toBe('changed');
     expect(listener).toHaveBeenCalledTimes(1);
     expect(session.state.draft).toBe('Newer text');
 
-    vi.mocked(cloud.loadPage).mockRejectedValueOnce(new Error('Connection lost'));
+    vi.mocked(cloud.pollPage).mockRejectedValueOnce(new Error('Connection lost'));
     await expect(session.refresh()).resolves.toBe('failed');
     expect(session.state.error).toBe('Connection lost');
     listener.mockClear();
-    vi.mocked(cloud.loadPage).mockResolvedValueOnce(page('Newer text', 2));
+    vi.mocked(cloud.pollPage).mockResolvedValueOnce(page('Newer text', 2));
     await expect(session.refresh()).resolves.toBe('unchanged');
     expect(session.state.error).toBe('');
     expect(listener).toHaveBeenCalledTimes(1);
@@ -161,7 +161,7 @@ describe('online page session', () => {
   it('does not report a result for a poll that a newer page replaced', async () => {
     const { cloud, session } = setup();
     const slow = deferred<TextDropPage>();
-    vi.mocked(cloud.loadPage).mockReturnValueOnce(slow.promise);
+    vi.mocked(cloud.pollPage).mockReturnValueOnce(slow.promise);
     await session.join(code);
     const polling = session.refresh();
     await Promise.resolve();
@@ -175,7 +175,7 @@ describe('online page session', () => {
   it('ignores a failed older poll after a newer save confirms sync', async () => {
     const { cloud, session } = setup();
     const pending = deferred<TextDropPage>();
-    vi.mocked(cloud.loadPage).mockReturnValueOnce(pending.promise);
+    vi.mocked(cloud.pollPage).mockReturnValueOnce(pending.promise);
     await session.join(code);
     const polling = session.refresh();
     await Promise.resolve();
@@ -194,7 +194,7 @@ describe('online page session', () => {
     const { cloud, session } = setup();
     const obsolete = deferred<TextDropPage>();
     const current = deferred<TextDropPage>();
-    vi.mocked(cloud.loadPage).mockReturnValueOnce(obsolete.promise).mockReturnValueOnce(current.promise);
+    vi.mocked(cloud.pollPage).mockReturnValueOnce(obsolete.promise).mockReturnValueOnce(current.promise);
     await session.join(code);
     const oldPolling = session.refresh();
     await Promise.resolve();
@@ -202,12 +202,12 @@ describe('online page session', () => {
     await session.join(code);
     const newPolling = session.refresh();
     await Promise.resolve();
-    expect(cloud.loadPage).toHaveBeenCalledTimes(2);
+    expect(cloud.pollPage).toHaveBeenCalledTimes(2);
     obsolete.reject(new Error('Old page failure'));
     await oldPolling;
     const duplicate = session.refresh();
     await Promise.resolve();
-    expect(cloud.loadPage).toHaveBeenCalledTimes(2);
+    expect(cloud.pollPage).toHaveBeenCalledTimes(2);
     expect(session.state.error).toBe('');
     current.resolve(page('Current page', 2));
     await Promise.all([newPolling, duplicate]);
@@ -219,7 +219,7 @@ describe('online page session', () => {
     vi.useFakeTimers();
     const { cloud, session } = setup();
     vi.mocked(cloud.savePage).mockRejectedValueOnce(new Error('Connection lost'));
-    vi.mocked(cloud.loadPage).mockResolvedValueOnce(page('other browser', 3));
+    vi.mocked(cloud.pollPage).mockResolvedValueOnce(page('other browser', 3));
     await session.join(code);
     session.edit('keep this');
     await session.save();
@@ -460,13 +460,13 @@ describe('online page session', () => {
     session.dispose();
   });
 
-  it('polls with the known version when the cloud supports it, and treats null as unchanged', async () => {
+  it('polls with the known version and treats null as unchanged', async () => {
     const { cloud, session } = setup();
     cloud.pollPage = vi.fn(async () => null);
     await session.join(code);
     await expect(session.refresh()).resolves.toBe('unchanged');
     expect(cloud.pollPage).toHaveBeenCalledWith(id, 1);
-    expect(cloud.loadPage).not.toHaveBeenCalled();
+    expect(cloud.pollPage).toHaveBeenCalledTimes(1);
     vi.mocked(cloud.pollPage).mockResolvedValueOnce(page('Newer', 2));
     await expect(session.refresh()).resolves.toBe('changed');
     expect(session.state.draft).toBe('Newer');

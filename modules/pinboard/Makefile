@@ -23,7 +23,7 @@ help:
 	  'make lint       Check formatting and lint rules with Biome (no changes written)' \
 	  '                make format applies the formatter and safe lint fixes' \
 	  'make check      Run all applicable checks' \
-	  'Supabase settings: see everydayapps/AGENTS.md for the shared defaults and their precedence.'
+	  'Supabase settings: see AGENTS.md for the shared defaults and their precedence.'
 
 node-check:
 	@command -v "$(NODE)" >/dev/null 2>&1 || { printf '%s\n' 'Install Node.js 24 or newer; see README.md.' >&2; exit 1; }

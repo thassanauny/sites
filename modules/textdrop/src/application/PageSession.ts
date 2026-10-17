@@ -182,7 +182,7 @@ export class PageSession {
     const request = Promise.resolve().then(async (): Promise<RefreshResult> => {
       try {
         if (generation !== this.generation || !this.state.online) return 'skipped';
-        const remote = this.cloud.pollPage ? await this.cloud.pollPage(page.id, page.version) : await this.cloud.loadPage(page.id);
+        const remote = await this.cloud.pollPage(page.id, page.version);
         if (generation !== this.generation) return 'skipped';
         const known = this.state.page?.version;
         if (remote) this.remember(remote);

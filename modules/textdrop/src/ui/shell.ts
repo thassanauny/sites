@@ -4,12 +4,13 @@ import { icon } from './icons';
 export function shell(): string {
   return `
     <div class="shell">
+      <a class="skip-link" id="skip-link" href="#main-content">Skip to content</a>
       <header class="site-header">
         <a class="brand" href="#/" aria-label="TextDrop home"><img src="./logo.svg" alt="" width="36" height="36" /><span>textdrop<span class="brand-dot">.</span></span></a>
         <span class="header-note">Shared text, one code away</span>
         <span class="online-indicator" id="connection"><span class="dot"></span><span id="connection-label">Online</span></span>
       </header>
-      <main>
+      <main id="main-content" tabindex="-1">
         <section id="home" class="home">
           <div class="intro">
             <span class="eyebrow"><span class="tiny-line"></span> TEXT · NOTES · SNIPPETS</span>
@@ -113,6 +114,8 @@ export function shellElements(root: HTMLElement) {
   };
   return {
     connection: get<HTMLElement>('connection'),
+    skipLink: get<HTMLAnchorElement>('skip-link'),
+    main: get<HTMLElement>('main-content'),
     connectionLabel: get<HTMLElement>('connection-label'),
     home: get<HTMLElement>('home'),
     create: get<HTMLButtonElement>('create'),

@@ -155,6 +155,16 @@ begin
 end;
 $$;
 
+-- Also in update-save-receipt.sql for installed projects. The original save still
+-- controls validation, row locks and acceptance order; only its response is smaller.
+create or replace function public.textdrop_save_page_receipt(p_id uuid, p_text text)
+returns jsonb language sql security invoker set search_path = '' as $$
+  select private.textdrop_save_page(p_id, p_text) - 'text';
+$$;
+
+revoke all on function public.textdrop_save_page_receipt(uuid,text) from public, anon, authenticated;
+grant execute on function public.textdrop_save_page_receipt(uuid,text) to authenticated;
+
 -- Invoker entry points are exposed; checked privileged implementations stay private.
 create or replace function public.textdrop_create_page(p_id uuid)
 returns jsonb language sql security invoker set search_path = '' as $$

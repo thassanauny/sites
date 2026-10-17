@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Board } from '../domain/boards/types';
+import type { Board, BoardSummary } from '../domain/boards/types';
 import { acceptBoard } from '../domain/boards/board';
-import { cloudConfigured, loadBoards } from '../infrastructure/cloud/boards';
+import { acceptSummary, summarizeBoard } from '../domain/boards/summary';
+import { cloudConfigured, loadBoardList, loadBoard } from '../infrastructure/cloud/boards';
 import type { DeviceBoards } from '../infrastructure/storage/deviceBoards';
 import { message } from '../ui/message';
 
@@ -13,6 +14,7 @@ const MAX_POLL_MS = 60_000;
  * After a failed refresh, background polls wait longer (10 s, 20 s ... up to a minute) until one succeeds.
  */
 export function useBoardSync({
+  selectedCode,
   deviceBoards,
   syncRemovals,
   onError,
@@ -20,6 +22,7 @@ export function useBoardSync({
   onNotice,
   onReconnect,
 }: {
+  selectedCode: string;
   deviceBoards: DeviceBoards;
   syncRemovals: () => Set<string>;
   /** A refresh failed; an empty text clears the error. */
@@ -30,8 +33,15 @@ export function useBoardSync({
   onReconnect: () => void;
 }) {
   const [boards, setBoards] = useState<Board[]>([]);
-  const boardsRef = useRef(boards);
-  boardsRef.current = boards;
+  const [summaries, setSummaries] = useState<BoardSummary[]>([]);
+  const summariesRef = useRef(summaries);
+  summariesRef.current = summaries;
+  const [detailError, setDetailError] = useState('');
+  const [loadingBoard, setLoadingBoard] = useState(false);
+  const detailRequests = useRef(new Map<string, Promise<Board>>());
+  const detailFailures = useRef(
+    new Map<string, { revision: number; attempts: number; notBefore: number; message: string }>(),
+  );
   const poll = useRef({ failures: 0, notBefore: 0 });
   const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,6 +55,13 @@ export function useBoardSync({
     (incoming: Board) => {
       if (deviceBoards.removal(incoming.invite_code) !== null) return false;
       boardWrites.current.set(incoming.id, ++writeVersion.current);
+      setSummaries((current) => {
+        const found = current.find((item) => item.id === incoming.id);
+        const next = acceptSummary(found, summarizeBoard(incoming));
+        return found
+          ? current.map((item) => (item.id === incoming.id ? next : item))
+          : [...current, next];
+      });
       setBoards((current) => {
         const found = current.find((item) => item.id === incoming.id);
         return found
@@ -57,6 +74,7 @@ export function useBoardSync({
   );
   const refresh = useCallback(
     async (manual = false) => {
+      if (manual) detailFailures.current.clear();
       try {
         syncRemovals();
       } catch (failure) {
@@ -73,32 +91,37 @@ export function useBoardSync({
       const refreshVersion = writeVersion.current;
       setRefreshing(true);
       try {
-        // A person's refresh downloads every board; background polls download only what changed.
-        const incoming = await loadBoards(manual ? undefined : boardsRef.current);
+        const incoming = await loadBoardList(summariesRef.current);
         const removed = syncRemovals();
-        setBoards((current) => {
+        setSummaries((current) => {
           const existing = new Map(current.map((item) => [item.id, item]));
           const merged = new Map(
             incoming
               .filter((item) => !removed.has(item.invite_code))
-              .map((item) => [item.id, acceptBoard(existing.get(item.id), item)]),
+              .map((item) => [item.id, acceptSummary(existing.get(item.id), item)]),
           );
-          // A complete list removes inaccessible boards, while overlapping saves/joins stay visible.
-          current.forEach((item) => {
+          for (const item of current)
             if (
               !merged.has(item.id) &&
               !removed.has(item.invite_code) &&
               (boardWrites.current.get(item.id) ?? 0) > refreshVersion
-            ) {
+            )
               merged.set(item.id, item);
-            }
-          });
           const next = [...merged.values()];
-          // Nothing changed: keep the array so React skips the render.
           return next.length === current.length &&
             next.every((item, index) => item === current[index])
             ? current
             : next;
+        });
+        setBoards((current) => {
+          const accessible = new Set(incoming.map((item) => item.id));
+          // Keep only cached details still accessible, plus saves/joins newer than this refresh.
+          const next = current.filter(
+            (item) =>
+              !removed.has(item.invite_code) &&
+              (accessible.has(item.id) || (boardWrites.current.get(item.id) ?? 0) > refreshVersion),
+          );
+          return next.length === current.length ? current : next;
         });
         poll.current = { failures: 0, notBefore: 0 };
         setLastSync(new Date());
@@ -121,6 +144,58 @@ export function useBoardSync({
     },
     [syncRemovals, onError, onSynced, onNotice],
   );
+  const selected = summaries.find((item) => item.invite_code === selectedCode);
+  const held = boards.find((item) => item.invite_code === selectedCode);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a successful poll retries a previously failed detail load even when its revision stayed unchanged.
+  useEffect(() => {
+    if (!selected || (held && held.revision >= selected.revision) || !navigator.onLine) {
+      if (!selected || (held && held.revision >= selected.revision)) setDetailError('');
+      setLoadingBoard(false);
+      return;
+    }
+    const failed = detailFailures.current.get(selected.id);
+    if (failed?.revision === selected.revision && Date.now() < failed.notBefore) {
+      setDetailError(failed.message);
+      setLoadingBoard(false);
+      return;
+    }
+    setDetailError('');
+    let active = true;
+    setLoadingBoard(true);
+    let request = detailRequests.current.get(selected.id);
+    if (!request) {
+      request = loadBoard(selected.id);
+      detailRequests.current.set(selected.id, request);
+      void request.finally(() => detailRequests.current.delete(selected.id)).catch(() => {});
+    }
+    void request
+      .then((incoming) => {
+        if (!active) return;
+        if (incoming.revision < selected.revision)
+          throw new Error('The board changed while loading. Refresh and try again.');
+        detailFailures.current.delete(selected.id);
+        upsert(incoming);
+      })
+      .catch((failure) => {
+        if (active) {
+          const text = message(failure);
+          const attempts = (detailFailures.current.get(selected.id)?.attempts ?? 0) + 1;
+          detailFailures.current.set(selected.id, {
+            revision: selected.revision,
+            attempts,
+            notBefore: Date.now() + Math.min(POLL_MS * 2 ** attempts, MAX_POLL_MS),
+            message: text,
+          });
+          setDetailError(text);
+        }
+      })
+      .finally(() => {
+        if (active) setLoadingBoard(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selected, held, lastSync, upsert]);
   useEffect(() => {
     void refresh();
     const tick = window.setInterval(() => {
@@ -146,6 +221,10 @@ export function useBoardSync({
   }, [refresh, onReconnect]);
   return {
     boards,
+    summaries,
+    loadingBoard,
+    detailError,
+    setDetailError,
     setBoards,
     loaded,
     refreshing,

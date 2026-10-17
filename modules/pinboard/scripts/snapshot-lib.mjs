@@ -1,5 +1,5 @@
-// Shared helpers of the website preparation modules (Utility Desk Lite, iou, Drafts, TextDrop and
-// Pinboard). Dependency-free: every public source snapshot ships a copy of this file beside its
+// Shared helpers of the website preparation modules. Dependency-free:
+// every public source snapshot ships a copy of this file beside its
 // helper as scripts/snapshot-lib.mjs, so it may only import Node.js built-ins.
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -27,8 +27,8 @@ export function within(parent, child) {
   return !path || (!isAbsolute(path) && path !== '..' && !path.startsWith('..' + sep));
 }
 
-/** The Sites checkout must not be, or sit inside, the development repository (two folders above `file`). */
-export function assertOutsideRepository(file, target, repository = resolve(dirname(file), '../..')) {
+/** The Sites checkout must not be, or sit inside, the development repository (the parent of publishing/). */
+export function assertOutsideRepository(file, target, repository = resolve(dirname(file), '..')) {
   if (isShipped(file)) return;
   if (within(realpathSync(repository), existsSync(target) ? realpathSync(target) : resolve(target))) {
     throw new Error('Choose a separate Sites checkout outside the development repository.');

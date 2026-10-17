@@ -28,8 +28,8 @@ help:
 	  'make format      Apply Biome formatting and safe lint fixes' \
 	  'make check       Run TypeScript, Biome and automated tests' \
 	  'make prepare-shared DEST=<Sites checkout>  Prepare a public source snapshot (used by publishing)' \
-	  'Publishing: run make -C everydayapps/publishing publish from the development repository root' \
-	  'Supabase settings: see everydayapps/AGENTS.md.'
+	  'Publishing: run make -C publishing publish from the development repository root' \
+	  'Supabase settings: see AGENTS.md.'
 
 node-check:
 	@command -v "$(NODE)" >/dev/null 2>&1 || { printf '%s\n' 'Install Node.js 24 or newer; see README.md.' >&2; exit 1; }

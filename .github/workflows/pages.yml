@@ -35,6 +35,8 @@ jobs:
         run: make -C modules/textdrop check-site SITE=../../site/textdrop
       - name: Verify Pinboard shared-board configuration
         run: make -C modules/pinboard check-site SITE=../../site/pinboard
+      - name: Verify Blueprint system-design configuration
+        run: make -C modules/blueprint check-site SITE=../../site/blueprint
       - name: Upload only the website
         uses: actions/upload-pages-artifact@v5
         with:

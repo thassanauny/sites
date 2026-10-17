@@ -12,7 +12,11 @@ const page = {
   version: 1,
   updatedAt: '2026-10-10T01:00:00.123456+00:00',
 };
-const reply = () => new Response(JSON.stringify(page), { status: 200, headers: { 'content-type': 'application/json' } });
+const reply = (url: unknown) => {
+  const { id, code, version, updatedAt } = page;
+  const data = String(url).endsWith('textdrop_save_page_receipt') ? { id, code, version, updatedAt } : page;
+  return new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } });
+};
 const stalled = () => new Promise<Response>(() => {});
 
 beforeEach(() => {
@@ -43,7 +47,7 @@ describe('snippet requests on a stalled connection', () => {
       .fn()
       .mockImplementationOnce(stalled)
       .mockImplementationOnce(stalled)
-      .mockImplementation(async () => reply());
+      .mockImplementation(async url => reply(url));
     vi.stubGlobal('fetch', network);
     // One client for the whole test: a second one with the same storage key makes the SDK warn.
     const cloud = createCloud('https://test-project.supabase.co', 'public-test-key');
@@ -52,18 +56,18 @@ describe('snippet requests on a stalled connection', () => {
     const saving = expect(cloud.savePage(page.id, 'Typed text')).rejects.toThrow(unreachable);
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 1000);
     await saving;
-    const polling = expect(cloud.loadPage(page.id)).rejects.toThrow(unreachable);
+    const polling = expect(cloud.pollPage(page.id, 0)).rejects.toThrow(unreachable);
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 1000);
     await polling;
     expect(network).toHaveBeenCalledTimes(2);
 
-    await expect(cloud.savePage(page.id, 'Typed text')).resolves.toEqual(page);
-    await expect(cloud.loadPage(page.id)).resolves.toEqual(page);
+    await expect(cloud.savePage(page.id, 'Typed text')).resolves.toEqual({ ...page, text: 'Typed text' });
+    await expect(cloud.pollPage(page.id, 0)).resolves.toEqual(page);
     expect(network.mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual([
-      '/rest/v1/rpc/textdrop_save_page',
-      '/rest/v1/rpc/textdrop_load_page',
-      '/rest/v1/rpc/textdrop_save_page',
-      '/rest/v1/rpc/textdrop_load_page',
+      '/rest/v1/rpc/textdrop_save_page_receipt',
+      '/rest/v1/rpc/textdrop_poll_page',
+      '/rest/v1/rpc/textdrop_save_page_receipt',
+      '/rest/v1/rpc/textdrop_poll_page',
     ]);
   });
 });

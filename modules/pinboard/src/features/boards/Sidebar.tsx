@@ -1,35 +1,32 @@
-import { Columns3, Plus } from 'lucide-react';
-import type { Board } from '../../domain/boards/types';
+import { Plus } from 'lucide-react';
+import type { Board, BoardSummary } from '../../domain/boards/types';
 import { cardFields, fieldVisible } from '../../domain/boards/fields';
 import { activeCards } from '../../domain/boards/board';
 
 export function Sidebar({
   boards,
   activeId,
+  currentBoard,
   visibleCardCount,
-  atHome,
   showEmptyHint,
   disabled,
   status,
   statusTitle,
-  onHome,
   onOpen,
   onCreate,
 }: {
-  boards: Board[];
+  boards: BoardSummary[];
   activeId?: string;
+  currentBoard?: Board;
   visibleCardCount: number;
-  atHome: boolean;
   showEmptyHint: boolean;
   disabled: boolean;
   status: string;
   statusTitle?: string;
-  onHome: () => void;
-  onOpen: (board: Board) => void;
+  onOpen: (board: BoardSummary) => void;
   onCreate: () => void;
 }) {
   const today = new Date().toLocaleDateString('en-CA');
-  const currentBoard = boards.find((board) => board.id === activeId);
   const cards = currentBoard ? activeCards(currentBoard) : [];
   const showDueDates = currentBoard ? fieldVisible(cardFields(currentBoard), 'dueDate') : false;
   const columnCounts = new Map(currentBoard?.columns.map((column) => [column.id, 0]));
@@ -44,21 +41,6 @@ export function Sidebar({
   }
   return (
     <aside className="sidebar">
-      <button
-        type="button"
-        className="brand"
-        onClick={onHome}
-        aria-label="Open workspace"
-        aria-current={atHome ? 'page' : undefined}
-      >
-        <span className="brand-mark">
-          <Columns3 size={23} strokeWidth={2.5} />
-        </span>
-        <span>
-          pinboard<span className="brand-dot">.</span>
-        </span>
-      </button>
-      <p className="brand-subtitle">A place for your projects.</p>
       <div className="sidebar-section">
         <span>YOUR BOARDS</span>
         <button
@@ -82,7 +64,7 @@ export function Sidebar({
           >
             <span className="board-nav-dot" />
             <span>{item.title}</span>
-            <span className="board-nav-count">{activeCards(item).length}</span>
+            <span className="board-nav-count">{item.active_card_count}</span>
           </button>
         ))}
         {showEmptyHint && (

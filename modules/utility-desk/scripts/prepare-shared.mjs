@@ -53,7 +53,7 @@ const spec = {
 export const prepareUtility = (app, target, run = execFileSync, options) => prepareManagedApp(spec, app, target, run, options);
 
 if (process.argv[1] && stat(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(file)) {
-  if (!process.argv[2]) { console.error('Use make -C everydayapps/publishing publish from the development repository root.'); process.exitCode = 1; }
+  if (!process.argv[2]) { console.error('Use make -C publishing publish from the development repository root.'); process.exitCode = 1; }
   else {
     const defaultApp = isShipped(file) ? join(dirname(file), '..') : join(dirname(file), '../apps/utility-desk-lite');
     try { prepareUtility(resolve(process.argv[3] || defaultApp), resolve(process.argv[2])); }

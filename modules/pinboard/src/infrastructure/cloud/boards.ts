@@ -1,5 +1,6 @@
 import { createClient, navigatorLock, type SupabaseClient } from '@supabase/supabase-js';
-import type { Board, BoardHead, Operation } from '../../domain/boards/types';
+import type { Board, BoardHead, BoardSummary, Operation } from '../../domain/boards/types';
+import { readBoardSummary } from '../../domain/boards/summary';
 import {
   normalizeInviteCode,
   readBoard,
@@ -19,15 +20,8 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? '';
 export const cloudConfigured = Boolean(supabaseUrl && supabaseKey);
 
-/** Rows requested per page; the API may return fewer. */
-const PAGE_SIZE = 100;
-const LEGACY_BOARD_COLUMNS =
-  'id,invite_code,title,description,columns,cards,revision,created_at,updated_at';
-const BOARD_COLUMNS = `${LEGACY_BOARD_COLUMNS},card_fields`;
-let fieldSettingsAvailable = true;
-const boardColumns = () => (fieldSettingsAvailable ? BOARD_COLUMNS : LEGACY_BOARD_COLUMNS);
-const missingCardFields = (error: ServiceError) =>
-  ['42703', 'PGRST204'].includes(error.code ?? '') && /card_fields/.test(error.message ?? '');
+const BOARD_COLUMNS =
+  'id,invite_code,title,description,columns,cards,revision,created_at,updated_at,card_fields';
 /** A stalled connection must end in an error instead of leaving every edit waiting. */
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -108,11 +102,11 @@ function serviceError(error: ServiceError, action: string): Error {
     error.code === 'PGRST202' ||
     error.code === 'PGRST205' ||
     error.code === '42P01' ||
-    error.code === '42883'
+    error.code === '42883' ||
+    error.code === '42703' ||
+    error.code === 'PGRST204'
   ) {
-    return new Error(
-      'Board sharing needs database setup. See everydayapps/apps/pinboard/supabase/README.md.',
-    );
+    return new Error('Board sharing needs database setup. See apps/pinboard/supabase/README.md.');
   }
   if (
     /anonymous.*(?:disabled|not allowed)|anonymous_provider_disabled/i.test(
@@ -212,100 +206,53 @@ function readCloudHead(input: unknown): BoardHead {
 
 const listChanged = () => new Error('The board list changed while loading. Refresh and try again.');
 
-/** Walk the joined boards in stable ID order, however many rows each page returns. */
-async function readPages<T extends { id: string }>(
-  select: string,
-  read: (row: unknown) => T,
-): Promise<T[]> {
-  const items: T[] = [];
-  const seen = new Set<string>();
-  let offset = 0;
-  for (;;) {
-    ensureOnline();
-    // RLS restricts this table to joined boards; stable ID order survives other members' edits.
-    const { data, error, count } = await call('load your boards', () =>
-      getClient()
-        .from('pinboard_boards')
-        .select(select, { count: 'exact' })
-        .order('id', { ascending: true })
-        .range(offset, offset + PAGE_SIZE - 1),
-    );
-    if (error) {
-      if (select === BOARD_COLUMNS && missingCardFields(error)) {
-        fieldSettingsAvailable = false;
-        return readPages(LEGACY_BOARD_COLUMNS, read);
-      }
-      throw serviceError(error, 'load your boards');
-    }
-    if (
-      !Array.isArray(data) ||
-      !Number.isSafeInteger(count) ||
-      count === null ||
-      count < 0 ||
-      offset + data.length > count ||
-      (data.length === 0 && offset < count)
-    ) {
-      throw new Error('The server returned an invalid board list.');
-    }
-    for (const row of data) {
-      const item = read(row);
-      if (seen.has(item.id)) throw listChanged();
-      seen.add(item.id);
-      items.push(item);
-    }
-    offset += data.length;
-    if (offset >= count) return items;
-  }
-}
-
-/** Fetch whole boards by ID. A board that cannot be returned means the list changed, never a partial result. */
-async function readBoardsById(ids: string[]): Promise<Board[]> {
-  const boards: Board[] = [];
-  const received = new Set<string>();
-  let pending = ids;
-  while (pending.length > 0) {
-    const wanted = pending.slice(0, PAGE_SIZE);
-    ensureOnline();
-    const { data, error } = await call('load your boards', () =>
-      getClient()
-        .from('pinboard_boards')
-        .select(boardColumns())
-        .in('id', wanted)
-        .order('id', { ascending: true }),
-    );
-    if (error) {
-      if (fieldSettingsAvailable && missingCardFields(error)) {
-        fieldSettingsAvailable = false;
-        continue;
-      }
-      throw serviceError(error, 'load your boards');
-    }
-    if (!Array.isArray(data) || data.length === 0) throw listChanged();
-    for (const row of data) {
-      const board = readCloudBoard(row);
-      if (!wanted.includes(board.id) || received.has(board.id)) throw listChanged();
-      received.add(board.id);
-      boards.push(board);
-    }
-    pending = pending.filter((id) => !received.has(id));
-  }
-  return boards;
-}
-
-/**
- * Every joined board. When the caller already holds boards, a poll first reads only each board's ID and revision
- * and downloads just the boards whose revision differs, so an idle tab costs a few bytes per board.
- */
-export async function loadBoards(known: readonly Board[] = []): Promise<Board[]> {
+/** One request returns heads and changed summaries, never card documents. */
+export async function loadBoardList(known: readonly BoardSummary[] = []): Promise<BoardSummary[]> {
   await initializeCloud();
-  if (known.length === 0) return readPages(boardColumns(), readCloudBoard);
-  const heads = await readPages('id,revision', readCloudHead);
+  const { data, error } = await call('load your boards', () =>
+    getClient().rpc('pinboard_sync_summaries', {
+      p_known: Object.fromEntries(known.map((board) => [board.id, board.revision])),
+    }),
+  );
+  if (error) throw serviceError(error, 'load your boards');
+  if (data?.format !== 1 || !Array.isArray(data.heads) || !Array.isArray(data.boards))
+    throw new Error('The server returned an invalid board list.');
   const held = new Map(known.map((board) => [board.id, board]));
-  const changed = heads
-    .filter((head) => held.get(head.id)?.revision !== head.revision)
-    .map((head) => head.id);
-  const downloaded = new Map((await readBoardsById(changed)).map((board) => [board.id, board]));
-  return heads.map((head) => downloaded.get(head.id) ?? held.get(head.id)!);
+  const changed = new Map<string, BoardSummary>();
+  for (const row of data.boards) {
+    const summary = readBoardSummary(row);
+    if (changed.has(summary.id)) throw listChanged();
+    changed.set(summary.id, summary);
+  }
+  const seen = new Set<string>();
+  const result = data.heads.map((row: unknown) => {
+    const head = readCloudHead(row);
+    if (seen.has(head.id)) throw listChanged();
+    seen.add(head.id);
+    const summary = changed.get(head.id) || held.get(head.id);
+    if (!summary || summary.revision !== head.revision) throw listChanged();
+    return summary;
+  });
+  if ([...changed.keys()].some((id) => !seen.has(id))) throw listChanged();
+  return result;
+}
+
+export async function loadBoard(id: string): Promise<Board> {
+  const boardId = validateUuid(id, 'Board ID');
+  await initializeCloud();
+  ensureOnline();
+  const { data, error } = await call('load your board', () =>
+    getClient()
+      .from('pinboard_boards')
+      .select(BOARD_COLUMNS)
+      .in('id', [boardId])
+      .order('id', { ascending: true }),
+  );
+  if (error) throw serviceError(error, 'load your board');
+  if (!Array.isArray(data) || data.length !== 1) throw listChanged();
+  const board = readCloudBoard(data[0]);
+  if (board.id !== boardId) throw listChanged();
+  return board;
 }
 
 export async function createBoard(id: string, title: string, description: string): Promise<Board> {
@@ -353,32 +300,7 @@ export async function mutateBoard(boardId: string, operation: Operation): Promis
       p_operation: payload,
     }),
   );
-  if (error) {
-    if (
-      (payload.type === 'add_assignee' || payload.type === 'delete_assignee') &&
-      error.message === 'PINBOARD_INVALID_OPERATION'
-    )
-      throw new Error(
-        'Assignee settings need a database update. Run Pinboard’s schema.sql in Supabase, then reload the app. Your settings draft is kept here.',
-      );
-    if (
-      payload.type === 'update_card' &&
-      'archived' in payload.patch &&
-      error.message === 'PINBOARD_INVALID_OPERATION'
-    )
-      throw new Error(
-        'Archiving needs a database update. Run Pinboard’s schema.sql in Supabase, then reload the app. Your card draft is kept here.',
-      );
-    if (
-      payload.type === 'update_board' &&
-      payload.patch.card_fields &&
-      error.message === 'PINBOARD_INVALID_OPERATION'
-    )
-      throw new Error(
-        'Card field settings need a database update. Run Pinboard’s schema.sql in Supabase, then reload the app. Your settings draft is kept here.',
-      );
-    throw serviceError(error, 'save your changes');
-  }
+  if (error) throw serviceError(error, 'save your changes');
   const board = readCloudBoard(data);
   if (board.id !== id)
     throw new Error('The server returned a different board. Refresh the app and try again.');

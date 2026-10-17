@@ -1,0 +1,166 @@
+/* Keep the board's spacious desktop layout and IOU's compact mobile controls. */
+.sidebar {
+  background: #eeeee7;
+}
+.brand {
+  font-size: 33px;
+  letter-spacing: -1.8px;
+}
+.main,
+.topbar {
+  background: var(--ea-paper);
+}
+.home {
+  max-width: 1160px;
+  width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+}
+.home h1 {
+  font-family: var(--ea-font-heading);
+  font-weight: 400;
+  font-size: clamp(30px, 4vw, 42px);
+  line-height: 1.15;
+  letter-spacing: -0.7px;
+}
+.home h1 br {
+  display: none;
+}
+.home h1 em::before {
+  content: " ";
+}
+.home-heading p:not(.eyebrow) {
+  color: var(--ea-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.eyebrow {
+  color: var(--ea-jade);
+  font-size: 10px;
+  letter-spacing: 1.35px;
+}
+.board-preview,
+.welcome-panel,
+.column,
+.task-card {
+  background-color: var(--ea-surface);
+  border-color: var(--ea-line);
+}
+.board-preview,
+.welcome-panel {
+  border-radius: 20px;
+}
+.preview-info h3 {
+  color: var(--ea-ink);
+}
+.preview-info p,
+.home-bottom {
+  color: var(--ea-muted);
+}
+.dialog {
+  border-radius: 20px;
+}
+.board-nav-item.active {
+  background: var(--ea-surface);
+  color: var(--ea-jade);
+}
+#main-content:focus {
+  outline: none;
+}
+@media (max-width: 760px) {
+  .sidebar {
+    padding: 12px 20px;
+    min-height: 76px;
+  }
+  .brand {
+    font-size: 30px;
+  }
+  .home {
+    padding-top: 26px;
+  }
+  .home h1 {
+    font-size: 30px;
+  }
+  .home-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+  .home-actions .button {
+    padding-inline: 10px;
+    font-size: 13px;
+    min-width: 0;
+    white-space: normal;
+  }
+  .home-heading > div,
+  .welcome-copy {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+}
+.site-header {
+  grid-column: 1 / -1;
+  background: var(--ea-paper);
+  border-bottom: 1px solid var(--ea-line);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.header-inner {
+  max-width: 1160px;
+  margin: auto;
+  min-height: 76px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.header-actions .icon-button {
+  background: transparent;
+  color: var(--ea-muted);
+}
+.sidebar {
+  position: sticky;
+  top: 0;
+  width: 240px;
+  height: calc(100dvh - 76px);
+  padding-top: 24px;
+}
+.main {
+  margin-left: 0;
+  min-width: 0;
+  min-height: calc(100dvh - 76px);
+}
+.home {
+  padding-top: 36px;
+}
+.home-heading {
+  align-items: flex-start;
+}
+.home h1 {
+  font-size: clamp(36px, 4.5vw, 60px);
+}
+@media (max-width: 760px) {
+  .app-shell {
+    display: block;
+  }
+  .sidebar {
+    display: none;
+  }
+  .home {
+    padding-top: 26px;
+  }
+  .home h1 {
+    font-size: 30px;
+  }
+}

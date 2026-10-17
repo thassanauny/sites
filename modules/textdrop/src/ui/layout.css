@@ -1,0 +1,27 @@
+/* The snippet page shares IOU's paper, hierarchy and touch targets. */
+.shell { max-width: 1160px; padding-inline: 32px; }
+.site-header { min-height: 76px; padding-block: 12px; }
+.brand { font-size: 33px; letter-spacing: -1.8px; }
+.intro h1 { font-family: var(--ea-font-heading); font-weight: 400; font-size: clamp(30px, 4vw, 42px); line-height: 1.15; letter-spacing: -0.7px; margin-block: 14px 12px; }
+.lead { font-size: 14px; line-height: 1.6; }
+.home { padding-top: 36px; grid-template-columns: minmax(0, 1.28fr) minmax(0, 1fr); }
+.intro { min-width: 0; }
+.hero-actions .button { min-height: 48px; border-radius: 12px; padding: 12px 19px; }
+.hero-visual, .editor-card, .device-row { border-color: var(--ea-line); border-radius: 20px; background-color: var(--ea-surface); }
+.device-heading h2 { font-size: 21px; color: var(--ea-ink); }
+.page-header h1 { font-family: var(--ea-font-heading); font-weight: 400; letter-spacing: -0.7px; }
+.device-count { border-radius: 20px; background: #e9eade; color: var(--ea-muted); }
+.device-open { min-height: 64px; }
+#snippet-dialog { border-radius: 20px; }
+#main-content:focus { outline: none; }
+@media (max-width: 600px) {
+  .shell { padding-inline: 20px; }
+  .site-header { padding-block: 12px; }
+  .brand { font-size: 30px; }
+  .home { padding-top: 26px; grid-template-columns: minmax(0, 1fr); }
+  .intro h1 { font-size: 30px; }
+  .hero-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .hero-actions .button { padding-inline: 10px; font-size: 13px; min-width: 0; white-space: normal; }
+}
+
+@media (min-width: 760px) { .intro h1 { font-size: 60px; } }

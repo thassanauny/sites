@@ -25,7 +25,7 @@ help:
 	  'make lint            Run ESLint only' \
 	  'make format          Run the Biome format and lint check (no changes written)' \
 	  'make test            Run tests only' \
-	  'Publishing: run make -C everydayapps/publishing publish from the development repository root'
+	  'Publishing: run make -C publishing publish from the development repository root'
 
 runtime:
 	@$(NODE) -e 'if (Number(process.versions.node.split(".")[0]) < 24) { console.error("Utility Desk Lite requires Node.js 24 or newer; see README.md."); process.exit(1); }'

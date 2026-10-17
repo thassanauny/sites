@@ -138,7 +138,7 @@ describe('Pinboard UI: editing boards, columns and cards', () => {
       revision: 2,
       cards: [{ ...card, columnId: 'done', assignee: 'Sam' }],
     };
-    cloud.loadBoards.mockResolvedValueOnce([moved]);
+    cloud.loadBoardList.mockResolvedValueOnce([moved]);
     await refresh();
     cloud.mutateBoard.mockResolvedValueOnce({
       ...moved,
@@ -229,11 +229,11 @@ describe('Pinboard UI: editing boards, columns and cards', () => {
         (item) => item.textContent?.trim() === 'Remove',
       ),
     ).toBe(false);
-    cloud.loadBoards.mockResolvedValueOnce([{ ...board, revision: 2 }]);
+    cloud.loadBoardList.mockResolvedValueOnce([{ ...board, revision: 2 }]);
     await refresh();
     await click('Remove');
     expect(button('Confirm removal').disabled).toBe(false);
-    cloud.loadBoards.mockResolvedValueOnce([{ ...single, revision: 3 }]);
+    cloud.loadBoardList.mockResolvedValueOnce([{ ...single, revision: 3 }]);
     await refresh();
     expect(button('Confirm removal').disabled).toBe(true);
     expect(cloud.mutateBoard).not.toHaveBeenCalled();

@@ -9,13 +9,13 @@ useMountHarness();
 
 describe('TextDrop synchronization and save status', () => {
   const visibility = (state: DocumentVisibilityState) => vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(state);
-  const loads = () => vi.mocked(cloud.loadPage).mock.calls.length;
+  const loads = () => vi.mocked(cloud.pollPage).mock.calls.length;
   const status = () => element('save-status').textContent;
   const newer = { ...first, text: 'Newer text', version: 2 };
 
   it('polls a clean snippet every 3 seconds only while the page is visible and shows the newer text', async () => {
     await start(`#/p/${first.code}`);
-    vi.mocked(cloud.loadPage).mockResolvedValue(newer);
+    vi.mocked(cloud.pollPage).mockResolvedValue(newer);
     await vi.advanceTimersByTimeAsync(2998); // mounting already advanced 1 ms
     expect(loads()).toBe(0);
     await vi.advanceTimersByTimeAsync(1);
@@ -112,7 +112,7 @@ describe('TextDrop synchronization and save status', () => {
   });
 
   it('waits longer between polls after failures and polls normally again after one succeeds', async () => {
-    vi.mocked(cloud.loadPage).mockRejectedValue(new Error('Poll failed'));
+    vi.mocked(cloud.pollPage).mockRejectedValue(new Error('Poll failed'));
     await start(`#/p/${first.code}`);
     await vi.advanceTimersByTimeAsync(2999);
     expect(loads()).toBe(1);
@@ -121,7 +121,7 @@ describe('TextDrop synchronization and save status', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(loads()).toBe(2);
     expect(status()).toBe('Sync unavailable');
-    vi.mocked(cloud.loadPage).mockResolvedValue(first);
+    vi.mocked(cloud.pollPage).mockResolvedValue(first);
     await vi.advanceTimersByTimeAsync(12_000);
     expect(loads()).toBe(3);
     expect(status()).toBe('All changes saved');
@@ -133,7 +133,7 @@ describe('TextDrop synchronization and save status', () => {
     vi.mocked(cloud.savePage).mockReturnValue(new Promise(() => {}));
     await start(`#/p/${first.code}`);
     edit('My unsaved words');
-    vi.mocked(cloud.loadPage).mockResolvedValue(newer);
+    vi.mocked(cloud.pollPage).mockResolvedValue(newer);
     await vi.advanceTimersByTimeAsync(3000);
     expect(loads()).toBe(1);
     expect(element<HTMLTextAreaElement>('editor').value).toBe('My unsaved words');
@@ -163,7 +163,7 @@ describe('TextDrop synchronization and save status', () => {
 
   it('shows "Sync unavailable" after a failed refresh and clears it when the next refresh succeeds', async () => {
     await start(`#/p/${first.code}`);
-    vi.mocked(cloud.loadPage).mockRejectedValueOnce(new Error('Poll failed'));
+    vi.mocked(cloud.pollPage).mockRejectedValueOnce(new Error('Poll failed'));
     window.dispatchEvent(new Event('focus'));
     await flush();
     expect(status()).toBe('Sync unavailable');

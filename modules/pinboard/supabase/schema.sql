@@ -212,6 +212,12 @@ create table if not exists public.pinboard_boards (
 alter table public.pinboard_boards add column if not exists card_fields jsonb
   check (card_fields is null or private.pinboard_valid_card_fields(card_fields));
 
+-- Keep collection reads on small scalar/column data: no card JSON needs to be
+-- fetched or expanded during a list or poll. PostgreSQL maintains this count.
+alter table public.pinboard_boards add column if not exists active_card_count integer
+  generated always as (jsonb_array_length(jsonb_path_query_array(cards,
+    '$[*] ? (!exists(@.archived) || @.archived == false)'))) stored;
+
 create table if not exists public.pinboard_board_access (
   board_id uuid not null references public.pinboard_boards(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -227,7 +233,7 @@ alter table public.pinboard_board_access enable row level security;
 revoke all on public.pinboard_boards, public.pinboard_board_access from public, anon, authenticated;
 -- Members read board rows only through these columns: `created_by` and the deletion
 -- receipts stay server-side. The client's explicit column list matches this one.
-grant select (id, invite_code, title, description, columns, cards, revision, created_at, updated_at, card_fields)
+grant select (id, invite_code, title, description, columns, cards, revision, created_at, updated_at, card_fields, active_card_count)
   on public.pinboard_boards to authenticated;
 grant select on public.pinboard_board_access to authenticated;
 
@@ -240,6 +246,32 @@ create policy pinboard_read_joined_boards on public.pinboard_boards
     select 1 from public.pinboard_board_access access
     where access.board_id = pinboard_boards.id and access.user_id = (select auth.uid())
   ));
+
+-- Security-invoker preserves the same membership RLS as the base table.
+create or replace view public.pinboard_board_summaries with (security_invoker = true) as
+  select id, invite_code, title, left(description, 240) as description, columns,
+    active_card_count, revision, created_at, updated_at from public.pinboard_boards;
+revoke all on public.pinboard_board_summaries from public, anon, authenticated;
+grant select on public.pinboard_board_summaries to authenticated;
+
+-- One request/snapshot for the full identity list plus only changed summaries.
+-- This invoker function retains the view's membership RLS and never reads cards.
+create or replace function public.pinboard_sync_summaries(p_known jsonb default '{}'::jsonb)
+returns jsonb language plpgsql stable security invoker set search_path = '' as $$
+declare heads jsonb; changed jsonb;
+begin
+  if auth.uid() is null then raise exception 'PINBOARD_AUTH_REQUIRED' using errcode = '42501'; end if;
+  if jsonb_typeof(p_known) is distinct from 'object' then raise exception 'PINBOARD_INVALID_BOARD' using errcode = '22023'; end if;
+  select
+    coalesce(jsonb_agg(jsonb_build_object('id', s.id, 'revision', s.revision) order by s.id), '[]'::jsonb),
+    coalesce(jsonb_agg(to_jsonb(s) order by s.id)
+      filter (where p_known->>s.id::text is distinct from s.revision::text), '[]'::jsonb)
+  into heads, changed from public.pinboard_board_summaries s;
+  return jsonb_build_object('format', 1, 'heads', heads, 'boards', changed);
+end;
+$$;
+revoke all on function public.pinboard_sync_summaries(jsonb) from public, anon, authenticated;
+grant execute on function public.pinboard_sync_summaries(jsonb) to authenticated;
 
 -- An explicit list: adding a table column never changes what clients receive.
 -- Stable, not immutable: timestamps are rendered in the session time zone.

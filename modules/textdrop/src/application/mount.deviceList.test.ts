@@ -150,7 +150,7 @@ describe('TextDrop device list', () => {
     expect(document.activeElement).toBe(root.querySelector('.snippet-remove'));
     expect(cloud.createPage).not.toHaveBeenCalled();
     expect(cloud.joinPage).not.toHaveBeenCalled();
-    expect(cloud.loadPage).not.toHaveBeenCalled();
+    expect(cloud.pollPage).not.toHaveBeenCalled();
     expect(cloud.savePage).not.toHaveBeenCalled();
     await join(first.code);
     expect(element<HTMLTextAreaElement>('editor').value).toBe(first.text);

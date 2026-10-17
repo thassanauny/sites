@@ -10,6 +10,7 @@ const collaborator = randomUUID();
 const stranger = randomUUID();
 const schema = new URL('../supabase/schema.sql', import.meta.url);
 const update = new URL('../supabase/update-poll-and-grants.sql', import.meta.url);
+const receiptUpdate = new URL('../supabase/update-save-receipt.sql', import.meta.url);
 const guide = new URL('../supabase/README.md', import.meta.url);
 let database: PGlite;
 let siblingState: Record<string, unknown>[];
@@ -32,13 +33,15 @@ async function join(code: string | null): Promise<TextDropPage> {
 }
 
 async function load(id: string): Promise<TextDropPage> {
-  const result = await database.query<{ page: TextDropPage }>('select public.textdrop_load_page($1::uuid) as page', [id]);
+  const result = await database.query<{ page: TextDropPage }>('select public.textdrop_poll_page($1::uuid, null) as page', [id]);
   return result.rows[0]!.page;
 }
 
 async function save(id: string, text: string | null): Promise<TextDropPage> {
-  const result = await database.query<{ page: TextDropPage }>('select public.textdrop_save_page($1::uuid, $2) as page', [id, text]);
-  return result.rows[0]!.page;
+  const result = await database.query<{ receipt: Omit<TextDropPage, 'text'> }>('select public.textdrop_save_page_receipt($1::uuid, $2) as receipt', [id, text]);
+  const receipt = result.rows[0]!.receipt;
+  expect(Object.keys(receipt).sort()).toEqual(['code', 'id', 'updatedAt', 'version']);
+  return readPage({ ...receipt, text });
 }
 
 async function poll(id: string, known: number | null): Promise<Record<string, unknown>> {
@@ -108,10 +111,10 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
     const functions = await database.query<{ nspname: string; proname: string; prosecdef: boolean; proconfig: string[] }>(`
       select n.nspname, p.proname, p.prosecdef, p.proconfig
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where p.proname in ('textdrop_create_page','textdrop_join_page','textdrop_load_page','textdrop_save_page','textdrop_poll_page')
+      where p.proname in ('textdrop_create_page','textdrop_join_page','textdrop_load_page','textdrop_save_page','textdrop_poll_page','textdrop_save_page_receipt')
       order by n.nspname, p.proname
     `);
-    expect(functions.rows).toHaveLength(10);
+    expect(functions.rows).toHaveLength(11);
     for (const row of functions.rows) {
       expect(row.prosecdef).toBe(row.nspname === 'private');
       expect(row.proconfig).toEqual(['search_path=""']);
@@ -173,7 +176,6 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
     await expect(database.query('select * from public.textdrop_pages where id = $1', [page.id])).rejects.toThrow('permission denied');
     await expect(database.query('select * from public.textdrop_page_access where page_id = $1', [page.id])).rejects.toThrow('permission denied');
     await expect(poll(page.id, 1)).rejects.toThrow('TEXTDROP_ACCESS_DENIED');
-    await expect(load(page.id)).rejects.toThrow('TEXTDROP_ACCESS_DENIED');
     await expect(save(page.id, 'Stolen')).rejects.toThrow('TEXTDROP_ACCESS_DENIED');
     await expect(database.query('update public.textdrop_pages set content = $1 where id = $2', ['Stolen', page.id])).rejects.toThrow('permission denied');
     await expect(database.query('delete from public.textdrop_pages where id = $1', [page.id])).rejects.toThrow('permission denied');
@@ -393,6 +395,56 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
     await expect(database.exec(await readFile(schema, 'utf8'))).rejects.toThrow('already exists');
     await database.exec('rollback');
     expect((await database.query('select count(*) as count from public.textdrop_pages')).rows).toEqual(before);
+    expect(await siblings()).toEqual(siblingState);
+  });
+
+  it('saves through a compact receipt with identical literal text, versions and legacy reads', async () => {
+    await identity(creator);
+    const page = await create();
+    const text = '😀'.repeat(MAX_TEXT_BYTES / 4);
+    const response = await database.query<{ receipt: Omit<TextDropPage, 'text'> }>('select public.textdrop_save_page_receipt($1::uuid,$2) as receipt', [page.id, text]);
+    const receipt = response.rows[0]!.receipt;
+    expect(Object.keys(receipt).sort()).toEqual(['code', 'id', 'updatedAt', 'version']);
+    expect(receipt).toMatchObject({ id: page.id, code: page.code, version: 2 });
+    expect(readPage({ ...receipt, text })).toEqual(await load(page.id));
+    expect(Buffer.byteLength(JSON.stringify(receipt))).toBeLessThan(256);
+    expect(Buffer.byteLength(JSON.stringify(receipt))).toBeLessThan(Buffer.byteLength(JSON.stringify({ ...receipt, text })) / 1000);
+    const later = (await database.query<{ page: TextDropPage }>('select public.textdrop_save_page($1::uuid, $2) as page', [page.id, 'Legacy caller'])).rows[0]!.page;
+    expect(later.version).toBe(3);
+    expect((await database.query<{ page: TextDropPage }>('select public.textdrop_load_page($1::uuid) as page', [page.id])).rows[0]!.page).toEqual(later);
+    const cleared = (await database.query<{ receipt: Omit<TextDropPage, 'text'> }>('select public.textdrop_save_page_receipt($1::uuid,$2) as receipt', [page.id, ''])).rows[0]!.receipt;
+    expect(cleared.version).toBe(4);
+    expect(await load(page.id)).toEqual({ ...cleared, text: '' });
+  });
+
+  it('rolls back an earlier receipt save when a later statement fails', async () => {
+    await identity(creator);
+    const page = await create();
+    await database.exec('begin');
+    await save(page.id, 'Rolled back');
+    await expect(save(page.id, null)).rejects.toThrow('TEXTDROP_INVALID_TEXT');
+    await database.exec('rollback');
+    expect(await load(page.id)).toEqual(page);
+  });
+
+  it('adds and replays the receipt API without changing tables or the original save implementation', async () => {
+    await database.exec('reset role');
+    const original = (await database.query("select pg_get_functiondef('private.textdrop_save_page(uuid,text)'::regprocedure) as body")).rows;
+    const initial = (await database.query("select pg_get_functiondef('public.textdrop_save_page_receipt(uuid,text)'::regprocedure) as body")).rows;
+    const before = (await database.query('select id,code,version,updated_at from public.textdrop_pages order by id')).rows;
+    await database.exec('drop function public.textdrop_save_page_receipt(uuid,text)');
+    for (let run = 0; run < 2; run++) await database.exec(await readFile(receiptUpdate, 'utf8'));
+    expect((await database.query("select pg_get_functiondef('public.textdrop_save_page_receipt(uuid,text)'::regprocedure) as body")).rows).toEqual(initial);
+    expect((await database.query("select pg_get_functiondef('private.textdrop_save_page(uuid,text)'::regprocedure) as body")).rows).toEqual(original);
+    expect((await database.query('select id,code,version,updated_at from public.textdrop_pages order by id')).rows).toEqual(before);
+    expect(
+      (
+        await database.query(`select
+      has_function_privilege('anon','public.textdrop_save_page_receipt(uuid,text)','execute') as anonymous,
+      has_function_privilege('authenticated','public.textdrop_save_page_receipt(uuid,text)','execute') as signed_in,
+      has_table_privilege('authenticated','public.textdrop_pages','select,insert,update,delete') as direct`)
+      ).rows,
+    ).toEqual([{ anonymous: false, signed_in: true, direct: false }]);
     expect(await siblings()).toEqual(siblingState);
   });
 });

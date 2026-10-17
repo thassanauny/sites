@@ -4,19 +4,15 @@ import type { Board, Card } from '../../domain/boards/types';
 const mock = vi.hoisted(() => {
   const getSession = vi.fn();
   const signInAnonymously = vi.fn();
-  const range = vi.fn();
-  const order = vi.fn(() => ({ range }));
   const orderIds = vi.fn();
   const inIds = vi.fn(() => ({ order: orderIds }));
-  const select = vi.fn(() => ({ order, in: inIds }));
-  const from = vi.fn(() => ({ select }));
+  const select = vi.fn((_columns: string, _options?: { count?: string }) => ({ in: inIds }));
+  const from = vi.fn((_table: string) => ({ select }));
   const rpc = vi.fn();
   const client = { auth: { getSession, signInAnonymously }, from, rpc };
   return {
     getSession,
     signInAnonymously,
-    range,
-    order,
     orderIds,
     inIds,
     select,
@@ -69,8 +65,10 @@ beforeEach(() => {
     data: { session: { access_token: 'test-token' } },
     error: null,
   });
-  mock.range.mockResolvedValue({ data: [], error: null, count: 0 });
-  mock.rpc.mockResolvedValue({ data: board, error: null });
+  mock.rpc.mockImplementation(async (name: string) => ({
+    data: name === 'pinboard_sync_summaries' ? { format: 1, heads: [], boards: [] } : board,
+    error: null,
+  }));
 });
 
 afterEach(() => {
@@ -79,6 +77,58 @@ afterEach(() => {
 });
 
 describe('online board sharing', () => {
+  it('loads a compact collection in one request and fetches one board only when requested', async () => {
+    const { summarizeBoard } = await import('../../domain/boards/summary');
+    const summary = summarizeBoard(board);
+    mock.rpc.mockResolvedValueOnce({
+      data: { format: 1, heads: [{ id: board.id, revision: board.revision }], boards: [summary] },
+      error: null,
+    });
+    mock.rpc.mockResolvedValueOnce({
+      data: { format: 1, heads: [{ id: board.id, revision: board.revision }], boards: [] },
+      error: null,
+    });
+    mock.orderIds.mockResolvedValueOnce({ data: [board], error: null });
+    const cloud = await import('./boards');
+    expect(await cloud.loadBoardList()).toEqual([summary]);
+    expect(mock.rpc).toHaveBeenCalledExactlyOnceWith('pinboard_sync_summaries', { p_known: {} });
+    expect(mock.from).not.toHaveBeenCalled();
+    expect((await cloud.loadBoardList([summary]))[0]).toBe(summary);
+    expect(mock.rpc).toHaveBeenLastCalledWith('pinboard_sync_summaries', {
+      p_known: { [board.id]: board.revision },
+    });
+    expect(mock.orderIds).not.toHaveBeenCalled();
+    expect(await cloud.loadBoard(board.id)).toEqual(board);
+    expect(mock.inIds).toHaveBeenCalledExactlyOnceWith('id', [board.id]);
+  });
+
+  it.each(['PGRST202', '42883'])(
+    'reports missing summary setup without full-board reads (%s)',
+    async (code) => {
+      mock.rpc.mockResolvedValueOnce({
+        data: null,
+        error: { code, message: 'function not found' },
+      });
+      const cloud = await import('./boards');
+      await expect(cloud.loadBoardList()).rejects.toThrow('database setup');
+      expect(mock.rpc).toHaveBeenCalledExactlyOnceWith('pinboard_sync_summaries', { p_known: {} });
+      expect(mock.from).not.toHaveBeenCalled();
+    },
+  );
+  it('rejects missing summary revisions and access errors without falling back to larger reads', async () => {
+    mock.rpc.mockResolvedValueOnce({
+      data: { format: 1, heads: [{ id: board.id, revision: 2 }], boards: [] },
+      error: null,
+    });
+    mock.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '42501', message: 'permission denied' },
+    });
+    const cloud = await import('./boards');
+    await expect(cloud.loadBoardList()).rejects.toThrow('list changed');
+    await expect(cloud.loadBoardList()).rejects.toThrow('permission denied');
+    expect(mock.from).not.toHaveBeenCalled();
+  });
   it('reports absent configuration without starting a session', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', '');
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', '');
@@ -122,7 +172,7 @@ describe('online board sharing', () => {
       data: { session: null },
       error: null,
     });
-    await cloud.loadBoards();
+    await cloud.loadBoardList();
     expect(mock.getSession).toHaveBeenCalledTimes(2);
     expect(mock.signInAnonymously).toHaveBeenCalledTimes(1);
   });
@@ -154,11 +204,11 @@ describe('online board sharing', () => {
       return { data: { session: null }, error: null };
     });
     const cloud = await import('./boards');
-    await expect(cloud.loadBoards()).rejects.toThrow('offline');
+    await expect(cloud.loadBoardList()).rejects.toThrow('offline');
     expect(mock.signInAnonymously).not.toHaveBeenCalled();
     expect(mock.from).not.toHaveBeenCalled();
     vi.stubGlobal('navigator', { onLine: true });
-    await expect(cloud.loadBoards()).resolves.toEqual([]);
+    await expect(cloud.loadBoardList()).resolves.toEqual([]);
   });
 
   it('retries an unsuccessful anonymous sign-in instead of retaining a failed initialization', async () => {
@@ -211,7 +261,7 @@ describe('online board sharing', () => {
       };
     });
     const cloud = await import('./boards');
-    await expect(cloud.loadBoards()).resolves.toEqual([]);
+    await expect(cloud.loadBoardList()).resolves.toEqual([]);
     expect(storage.setItem.mock.calls).toEqual([['pinboard-auth', session]]);
     expect(mock.signInAnonymously).not.toHaveBeenCalled();
   });
@@ -281,8 +331,8 @@ describe('online board sharing', () => {
     };
     vi.stubGlobal('window', { localStorage: storage });
     const cloud = await import('./boards');
-    await expect(cloud.loadBoards()).rejects.toThrow('original credentials are preserved');
-    await expect(cloud.loadBoards()).rejects.toThrow('original credentials are preserved');
+    await expect(cloud.loadBoardList()).rejects.toThrow('original credentials are preserved');
+    await expect(cloud.loadBoardList()).rejects.toThrow('original credentials are preserved');
     expect(storage.getItem).toHaveBeenCalledTimes(2);
     expect(values.get('pinboard-auth')).toBe(raw);
     expect(mock.createClient).not.toHaveBeenCalled();
@@ -293,7 +343,7 @@ describe('online board sharing', () => {
   it('refuses offline reads and writes without creating a queue or contacting Supabase', async () => {
     vi.stubGlobal('navigator', { onLine: false });
     const cloud = await import('./boards');
-    await expect(cloud.loadBoards()).rejects.toThrow('offline');
+    await expect(cloud.loadBoardList()).rejects.toThrow('offline');
     await expect(cloud.createBoard(board.id, board.title, '')).rejects.toThrow('offline');
     await expect(cloud.joinBoard(board.invite_code)).rejects.toThrow('offline');
     await expect(cloud.mutateBoard(board.id, { type: 'delete_card', id: card.id })).rejects.toThrow(
@@ -318,80 +368,20 @@ describe('online board sharing', () => {
     expect(mock.rpc).not.toHaveBeenCalled();
   });
 
-  it('falls back only for the missing field-settings column on an older database', async () => {
-    mock.range.mockResolvedValueOnce({
-      data: null,
-      error: { code: '42703', message: 'column pinboard_boards.card_fields does not exist' },
-      count: null,
-    });
-    mock.range.mockResolvedValueOnce({ data: [board], error: null, count: 1 });
-    const cloud = await import('./boards');
-    await expect(cloud.loadBoards()).resolves.toEqual([board]);
-    expect(mock.select).toHaveBeenNthCalledWith(
-      1,
-      'id,invite_code,title,description,columns,cards,revision,created_at,updated_at,card_fields',
-      { count: 'exact' },
-    );
-    expect(mock.select).toHaveBeenNthCalledWith(
-      2,
-      'id,invite_code,title,description,columns,cards,revision,created_at,updated_at',
-      { count: 'exact' },
-    );
-    mock.range.mockResolvedValueOnce({
-      data: null,
-      error: { code: '42501', message: 'permission denied' },
-      count: null,
-    });
-    await expect(cloud.loadBoards()).rejects.toThrow('permission denied');
-    expect(mock.range).toHaveBeenCalledTimes(3);
-  });
-
-  it('falls back for changed-board reads without losing the held board list', async () => {
-    mock.range.mockResolvedValueOnce({
-      data: [{ id: board.id, revision: 2 }],
-      error: null,
-      count: 1,
-    });
+  it('reports missing current board columns without retrying an obsolete selection', async () => {
     mock.orderIds.mockResolvedValueOnce({
       data: null,
-      error: { code: '42703', message: 'card_fields does not exist' },
-    });
-    mock.orderIds.mockResolvedValueOnce({ data: [{ ...board, revision: 2 }], error: null });
-    const cloud = await import('./boards');
-    await expect(cloud.loadBoards([board])).resolves.toEqual([{ ...board, revision: 2 }]);
-    expect(mock.orderIds).toHaveBeenCalledTimes(2);
-  });
-
-  it('explains the required schema update when an older database rejects field settings', async () => {
-    mock.rpc.mockResolvedValueOnce({
-      data: null,
-      error: { code: '22023', message: 'PINBOARD_INVALID_OPERATION' },
+      error: { code: '42703', message: 'column card_fields does not exist' },
     });
     const cloud = await import('./boards');
-    await expect(
-      cloud.mutateBoard(board.id, {
-        type: 'update_board',
-        patch: { card_fields: { hidden: ['assignee'], custom: [] } },
-      }),
-    ).rejects.toThrow('database update');
+    await expect(cloud.loadBoard(board.id)).rejects.toThrow('database setup');
+    expect(mock.orderIds).toHaveBeenCalledTimes(1);
+    expect(mock.select).toHaveBeenCalledExactlyOnceWith(
+      'id,invite_code,title,description,columns,cards,revision,created_at,updated_at,card_fields',
+    );
   });
 
-  it('explains the required schema update when an older database rejects archive flags', async () => {
-    mock.rpc.mockResolvedValueOnce({
-      data: null,
-      error: { code: '22023', message: 'PINBOARD_INVALID_OPERATION' },
-    });
-    const cloud = await import('./boards');
-    await expect(
-      cloud.mutateBoard(board.id, {
-        type: 'update_card',
-        id: '11111111-1111-4111-8111-111111111111',
-        patch: { archived: true },
-      }),
-    ).rejects.toThrow('Archiving needs a database update');
-  });
-
-  it('explains assignee setup and rejects a removed assignment with a useful message', async () => {
+  it('reports invalid operations and removed assignments with useful messages', async () => {
     const cloud = await import('./boards');
     mock.rpc.mockResolvedValueOnce({
       data: null,
@@ -399,7 +389,7 @@ describe('online board sharing', () => {
     });
     await expect(
       cloud.mutateBoard(board.id, { type: 'add_assignee', name: 'Sam' }),
-    ).rejects.toThrow('Assignee settings need a database update');
+    ).rejects.toThrow('invalid data');
     mock.rpc.mockResolvedValueOnce({
       data: null,
       error: { code: 'P0001', message: 'PINBOARD_ASSIGNEE_NOT_FOUND' },
@@ -413,173 +403,50 @@ describe('online board sharing', () => {
     ).rejects.toThrow('Choose another name or Unassigned');
   });
 
-  it('loads every joined board through RLS with stable pagination even under a smaller API cap', async () => {
-    const boards = [
-      board,
-      { ...board, id: '33333333-3333-4333-8333-333333333333' },
-      { ...board, id: '44444444-4444-4444-8444-444444444444' },
-    ];
-    mock.range.mockResolvedValueOnce({
-      data: boards.slice(0, 2),
-      error: null,
-      count: 3,
-    });
-    mock.range.mockResolvedValueOnce({
-      data: boards.slice(2),
-      error: null,
-      count: 3,
-    });
+  it('rejects missing, repeated or unrequested detail rows instead of opening another board', async () => {
     const cloud = await import('./boards');
-    await expect(cloud.loadBoards()).resolves.toEqual(boards);
-    expect(mock.from).toHaveBeenCalledWith('pinboard_boards');
-    expect(mock.select).toHaveBeenCalledWith(
-      'id,invite_code,title,description,columns,cards,revision,created_at,updated_at,card_fields',
-      { count: 'exact' },
-    );
-    expect(mock.order).toHaveBeenCalledWith('id', { ascending: true });
-    expect(mock.range.mock.calls).toEqual([
-      [0, 99],
-      [2, 101],
-    ]);
+    for (const data of [
+      null,
+      [],
+      [board, board],
+      [{ ...board, id: '33333333-3333-4333-8333-333333333333' }],
+    ]) {
+      mock.orderIds.mockResolvedValueOnce({ data, error: null });
+      await expect(cloud.loadBoard(board.id)).rejects.toThrow('board list changed while loading');
+    }
+    mock.orderIds.mockResolvedValueOnce({
+      data: [{ ...board, cards: [{ ...card, dueDate: '2026-02-30' }] }],
+      error: null,
+    });
+    await expect(cloud.loadBoard(board.id)).rejects.toThrow('invalid board data');
+    mock.orderIds.mockResolvedValueOnce({ data: null, error: { message: 'Failed to fetch' } });
+    await expect(cloud.loadBoard(board.id)).rejects.toThrow('Check your connection');
   });
 
-  describe('polling for changes', () => {
-    const second = {
-      ...board,
-      id: '33333333-3333-4333-8333-333333333333',
-      invite_code: 'b'.repeat(32),
-      revision: 5,
-    };
-    const third = {
-      ...board,
-      id: '44444444-4444-4444-8444-444444444444',
-      invite_code: 'c'.repeat(32),
-    };
-    const heads = (...items: { id: string; revision: number }[]) => ({
-      data: items,
-      error: null,
-      count: items.length,
-    });
-
-    it('reads only IDs and revisions of held boards and downloads the boards that changed or are new', async () => {
-      mock.range.mockResolvedValueOnce(heads(board, second, third));
-      mock.orderIds.mockResolvedValueOnce({
-        data: [second, third],
-        error: null,
-      });
-      const cloud = await import('./boards');
-      const held = [board, { ...second, revision: 4 }];
-      const result = await cloud.loadBoards(held);
-      expect(mock.select.mock.calls).toEqual([
-        ['id,revision', { count: 'exact' }],
-        [
-          'id,invite_code,title,description,columns,cards,revision,created_at,updated_at,card_fields',
+  it('requires complete and unique summary heads and valid revisions', async () => {
+    const cloud = await import('./boards');
+    const { summarizeBoard } = await import('../../domain/boards/summary');
+    const summary = summarizeBoard(board);
+    for (const data of [
+      null,
+      { format: 1, heads: [], boards: null },
+      { format: 1, heads: [{ id: board.id, revision: 0 }], boards: [summary] },
+      { format: 1, heads: [{ id: 'bad', revision: 1 }], boards: [summary] },
+      {
+        format: 1,
+        heads: [
+          { id: board.id, revision: 1 },
+          { id: board.id, revision: 1 },
         ],
-      ]);
-      expect(mock.inIds).toHaveBeenCalledWith('id', [second.id, third.id]);
-      expect(mock.orderIds).toHaveBeenCalledWith('id', { ascending: true });
-      expect(result).toEqual([board, second, third]);
-      expect(result[0]).toBe(board);
-    });
-
-    it('downloads nothing and keeps the held boards when no revision changed', async () => {
-      mock.range.mockResolvedValueOnce(heads(board, second));
-      const cloud = await import('./boards');
-      const held = [second, board];
-      const result = await cloud.loadBoards(held);
-      expect(mock.select).toHaveBeenCalledTimes(1);
-      expect(mock.inIds).not.toHaveBeenCalled();
-      expect(result).toHaveLength(2);
-      expect(result[0]).toBe(board);
-      expect(result[1]).toBe(second);
-    });
-
-    it('drops held boards the server no longer lists and still loads everything when nothing is held', async () => {
-      mock.range.mockResolvedValueOnce(heads(board));
-      const cloud = await import('./boards');
-      await expect(cloud.loadBoards([board, second])).resolves.toEqual([board]);
-      mock.range.mockResolvedValueOnce({
-        data: [board, second],
-        error: null,
-        count: 2,
-      });
-      await expect(cloud.loadBoards([])).resolves.toEqual([board, second]);
-      expect(mock.select).toHaveBeenLastCalledWith(
-        'id,invite_code,title,description,columns,cards,revision,created_at,updated_at,card_fields',
-        { count: 'exact' },
-      );
-    });
-
-    it('pages the revision list like the full list', async () => {
-      const many = Array.from({ length: 101 }, (_, index) => ({
-        id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
-        revision: 1,
-      }));
-      mock.range.mockResolvedValueOnce({
-        data: many.slice(0, 100),
-        error: null,
-        count: 101,
-      });
-      mock.range.mockResolvedValueOnce({
-        data: many.slice(100),
-        error: null,
-        count: 101,
-      });
-      const cloud = await import('./boards');
-      const held = many.map((head) => ({ ...board, id: head.id }));
-      const result = await cloud.loadBoards(held);
-      expect(mock.range.mock.calls).toEqual([
-        [0, 99],
-        [100, 199],
-      ]);
-      expect(result).toHaveLength(101);
-      expect(mock.inIds).not.toHaveBeenCalled();
-    });
-
-    it('asks again for boards a capped response left out, and fails when a board cannot be downloaded', async () => {
-      mock.range.mockResolvedValue(heads(second, third));
-      mock.orderIds.mockResolvedValueOnce({ data: [second], error: null });
-      mock.orderIds.mockResolvedValueOnce({ data: [third], error: null });
-      const cloud = await import('./boards');
-      await expect(cloud.loadBoards([board])).resolves.toEqual([second, third]);
-      expect(mock.inIds.mock.calls).toEqual([
-        ['id', [second.id, third.id]],
-        ['id', [third.id]],
-      ]);
-      mock.inIds.mockClear();
-      mock.orderIds.mockResolvedValueOnce({ data: [second], error: null });
-      mock.orderIds.mockResolvedValueOnce({ data: [], error: null });
-      await expect(cloud.loadBoards([board])).rejects.toThrow('board list changed while loading');
-    });
-
-    it('rejects downloads that return an unrequested or repeated board, invalid data or a service failure', async () => {
-      mock.range.mockResolvedValue(heads(second));
-      const cloud = await import('./boards');
-      mock.orderIds.mockResolvedValueOnce({ data: [third], error: null });
-      await expect(cloud.loadBoards([board])).rejects.toThrow('board list changed while loading');
-      mock.orderIds.mockResolvedValueOnce({
-        data: [{ ...second, cards: [{ ...card, dueDate: '2026-02-30' }] }],
-        error: null,
-      });
-      await expect(cloud.loadBoards([board])).rejects.toThrow('invalid board data');
-      mock.orderIds.mockResolvedValueOnce({
-        data: null,
-        error: { message: 'Failed to fetch' },
-      });
-      await expect(cloud.loadBoards([board])).rejects.toThrow('Check your connection');
-      mock.range.mockResolvedValueOnce({
-        data: [{ id: 'not-an-id', revision: 1 }],
-        error: null,
-        count: 1,
-      });
-      await expect(cloud.loadBoards([board])).rejects.toThrow('invalid board data');
-      mock.range.mockResolvedValueOnce({
-        data: [{ id: second.id, revision: 0 }],
-        error: null,
-        count: 1,
-      });
-      await expect(cloud.loadBoards([board])).rejects.toThrow('invalid board data');
-    });
+        boards: [summary],
+      },
+      { format: 1, heads: [], boards: [summary] },
+      { format: 1, heads: [{ id: board.id, revision: 1 }], boards: [summary, summary] },
+    ]) {
+      mock.rpc.mockResolvedValueOnce({ data, error: null });
+      await expect(cloud.loadBoardList()).rejects.toThrow();
+    }
+    expect(mock.from).not.toHaveBeenCalled();
   });
 
   it('ignores fields a newer server adds to a board result', async () => {
@@ -662,12 +529,12 @@ describe('online board sharing', () => {
 
     it('explains a timed-out request in plain words', async () => {
       const cloud = await import('./boards');
-      mock.range.mockResolvedValueOnce({
+      mock.rpc.mockResolvedValueOnce({
         data: null,
         count: null,
         error: { message: 'TimeoutError: The request took too long.' },
       });
-      await expect(cloud.loadBoards()).rejects.toThrow(
+      await expect(cloud.loadBoardList()).rejects.toThrow(
         'The request took too long. Check your connection',
       );
       mock.rpc.mockResolvedValueOnce({
@@ -681,39 +548,6 @@ describe('online board sharing', () => {
         cloud.mutateBoard(board.id, { type: 'delete_card', id: card.id }),
       ).rejects.toThrow('The request took too long.');
     });
-  });
-
-  it('fails the whole refresh when a later page fails instead of returning partial data', async () => {
-    mock.range.mockResolvedValueOnce({ data: [board], error: null, count: 2 });
-    mock.range.mockResolvedValueOnce({
-      data: null,
-      error: { message: 'Failed to fetch' },
-      count: null,
-    });
-    const cloud = await import('./boards');
-    await expect(cloud.loadBoards()).rejects.toThrow('Check your connection');
-  });
-
-  it('rejects a shifted page rather than returning a duplicate or incomplete board list', async () => {
-    mock.range.mockResolvedValueOnce({ data: [board], error: null, count: 2 });
-    mock.range.mockResolvedValueOnce({ data: [board], error: null, count: 2 });
-    const cloud = await import('./boards');
-    await expect(cloud.loadBoards()).rejects.toThrow('board list changed while loading');
-    await expect(cloud.loadBoards()).resolves.toEqual([]);
-  });
-
-  it('rejects invalid page counts and received board data', async () => {
-    const cloud = await import('./boards');
-    mock.range.mockResolvedValueOnce({ data: [board], error: null, count: 0 });
-    await expect(cloud.loadBoards()).rejects.toThrow('invalid board list');
-    mock.range.mockResolvedValueOnce({
-      data: [{ ...board, cards: [{ ...card, dueDate: '2026-02-30' }] }],
-      error: null,
-      count: 1,
-    });
-    await expect(cloud.loadBoards()).rejects.toThrow('invalid board data');
-    mock.range.mockResolvedValueOnce({ data: [], error: null, count: 2 });
-    await expect(cloud.loadBoards()).rejects.toThrow('invalid board list');
   });
 
   it('uses the server-generated invitation and reuses the stable ID after a lost create response', async () => {
@@ -845,7 +679,7 @@ describe('online board sharing', () => {
 
   it('explains missing schema, disabled anonymous auth, and removed-card errors honestly', async () => {
     const cloud = await import('./boards');
-    mock.range.mockResolvedValueOnce({
+    mock.rpc.mockResolvedValueOnce({
       data: null,
       count: null,
       error: {
@@ -853,9 +687,7 @@ describe('online board sharing', () => {
         message: 'Could not find the table public.pinboard_boards in the schema cache',
       },
     });
-    await expect(cloud.loadBoards()).rejects.toThrow(
-      'everydayapps/apps/pinboard/supabase/README.md',
-    );
+    await expect(cloud.loadBoardList()).rejects.toThrow('apps/pinboard/supabase/README.md');
     mock.rpc.mockResolvedValueOnce({
       data: null,
       error: { code: 'PGRST202', message: 'missing function' },

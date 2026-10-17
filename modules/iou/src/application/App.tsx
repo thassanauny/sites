@@ -279,6 +279,16 @@ export default function App() {
 
   return (
     <div className={`app-shell ${group ? 'in-group' : ''}`}>
+      <button
+        type="button"
+        className="skip-link"
+        onClick={event => {
+          event.preventDefault()
+          document.getElementById('main-content')?.focus()
+        }}
+      >
+        Skip to content
+      </button>
       <header className="site-header">
         <div className="header-inner">
           <button type="button" className="brand" onClick={() => navigate()} aria-label="iou home">
@@ -318,7 +328,7 @@ export default function App() {
           </div>
         </div>
       </header>
-      <main className={`main-container${page.groups ? ' groups-page' : ''}`}>
+      <main id="main-content" tabIndex={-1} className={`main-container${page.groups ? ' groups-page' : ''}`}>
         {notice && (
           <div className="notice warning" role="alert">
             <span>{notice}</span>

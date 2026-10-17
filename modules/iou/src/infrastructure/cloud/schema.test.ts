@@ -174,4 +174,62 @@ describe('iou initial schema executed in embedded PostgreSQL', () => {
     expect(await stored(record.payload.id)).toEqual(record)
     expect((await save(record, { name: 'Still usable' })).version).toBe(2)
   })
+
+  it('returns only a caller’s joined revisions with no ledger or invitation data', async () => {
+    const heads = async () => (await database.query<{ result: { format: number; heads: { id: string; version: number }[] } }>('select public.iou_group_heads() as result')).rows[0]!.result
+    await identity(creator)
+    const record = await create()
+    const updated = await save(record, { name: 'New revision' })
+    const result = await heads()
+    expect(result.format).toBe(1)
+    expect(result.heads).toContainEqual({ id: record.payload.id, version: updated.version })
+    expect(result.heads.every(row => Object.keys(row).sort().join() === 'id,version')).toBe(true)
+    await identity(stranger)
+    expect(await heads()).toEqual({ format: 1, heads: [] })
+    await database.query('select public.iou_join_group($1)', [record.payload.inviteCode])
+    expect(await heads()).toEqual({ format: 1, heads: [{ id: record.payload.id, version: updated.version }] })
+    await identity(null)
+    await expect(heads()).rejects.toMatchObject({ code: '42501', message: 'IOU_AUTH_REQUIRED' })
+    await identity(null, 'anon')
+    await expect(heads()).rejects.toMatchObject({ code: '42501' })
+  })
+
+  it('upgrades and replays without changing records, grants or the initial read implementation', async () => {
+    await database.exec('reset role')
+    const definition = (await database.query("select pg_get_functiondef('private.iou_group_heads()'::regprocedure) as body")).rows
+    const before = (await database.query('select * from public.iou_groups order by id')).rows
+    await database.exec('drop function public.iou_group_heads(); drop function private.iou_group_heads();')
+    const update = await readFile(new URL('../../../supabase/update-group-heads.sql', import.meta.url), 'utf8')
+    await database.exec(update)
+    await database.exec(update)
+    expect((await database.query("select pg_get_functiondef('private.iou_group_heads()'::regprocedure) as body")).rows).toEqual(definition)
+    expect((await database.query('select * from public.iou_groups order by id')).rows).toEqual(before)
+    expect(
+      (
+        await database.query(`select
+      has_function_privilege('anon','public.iou_group_heads()','execute') as anonymous,
+      has_function_privilege('anon','private.iou_group_heads()','execute') as private_anonymous,
+      has_function_privilege('authenticated','public.iou_group_heads()','execute') as signed_in,
+      has_table_privilege('authenticated','public.iou_groups','insert,update,delete') as writes`)
+      ).rows,
+    ).toEqual([{ anonymous: false, private_anonymous: false, signed_in: true, writes: false }])
+  })
+
+  it('returns more than a normal API row cap in one scalar response', async () => {
+    const reader = randomUUID()
+    await database.exec('reset role')
+    await database.query('insert into auth.users(id) values ($1)', [reader])
+    await database.query(
+      `insert into public.iou_groups(id,invite_code,payload)
+      select 'bulk-' || n, md5('bulk-' || n), $1::jsonb || jsonb_build_object('id','bulk-' || n,'inviteCode',md5('bulk-' || n))
+      from generate_series(1,1100) n`,
+      [JSON.stringify(group())],
+    )
+    await database.query("insert into public.iou_group_access(group_id,user_id) select id,$1::uuid from public.iou_groups where id like 'bulk-%'", [reader])
+    await identity(reader)
+    const reply = await database.query<{ result: { format: number; heads: { id: string; version: number }[] } }>('select public.iou_group_heads() as result')
+    expect(reply.rows).toHaveLength(1)
+    expect(reply.rows[0]!.result.heads).toHaveLength(1100)
+    expect(reply.rows[0]!.result.heads.every(({ version }) => version === 1)).toBe(true)
+  })
 })

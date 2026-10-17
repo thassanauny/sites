@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SHARED_APPS } from './catalog.mjs';
 
-const names = new Set(['textdrop', 'pinboard']);
+const names = new Set(SHARED_APPS.map(app => app.id));
 const digest = value => createHash('sha256').update(value).digest('hex');
 const digestPattern = /^[a-f0-9]{64}$/;
 
@@ -95,7 +96,7 @@ export function checkSharedBuild(directory, app) {
 const file = fileURLToPath(import.meta.url);
 if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[1]) === file) {
   try {
-    if (!process.argv[2] || !process.argv[3]) throw new Error('Pass the built directory and textdrop or pinboard.');
+    if (!process.argv[2] || !process.argv[3]) throw new Error('Pass the built directory and app name.');
     checkSharedBuild(resolve(process.argv[2]), process.argv[3]);
     console.log(process.argv[3] + ' public configuration and script checksums verified.');
   } catch (error) { console.error(error.message); process.exitCode = 1; }

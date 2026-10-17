@@ -2,7 +2,7 @@ import { act, createElement, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, vi } from 'vitest';
 import App from './App';
-import { cloud } from './cloudMock';
+import { cloud, resetCloudDocuments, type BoardSnapshot } from './cloudMock';
 import type { Board, Card } from '../domain/boards/types';
 import { DeviceBoards, DEVICE_BOARDS_PREFIX } from '../infrastructure/storage/deviceBoards';
 
@@ -87,13 +87,13 @@ export async function select(name: string, value: string) {
   });
 }
 export async function mount(
-  boards: Board[] = [board],
+  boards: BoardSnapshot[] = [board],
   code = board.invite_code,
   strict = false,
   hash?: string,
 ) {
   window.history.replaceState(null, '', hash ? `/${hash}` : code ? `/#board/${code}` : '/');
-  cloud.loadBoards.mockResolvedValue(boards);
+  cloud.loadBoardList.mockResolvedValue(boards);
   root = createRoot(document.body.appendChild(document.createElement('div')));
   await act(async () => {
     root!.render(strict ? createElement(StrictMode, null, createElement(App)) : createElement(App));
@@ -225,6 +225,7 @@ export function installHarness() {
     window.localStorage.clear();
     vi.useFakeTimers();
     vi.resetAllMocks();
+    resetCloudDocuments();
     cloud.configured = true;
     cloud.joinBoard.mockRejectedValue(new Error('Invitation unavailable'));
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });

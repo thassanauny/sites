@@ -1,0 +1,104 @@
+/* Home and dialogs use IOU's visual language; canvas density stays task-specific. */
+:root {
+  --canvas: var(--ea-paper);
+}
+.topbar {
+  background: var(--ea-paper);
+}
+.brand {
+  font-size: 33px;
+  letter-spacing: -1.8px;
+}
+.brand-mark {
+  background: var(--ea-jade);
+}
+.board-home {
+  background: var(--ea-paper);
+}
+.home-content {
+  max-width: 1160px;
+}
+.home-intro h1 {
+  font-family: var(--ea-font-heading);
+  font-weight: 400;
+  font-size: clamp(30px, 4vw, 42px);
+  letter-spacing: -0.7px;
+  line-height: 1.15;
+}
+.home-intro > div > p:last-child {
+  color: var(--ea-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.board-card,
+.template-card {
+  background: var(--ea-surface);
+  border-color: var(--ea-line);
+  border-radius: 20px;
+}
+.board-card-description,
+.board-card-meta,
+.home-footnote {
+  color: var(--ea-muted);
+}
+.home-tool-actions > .button {
+  min-height: 48px;
+}
+.home-search {
+  min-height: 48px;
+  border-radius: 12px;
+  background: var(--ea-surface);
+  border-color: var(--ea-line);
+}
+.sidebar,
+.inspector {
+  background: var(--ea-surface);
+}
+.canvas-area {
+  background: var(--ea-paper);
+}
+.modal {
+  border-radius: 20px;
+  background: var(--ea-surface);
+}
+.modal-header h2 {
+  font-family: var(--ea-font-heading);
+  font-size: 27px;
+  font-weight: 400;
+}
+.save-status {
+  color: var(--ea-muted);
+}
+.canvas-toolbar button,
+.zoom-controls button {
+  min-width: 36px;
+  min-height: 36px;
+}
+#main-content:focus {
+  outline: none;
+}
+@media (max-width: 660px) {
+  .home-content {
+    padding: 26px 20px;
+  }
+  .brand {
+    font-size: 30px;
+  }
+  .home-intro h1 {
+    font-size: 30px;
+  }
+  .home-tool-actions {
+    flex-wrap: wrap;
+  }
+}
+
+.topbar {
+  height: 76px;
+  min-height: 76px;
+}
+@media (max-width: 660px) {
+  .topbar {
+    height: 68px;
+    min-height: 68px;
+  }
+}

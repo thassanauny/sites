@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Board, Card, CardDropTarget, Column, Operation } from '../domain/boards/types';
-import { activeCards, nextPosition, placeCard, sortedCards } from '../domain/boards/board';
+import { nextPosition, placeCard, sortedCards } from '../domain/boards/board';
 import {
   cloudConfigured,
   createBoard,
@@ -54,16 +54,32 @@ export function useWorkspace() {
     retryLink,
     leaveRemovedBoard,
   } = useRouteModal();
-  const { boards, setBoards, loaded, refreshing, offline, lastSync, setLastSync, refresh, upsert } =
-    useBoardSync({
-      deviceBoards,
-      syncRemovals,
-      onError: setSyncError,
-      onSynced: clearSyncError,
-      onNotice: setNotice,
-      onReconnect: retryLink,
-    });
+  const {
+    boards,
+    summaries,
+    loadingBoard,
+    detailError,
+    setDetailError,
+    setBoards,
+    loaded,
+    refreshing,
+    offline,
+    lastSync,
+    setLastSync,
+    refresh,
+    upsert,
+  } = useBoardSync({
+    selectedCode,
+    deviceBoards,
+    syncRemovals,
+    onError: setSyncError,
+    onSynced: clearSyncError,
+    onNotice: setNotice,
+    onReconnect: retryLink,
+  });
   const visibleBoards = boards.filter((item) => !removedCodes.has(item.invite_code));
+  const visibleSummaries = summaries.filter((item) => !removedCodes.has(item.invite_code));
+  const knownSelected = visibleSummaries.some((item) => item.invite_code === selectedCode);
   const board = visibleBoards.find((item) => item.invite_code === selectedCode);
   useEffect(() => {
     const storage = (event: StorageEvent) => {
@@ -99,6 +115,7 @@ export function useWorkspace() {
       !removalsReady ||
       !selectedCode ||
       board ||
+      knownSelected ||
       offline ||
       failedLink.current === selectedCode
     )
@@ -129,6 +146,7 @@ export function useWorkspace() {
   }, [
     selectedCode,
     board,
+    knownSelected,
     loaded,
     removalsReady,
     offline,
@@ -358,9 +376,12 @@ export function useWorkspace() {
     [dropCard],
   );
   const refreshNow = useCallback(() => void refresh(true), [refresh]);
-  const dismissError = useCallback(() => setError(''), [setError]);
-  const boardList = [...visibleBoards].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  const workspaceCardCount = boardList.reduce((total, item) => total + activeCards(item).length, 0);
+  const dismissError = useCallback(() => {
+    setError('');
+    setDetailError('');
+  }, [setError, setDetailError]);
+  const boardList = [...visibleSummaries].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  const workspaceCardCount = boardList.reduce((total, item) => total + item.active_card_count, 0);
   // The open dialog edits a snapshot; these follow the live board and this device's removals.
   const modalBoard =
     modal && 'board' in modal ? boards.find((item) => item.id === modal.board.id) : undefined;
@@ -369,7 +390,10 @@ export function useWorkspace() {
   return {
     board,
     boardList,
-    visibleCount: visibleBoards.length,
+    loadingBoard:
+      loadingBoard ||
+      (!board && visibleSummaries.some((item) => item.invite_code === selectedCode)),
+    visibleCount: visibleSummaries.length,
     workspaceCardCount,
     selectedCode,
     loaded,
@@ -377,7 +401,7 @@ export function useWorkspace() {
     refreshing,
     busy,
     offline,
-    error,
+    error: error || detailError,
     notice,
     lastSync,
     navigations,

@@ -1,0 +1,10 @@
+/* App-specific layout, using the IOU visual foundation. */
+.site-header {
+  background: var(--ea-paper);
+}
+.group-card {
+  background: var(--ea-surface);
+}
+#main-content:focus {
+  outline: none;
+}

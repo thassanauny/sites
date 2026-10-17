@@ -17,7 +17,7 @@ export function useRouteModal() {
   const [navigations, setNavigations] = useState(0);
   const failedLink = useRef('');
   const navigationVersion = useRef(0);
-  const navigate = useCallback((incoming?: Board) => {
+  const navigate = useCallback((incoming?: Pick<Board, 'invite_code'>) => {
     navigationVersion.current += 1;
     failedLink.current = '';
     window.location.hash = incoming ? `board/${incoming.invite_code}` : '';
