@@ -133,12 +133,12 @@ test("simultaneous tabs share one fresh anonymous device identity", async ({
   expect(firstCloud.sessionCreates + secondCloud.sessionCreates).toBe(1);
 });
 
-test("legacy invitation links ask for Join first and allow editing without a separate credential", async ({
+test("unlisted board invitations ask for Join before editing", async ({
   page,
 }) => {
   const cloud = await mockCloud(page, false);
   await signIn(page);
-  await page.goto("./#/join/" + invite);
+  await page.goto("./#/board/" + invite);
   await expect(page.getByLabel("Invitation code or link")).toHaveValue(invite);
   expect(cloud.joins).toBe(0);
   await page.getByRole("dialog").getByRole("button", { name: "Join board", exact: true }).click();
@@ -176,7 +176,7 @@ test("removal stays hidden on the homepage and a confirmed rejoin restores it to
 }) => {
   const cloud = await mockCloud(page);
   await signIn(page);
-  await page.goto("./#/boards");
+  await page.goto("./#/");
   await expect(page.locator(".board-card")).toHaveCount(1);
   await page.getByRole("button", { name: "Open Saved production system", exact: true }).click();
   await page.getByRole("button", { name: "Board settings", exact: true }).click();
@@ -226,7 +226,7 @@ test("removing in another tab preserves the open draft and hides the board on bo
   await draft.fill("An unsaved design decision");
   const other = await page.context().newPage();
   await mockCloud(other, true, cloud.rows[0].id);
-  await other.goto("http://127.0.0.1:5194/#/boards");
+  await other.goto("http://127.0.0.1:5194/#/");
   await other.getByRole("button", { name: "Open Saved production system", exact: true }).click();
   await other.getByRole("button", { name: "Board settings", exact: true }).click();
   await other.getByRole("button", { name: "Remove from this device", exact: true }).click();
@@ -259,7 +259,7 @@ test("a failed removal preference write leaves the board visible", async ({
   });
   const cloud = await mockCloud(page);
   await signIn(page);
-  await page.goto("./#/boards");
+  await page.goto("./#/");
   await page.getByRole("button", { name: "Open Saved production system", exact: true }).click();
   await page.getByRole("button", { name: "Board settings", exact: true }).click();
   await page.getByRole("button", { name: "Remove from this device", exact: true }).click();
@@ -311,21 +311,18 @@ test("a schema mismatch discovered after loading cancels pending shared writes",
   expect(cloud.rows[0].document.nodes.length).toBe(9);
 });
 
-test("a fresh workspace stays empty and generic board routes never open a board", async ({ page }) => {
+test("unsupported routes fail without opening a board or rewriting the URL", async ({ page }) => {
   const cloud = await mockCloud(page, false);
   await signIn(page);
-  for (const path of ["./", "./#/board", "./#/board/", "./#/editor"]) {
-    await page.goto(path);
-    await expect(page.getByRole("main", { name: "All boards" })).toBeVisible();
-    await expect(page.locator(".board-card")).toHaveCount(0);
+  for (const hash of ["#/board", "#/board/", "#/editor", "#/join/" + invite, "#board/" + invite]) {
+    await page.goto("./" + hash);
+    await expect(page.getByRole("heading", { name: "Page not found", exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.locator(".react-flow")).toHaveCount(0);
+    expect(new URL(page.url()).hash).toBe(hash);
   }
+  expect(cloud.joins).toBe(0);
   expect(cloud.writes).toEqual([]);
-  await page.getByRole("button", { name: "Create a board", exact: true }).click();
-  await page.getByRole("button", { name: /A clean slate/ }).click();
-  await expect(page).toHaveURL(/#\/board\/d4/);
-  await expect(page.getByRole("button", { name: "Invite" })).toBeVisible();
-  expect(cloud.writes).toEqual(["CREATE"]);
 });
 
 test("a board link asks a new device to Join without creating another board", async ({ page }) => {

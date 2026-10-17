@@ -10,7 +10,7 @@ import {
 } from "@xyflow/react";
 import type { Connection, NodeChange, EdgeChange } from "@xyflow/react";
 import { toPng } from "html-to-image";
-import { boardCodeFromHash, invitationFromHash } from "../domain/sharing/invitations";
+import { boardCodeFromHash } from "../domain/sharing/invitations";
 import { useAuth } from "../infrastructure/auth/useAuth";
 import { useCloudBoards } from "./useCloudBoards";
 import { messageFor } from "../infrastructure/cloud/boards";
@@ -50,7 +50,8 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
   const [showInspector, setShowInspector] = useState(false);
   const [toast, setToast] = useState("");
   const [routeHash, setRouteHash] = useState(() => location.hash);
-  const routeCode = boardCodeFromHash(routeHash.replace(/^#\/join\//, "#/board/"));
+  const routeCode = boardCodeFromHash(routeHash);
+  const invalidRoute = !["", "#", "#/"].includes(routeHash) && !routeCode;
   const [openedCode, setOpenedCode] = useState("");
   const [routeError, setRouteError] = useState("");
   const [routeRetry, setRouteRetry] = useState(0);
@@ -89,14 +90,7 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
       setRouteHash(location.hash);
       setOpenedCode("");
       setRouteError("");
-      try {
-        const code = invitationFromHash(location.hash);
-        if (code) setInvitationInput(code);
-      } catch (error) {
-        setToast(
-          error instanceof Error ? error.message : "Invalid invitation link.",
-        );
-      }
+      setModal(null);
     };
     route();
     window.addEventListener("hashchange", route);
@@ -442,6 +436,7 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
     setToast,
     home,
     routeError,
+    invalidRoute,
     retryBoardLink: () => { setRouteError(""); cloud.retry(); setRouteRetry((value) => value + 1); },
     activeRemoved,
     isExporting,

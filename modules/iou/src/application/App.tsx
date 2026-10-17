@@ -93,6 +93,7 @@ export default function App() {
     const changed = () => {
       const next = route()
       const changedPage =
+        next.invalid !== currentRoute.current.invalid ||
         next.groupCode !== currentRoute.current.groupCode ||
         next.groups !== currentRoute.current.groups ||
         next.transactions !== currentRoute.current.transactions ||
@@ -407,7 +408,15 @@ export default function App() {
             </button>
           </div>
         ))}
-        {page.groupCode && !group ? (
+        {page.invalid ? (
+          <div className="empty-state" role="alert">
+            <h2>Page not found</h2>
+            <p>This link is not supported.</p>
+            <button type="button" className="button secondary" onClick={() => navigate()}>
+              Go home
+            </button>
+          </div>
+        ) : page.groupCode && !group ? (
           <div className="empty-state">
             <Search size={36} />
             <h2>We couldn’t find that group.</h2>

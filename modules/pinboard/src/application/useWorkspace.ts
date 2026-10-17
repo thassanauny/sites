@@ -41,6 +41,7 @@ export function useWorkspace() {
     useDeviceRemovals();
   const {
     selectedCode,
+    routeInvalid,
     setSelectedCode,
     modal,
     setModal,
@@ -371,6 +372,7 @@ export function useWorkspace() {
       (!board && visibleSummaries.some((item) => item.invite_code === selectedCode)),
     visibleCount: visibleSummaries.length,
     selectedCode,
+    routeInvalid,
     loaded,
     removalsReady,
     refreshing,

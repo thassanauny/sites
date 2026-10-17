@@ -35,11 +35,11 @@ export function element<T extends HTMLElement = HTMLElement>(id: string): T {
 export const rows = () => [...root.querySelectorAll<HTMLAnchorElement>('.device-row .snippet-open')].map(row => row.dataset.code);
 export const flush = () => vi.advanceTimersByTimeAsync(1);
 
-export async function start(hash = '#/', configured = true): Promise<void> {
+export async function start(hash = '#/', configured = true, listed = true): Promise<void> {
   // Ordinary-page fixtures represent snippets already listed on this device.
-  // Invitation fixtures use #/join; removed entries are never restored by setup.
+  // Unlisted invitations pass listed=false; removed entries are never restored by setup.
   const route = readRoute(hash);
-  if (route.kind === 'page') {
+  if (listed && route.kind === 'page') {
     try {
       const device = new DeviceSnippets();
       if (!device.isRemoved(route.code)) device.remember(route.code);

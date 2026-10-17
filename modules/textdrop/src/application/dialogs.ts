@@ -80,7 +80,7 @@ export class DialogController {
     if (this.busy && !force) return;
     const opening = this.opening;
     if (!force && opening && session.state.phase === 'opening') return;
-    if (!force && this.kind === 'join' && ['join', 'page'].includes(readRoute(location.hash).kind)) this.host.showHomeAddress();
+    if (!force && this.kind === 'join' && readRoute(location.hash).kind === 'page') this.host.showHomeAddress();
     ++this.copies;
     this.kind = null;
     this.error = '';

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Board } from '../domain/boards/types';
 import type { ModalState } from '../features/boards/modal';
-import { routeCode, routeInvitation } from './workspace';
+import { routeCode, invalidRoute } from './workspace';
 
-/** The selected board and open dialog, driven by the address hash (`#board/<code>`, `#join/<code>`). */
+/** The selected board and open dialog, driven by the address hash (`#board/<code>`). */
 export function useRouteModal() {
+  const [routeInvalid, setRouteInvalid] = useState(invalidRoute);
   const [selectedCode, setSelectedCode] = useState(routeCode);
   const [modal, setModal] = useState<ModalState | undefined>();
   const modalRef = useRef(modal);
@@ -18,6 +19,7 @@ export function useRouteModal() {
     navigationVersion.current += 1;
     failedLink.current = '';
     window.location.hash = incoming ? `board/${incoming.invite_code}` : '';
+    setRouteInvalid(false);
     setSelectedCode(incoming?.invite_code ?? '');
     setNavigations((value) => value + 1);
   }, []);
@@ -25,7 +27,7 @@ export function useRouteModal() {
     (expected: ModalState) => {
       if (modalRef.current !== expected) return;
       setModal(undefined);
-      if (expected.type === 'join' && (routeInvitation() || routeCode())) navigate();
+      if (expected.type === 'join' && routeCode()) navigate();
     },
     [navigate],
   );
@@ -45,6 +47,7 @@ export function useRouteModal() {
     const hash = () => {
       navigationVersion.current += 1;
       failedLink.current = '';
+      setRouteInvalid(invalidRoute());
       setSelectedCode(routeCode());
       setModal(undefined);
       setNavigations((value) => value + 1);
@@ -54,6 +57,7 @@ export function useRouteModal() {
   }, []);
   return {
     selectedCode,
+    routeInvalid,
     setSelectedCode,
     modal,
     setModal,

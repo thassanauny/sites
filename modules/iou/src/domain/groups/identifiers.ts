@@ -24,4 +24,12 @@ export const isSafeText = (value: string): boolean => !CONTROL_PATTERN.test(valu
 export const normalizeInviteCode = (input: string): string => input.trim().replace(/\s+/g, '').toLowerCase()
 
 /** Accept either an invitation code or the link that carries it. */
-export const invitationCode = (input: string): string => normalizeInviteCode(input.includes('/join/') ? input.split('/join/').pop()! : input)
+export function invitationCode(input: string): string {
+  const value = input.trim()
+  if (!/^https?:\/\//i.test(value)) return normalizeInviteCode(value)
+  try {
+    return /^#\/join\/([a-f0-9]{32})$/i.exec(new URL(value).hash)?.[1]?.toLowerCase() ?? ''
+  } catch {
+    return ''
+  }
+}

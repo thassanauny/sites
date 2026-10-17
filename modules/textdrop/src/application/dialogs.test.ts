@@ -161,7 +161,7 @@ describe('dialog controller', () => {
   });
 
   it('puts Home in the address bar when an invitation dialog is dismissed', () => {
-    history.replaceState(null, '', `/textdrop/#/join/${code}`);
+    history.replaceState(null, '', `/textdrop/#/p/${code}`);
     dialogs.show('join');
     dialogs.close();
     expect(showHomeAddress).toHaveBeenCalledTimes(1);
@@ -171,7 +171,7 @@ describe('dialog controller', () => {
     dialogs.show('join');
     dialogs.close(true);
     expect(showHomeAddress).toHaveBeenCalledTimes(1);
-    history.replaceState(null, '', `/textdrop/#/join/${code}`);
+    history.replaceState(null, '', `/textdrop/#/p/${code}`);
     dialogs.show('join');
     dialogs.close(true);
     expect(showHomeAddress).toHaveBeenCalledTimes(1);

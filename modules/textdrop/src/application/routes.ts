@@ -1,13 +1,12 @@
 import { normalizeCode } from '../domain/snippets/model';
 
-export type Route = { kind: 'home' } | { kind: 'page' | 'join'; code: string } | { kind: 'invalid' };
+export type Route = { kind: 'home' } | { kind: 'page'; code: string } | { kind: 'invalid' };
 
 export function readRoute(hash: string): Route {
   if (!hash || hash === '#' || hash === '#/') return { kind: 'home' };
-  const kind = hash.startsWith('#/p/') ? 'page' : hash.startsWith('#/join/') ? 'join' : null;
-  if (!kind) return { kind: 'invalid' };
+  if (!hash.startsWith('#/p/')) return { kind: 'invalid' };
   try {
-    return { kind, code: normalizeCode(decodeURIComponent(hash.slice(kind === 'join' ? 7 : 4))) };
+    return { kind: 'page', code: normalizeCode(decodeURIComponent(hash.slice(4))) };
   } catch {
     return { kind: 'invalid' };
   }
@@ -25,7 +24,7 @@ export function joinCode(input: string): string {
       throw new Error(NO_CODE_IN_LINK);
     }
     const route = readRoute(hash);
-    if (route.kind === 'page' || route.kind === 'join') return route.code;
+    if (route.kind === 'page') return route.code;
     throw new Error(NO_CODE_IN_LINK);
   }
   return normalizeCode(trimmed);

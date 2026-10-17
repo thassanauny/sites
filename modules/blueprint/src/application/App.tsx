@@ -56,6 +56,7 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
     toast,
     setToast,
     home,
+    invalidRoute,
     routeError,
     retryBoardLink,
     showEditor,
@@ -80,7 +81,11 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
       </button>
       <WorkspaceHeader controller={controller} />
 
-      {home ? (
+      {invalidRoute ? (
+        <main id="main-content" tabIndex={-1} className="board-home">
+          <div className="home-empty" role="alert"><h1>Page not found</h1><p>This link is not supported.</p><button className="button secondary" onClick={showHome}>Go home</button></div>
+        </main>
+      ) : home ? (
         <BoardHome
           boards={workspace.visibleBoards}
           activeId={board.id}

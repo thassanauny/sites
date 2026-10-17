@@ -15,6 +15,7 @@ export default function App() {
     boardList,
     visibleCount,
     selectedCode,
+    routeInvalid,
     loaded,
     loadingBoard,
     refreshing,
@@ -143,7 +144,15 @@ export default function App() {
             </button>
           </div>
         )}
-        {board ? (
+        {routeInvalid ? (
+          <section className="home" role="alert">
+            <h1>Page not found</h1>
+            <p>This link is not supported.</p>
+            <button type="button" className="button secondary" onClick={() => navigate()}>
+              Go home
+            </button>
+          </section>
+        ) : board ? (
           <BoardView
             board={board}
             disabled={disabled}

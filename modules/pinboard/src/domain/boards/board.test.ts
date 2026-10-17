@@ -128,19 +128,16 @@ describe('board data and concurrent updates', () => {
 
   it('accepts codes and invitation links while rejecting incomplete or unrelated links', () => {
     const code = 'a'.repeat(32);
-    for (const input of [
-      code.toUpperCase(),
-      `  https://example.test/#join/${code}  `,
-      `https://example.test/#/join/${code}`,
-      `https://example.test/#board/${code}`,
-    ]) {
+    for (const input of [code.toUpperCase(), `  https://example.test/#board/${code}  `]) {
       expect(readInviteCode(input)).toBe(code);
     }
     for (const input of [
       'https://example.test/',
+      `https://example.test/#/join/${code}`,
+      `https://example.test/#/board/${code}`,
       `https://example.test/#other/${code}`,
-      `#join/${code}/extra`,
-      '#join/short',
+      `#board/${code}/extra`,
+      '#board/short',
     ]) {
       expect(() => readInviteCode(input)).toThrow('32-character');
     }

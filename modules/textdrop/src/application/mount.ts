@@ -273,7 +273,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     ui.notice.hidden = !notice;
     ui.noticeMessage.textContent = notice;
     const link = readRoute(location.hash);
-    const retryOpening = !page && !opening && !!error && configured && online && (link.kind === 'page' || link.kind === 'join');
+    const retryOpening = !page && !opening && !!error && configured && online && link.kind === 'page';
     ui.retry.hidden = !retryOpening && (!page || !dirty || !online || phase === 'saving' || measure(draft).tooLarge);
     setText(ui.retry, retryOpening ? 'Retry opening' : 'Retry save');
     ui.newSession.hidden = !(sessionDamaged && notice === error);
@@ -699,7 +699,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
       updateDeviceSnippets(() => deviceSnippets.list());
       session.home();
       ui.create.focus();
-    } else if (next.kind === 'page' || next.kind === 'join') {
+    } else if (next.kind === 'page') {
       let expected: string | null;
       try {
         expected = deviceSnippets.snapshot(next.code);

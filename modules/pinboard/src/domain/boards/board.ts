@@ -357,7 +357,7 @@ export function normalizeInviteCode(input: string): string {
 export function readInviteCode(input: string): string {
   const trimmed = input.trim();
   const hash = trimmed.includes('#') ? trimmed.slice(trimmed.indexOf('#')) : '';
-  const link = /^#\/?(?:board|join)\/(.+)$/is.exec(hash);
+  const link = /^#board\/(.+)$/is.exec(hash);
   return normalizeInviteCode(link ? link[1] : input);
 }
 

@@ -62,7 +62,6 @@ export function useCloudBoards(
   ];
   const pendingBoard = candidates.find(
     (item) =>
-      !(location.hash.startsWith("#/join/") && !item.revision) &&
       item.cloudSavedContent !== boardContent(item) &&
       !conflicts.current.has(item.id) &&
       failures.current.get(item.id)?.content !== boardContent(item),

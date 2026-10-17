@@ -72,7 +72,7 @@ describe('TextDrop opening snippets', () => {
   });
 
   it('opens a prefilled Join dialog for an invitation without requesting the shared text until submitted', async () => {
-    await start(`#/join/${first.code}`);
+    await start(`#/p/${first.code}`, true, false);
     expect(element<HTMLDialogElement>('snippet-dialog').open).toBe(true);
     expect(element('join-form').hidden).toBe(false);
     expect(element<HTMLInputElement>('join-code').value).toBe(first.code);
@@ -81,13 +81,13 @@ describe('TextDrop opening snippets', () => {
     element('join-cancel').click();
     expect(cloud.joinPage).not.toHaveBeenCalled();
     expect(rows()).toEqual([]);
-    await join(`http://localhost/textdrop/#/join/${first.code}`);
+    await join(`http://localhost/textdrop/#/p/${first.code}`);
     expect(cloud.joinPage).toHaveBeenCalledExactlyOnceWith(first.code);
     expect(location.hash).toBe(`#/p/${first.code}`);
   });
 
   it('explains unavailable sharing inside an unconfigured invitation dialog without allowing a request', async () => {
-    await start(`#/join/${first.code}`, false);
+    await start(`#/p/${first.code}`, false, false);
     const dialog = element<HTMLDialogElement>('snippet-dialog');
     expect(dialog.open).toBe(true);
     expect(element<HTMLInputElement>('join-code').value).toBe(first.code);
@@ -169,7 +169,7 @@ describe('TextDrop opening snippets', () => {
     await start();
     element('create').click();
     element('create-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    history.replaceState(null, '', `/textdrop/#/join/${second.code}`);
+    history.replaceState(null, '', `/textdrop/#/p/${second.code}`);
     window.dispatchEvent(new Event('hashchange'));
     expect(element('join-form').hidden).toBe(false);
     expect(element<HTMLInputElement>('join-code').value).toBe(second.code);
@@ -177,7 +177,7 @@ describe('TextDrop opening snippets', () => {
     await flush();
     expect(element('workspace').hidden).toBe(true);
     expect(rows()).toEqual([]);
-    expect(location.hash).toBe(`#/join/${second.code}`);
+    expect(location.hash).toBe(`#/p/${second.code}`);
     expect(element<HTMLInputElement>('join-code').value).toBe(second.code);
     await join(second.code);
     expect(element('page-code').textContent).toBe(second.code);
@@ -189,13 +189,13 @@ describe('TextDrop opening snippets', () => {
     vi.mocked(cloud.joinPage).mockReturnValueOnce(opening.promise);
     await start();
     await join(first.code);
-    history.replaceState(null, '', `/textdrop/#/join/${second.code}`);
+    history.replaceState(null, '', `/textdrop/#/p/${second.code}`);
     window.dispatchEvent(new Event('hashchange'));
     expect(element('home').hidden).toBe(false);
     expect(element<HTMLInputElement>('join-code').value).toBe(second.code);
     opening.resolve(first);
     await flush();
-    expect(location.hash).toBe(`#/join/${second.code}`);
+    expect(location.hash).toBe(`#/p/${second.code}`);
     expect(element('workspace').hidden).toBe(true);
     expect(element<HTMLInputElement>('join-code').value).toBe(second.code);
     expect(rows()).toEqual([]);
@@ -256,7 +256,7 @@ describe('TextDrop browser history', () => {
   });
 
   it('adds no extra entry when a snippet opens from an invitation link or a list link', async () => {
-    await startAfterEarlierPage(`#/join/${second.code}`);
+    await startAfterEarlierPage(`#/p/${second.code}`);
     const entries = history.length;
     await join(second.code);
     expect(location.hash).toBe(`#/p/${second.code}`);

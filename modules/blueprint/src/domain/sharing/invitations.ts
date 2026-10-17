@@ -2,7 +2,7 @@ export function invitationCode(value: string): string {
   let input = value.trim();
   if (/^https?:\/\//i.test(input)) {
     try {
-      const match = new URL(input).hash.match(/^#\/(?:join|board)\/([^/]+)$/);
+      const match = new URL(input).hash.match(/^#\/board\/([^/]+)$/);
       if (!match) throw new Error();
       input = decodeURIComponent(match[1]);
     } catch {
@@ -24,19 +24,8 @@ export function invitationLink(code: string, currentUrl: string): string {
   return url.href;
 }
 
-export function invitationFromHash(hash: string): string | null {
-  if (!hash.startsWith("#/join/")) return null;
-  try {
-    return invitationCode(decodeURIComponent(hash.slice(7)));
-  } catch {
-    throw new Error(
-      "This invitation link is invalid. Paste a complete board invitation.",
-    );
-  }
-}
-
-/** A board route identifies exactly one invitation; generic routes select no board. */
+/** Only a complete canonical board URL identifies an invitation. */
 export function boardCodeFromHash(hash: string): string | null {
-  const match = /^#\/?board\/([a-f0-9]{32})$/i.exec(hash);
+  const match = /^#\/board\/([a-f0-9]{32})$/i.exec(hash);
   return match ? match[1].toLowerCase() : null;
 }
