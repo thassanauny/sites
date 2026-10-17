@@ -133,7 +133,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     await mount([], board.invite_code);
     expect(cloud.loadBoardList).not.toHaveBeenCalled();
     expect(cloud.joinBoard).not.toHaveBeenCalled();
-    expect(document.querySelector('.connection')?.textContent).toBe('Setup needed');
+    expect(document.querySelector('.connection')?.textContent).toBe('Setup required');
     expect(document.querySelector('dialog')).toBeNull();
   });
 
@@ -146,7 +146,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     await act(async () => {
       pending.resolve([board]);
     });
-    expect(status()).toBe('All changes saved');
+    expect(status()).toBe('Connected');
     expect(syncLabel()).toMatch(/^Synced \d{1,2}:\d{2}/);
 
     await click('Settings');
@@ -158,7 +158,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     await act(async () => {
       saving.resolve({ ...board, title: 'Renamed', revision: 2 });
     });
-    expect(status()).toBe('All changes saved');
+    expect(status()).toBe('Connected');
 
     cloud.loadBoardList.mockRejectedValueOnce(new Error('Could not connect to shared boards.'));
     await refresh();
@@ -247,7 +247,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     expect(document.querySelector('.banner.error')).not.toBeNull();
     await refresh();
     expect(document.querySelector('.banner.error')).toBeNull();
-    expect(status()).toBe('All changes saved');
+    expect(status()).toBe('Connected');
     expect(syncLabel()).toMatch(/^Synced \d{1,2}:\d{2}/);
   });
 

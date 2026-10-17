@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Copy, Link2, LoaderCircle, Users } from "lucide-react";
 import { Modal } from "../../ui/Modal";
 import { invitationLink } from "../../domain/sharing/invitations";
@@ -20,8 +20,10 @@ export function SharingDialog({
   initialCode: string;
   onClose: () => void;
   onSettings: () => void;
-  onJoined: () => void;
+  onJoined: (code: string, rejoined: boolean) => void;
 }) {
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const [code, setCode] = useState(initialCode);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -62,9 +64,10 @@ export function SharingDialog({
             setBusy(true);
             setError("");
             try {
-              await cloud.joinBoard(code);
-              onJoined();
+              const joined = await cloud.joinBoard(code, true, () => active.current);
+              if (!joined || !active.current) return;
               onClose();
+              onJoined(joined.inviteCode!, joined.wasRemoved);
             } catch (error) {
               setError(
                 error instanceof Error

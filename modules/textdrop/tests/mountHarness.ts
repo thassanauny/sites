@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, vi } from 'vitest';
+import { readRoute } from '../src/application/routes';
+import { RecoveryDrafts } from '../src/infrastructure/storage/recoveryDrafts';
 import { mountTextDrop } from '../src/application/mount';
 import type { Cloud } from '../src/application/ports';
 import type { TextDropPage } from '../src/domain/snippets/model';
@@ -34,8 +36,19 @@ export const rows = () => [...root.querySelectorAll<HTMLAnchorElement>('.device-
 export const flush = () => vi.advanceTimersByTimeAsync(1);
 
 export async function start(hash = '#/', configured = true): Promise<void> {
+  // Ordinary-page fixtures represent snippets already listed on this device.
+  // Invitation fixtures use #/join; removed entries are never restored by setup.
+  const route = readRoute(hash);
+  if (route.kind === 'page') {
+    try {
+      const device = new DeviceSnippets();
+      if (!device.isRemoved(route.code)) device.remember(route.code);
+    } catch {
+      /* The app reports blocked browser storage. */
+    }
+  }
   history.replaceState(null, '', `/textdrop/${hash}`);
-  dispose = mountTextDrop(root, cloud, new DeviceSnippets(), { configured, version: 'test' });
+  dispose = mountTextDrop(root, cloud, new DeviceSnippets(), { configured, version: 'test', recovery: new RecoveryDrafts() });
   await flush();
 }
 

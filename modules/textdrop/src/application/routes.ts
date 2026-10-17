@@ -38,6 +38,6 @@ export function pageHash(code: string): string {
 export function invitationLink(code: string, currentUrl: string): string {
   const url = new URL(currentUrl);
   url.search = '';
-  url.hash = `#/join/${normalizeCode(code)}`;
+  url.hash = pageHash(code);
   return url.href;
 }

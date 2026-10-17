@@ -6,10 +6,7 @@ import { routeCode, routeInvitation } from './workspace';
 /** The selected board and open dialog, driven by the address hash (`#board/<code>`, `#join/<code>`). */
 export function useRouteModal() {
   const [selectedCode, setSelectedCode] = useState(routeCode);
-  const [modal, setModal] = useState<ModalState | undefined>(() => {
-    const code = routeInvitation();
-    return code ? { type: 'join', code } : undefined;
-  });
+  const [modal, setModal] = useState<ModalState | undefined>();
   const modalRef = useRef(modal);
   modalRef.current = modal;
   const [joinRetry, setJoinRetry] = useState(0);
@@ -49,8 +46,7 @@ export function useRouteModal() {
       navigationVersion.current += 1;
       failedLink.current = '';
       setSelectedCode(routeCode());
-      const code = routeInvitation();
-      setModal(code ? { type: 'join', code } : undefined);
+      setModal(undefined);
       setNavigations((value) => value + 1);
     };
     window.addEventListener('hashchange', hash);

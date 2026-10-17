@@ -25,6 +25,7 @@ export function useCloudBoards(
 ) {
   const [status, setStatus] = useState<CloudStatus>(user ? "loading" : "local");
   const [error, setError] = useState("");
+  const [lastSync, setLastSync] = useState<Date | null>(null);
   const [ready, setReady] = useState(!user);
   const [retry, setRetry] = useState(0);
   const [saveTick, setSaveTick] = useState(0);
@@ -42,7 +43,7 @@ export function useCloudBoards(
     (item) => item.cloudSavedContent !== boardContent(item),
   );
   const candidates = [
-    board,
+    ...workspace.boards.filter((item) => item.id === board.id),
     ...workspace.boards.filter((item) => item.id !== board.id),
   ];
   const pendingBoard = candidates.find(
@@ -76,6 +77,7 @@ export function useCloudBoards(
         const boards = await listCloudBoards(client, knownBoards.current);
         if (cancelled) return;
         mergeCloudBoards(boards);
+        setLastSync(new Date());
         initialized.current = true;
         setReady(true);
       } catch (fetchError) {
@@ -123,6 +125,7 @@ export function useCloudBoards(
       try {
         const saved = await saveCloudBoard(client, pendingBoard);
         if (active.current) {
+          setLastSync(new Date());
           failures.current.delete(pendingBoard.id);
           markCloudSaved(pendingBoard.id, saved.revision, signature, {
             inviteCode: saved.inviteCode,
@@ -155,17 +158,22 @@ export function useCloudBoards(
     saveTick,
   ]);
 
-  const joinBoard = async (input: string) => {
+  const joinBoard = async (input: string, restore = true, current = () => true) => {
     if (!supabase || !user)
       throw new Error(
         "A Supabase device session is required. Check Settings and retry.",
       );
+    const version = workspace.removalVersion();
     const joined = await joinCloudBoard(supabase, input);
     conflicts.current.delete(joined.id);
     failures.current.delete(joined.id);
-    await openCloudBoard(joined);
-    if (location.hash.startsWith("#/join/"))
-      history.replaceState(null, "", `${location.pathname}${location.search}`);
+    if (!current()) return null;
+    if (version !== workspace.removalVersion()) throw new Error("Device removals changed while opening. Open this link again to retry.");
+    if (!restore && workspace.isRemoved(joined.id)) return null;
+    const wasRemoved = workspace.isRemoved(joined.id);
+    await openCloudBoard(joined, restore);
+    setLastSync(new Date());
+    return { ...joined, wasRemoved };
   };
   const saveAsCopy = () => {
     const source =
@@ -187,10 +195,18 @@ export function useCloudBoards(
   };
   return {
     status,
+    lastSync,
     error,
     ready,
     saveAsCopy,
     joinBoard,
+    createBoard: async (draft: Board) => {
+      if (!supabase || !user || !ready)
+        throw new Error("Connect to Blueprint sharing before creating a board. Check Settings and retry.");
+      const saved = await saveCloudBoard(supabase, draft);
+      if (active.current) setLastSync(new Date());
+      return { ...draft, ...saved, cloudSavedContent: boardContent(draft) };
+    },
     pending: Boolean(user && pendingBoards.length),
     retry: () => {
       conflicts.current.clear();

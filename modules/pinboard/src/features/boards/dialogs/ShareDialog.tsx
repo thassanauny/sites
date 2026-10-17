@@ -15,7 +15,7 @@ export function ShareDialog({
   onNotice: (text: string) => void;
 }) {
   const { localError, copied, copy } = useDialogMessages(onNotice);
-  const url = `${window.location.href.split('#')[0]}#join/${board.invite_code}`;
+  const url = `${window.location.href.split('#')[0]}#board/${board.invite_code}`;
   return (
     <Dialog title="Invite a few people." busy={busy} onClose={onClose}>
       <p className="dialog-intro">

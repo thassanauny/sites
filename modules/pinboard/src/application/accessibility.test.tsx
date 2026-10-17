@@ -22,11 +22,11 @@ describe('Pinboard UI: keyboard focus and labelled controls', () => {
     ['normally', false],
     ['under StrictMode', true],
   ])('%s', (_mode, strict) => {
-    it.each(['Settings', 'Edit Buy coffee', 'Add column', 'Create board', 'Join with a code'])(
+    it.each(['Settings', 'Edit Buy coffee', 'Add column', 'Create board', 'Join a board'])(
       'returns focus to "%s" after its dialog closes',
       async (name) => {
         await mount([populated], board.invite_code, strict);
-        if (name === 'Join with a code') await click('Open workspace');
+        if (name === 'Join a board') await click('Open workspace');
         const opener = button(name === 'Add column' ? 'Settings' : name);
         opener.focus();
         if (name === 'Add column') await click('Settings');

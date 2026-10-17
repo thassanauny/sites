@@ -4,6 +4,7 @@ import { SharingDialog } from "../features/sharing/SharingDialog";
 import { Modal } from "../ui/Modal";
 import { BoardSettingsDialog } from "../features/sharing/BoardSettingsDialog";
 import { useAuth } from "../infrastructure/auth/useAuth";
+import { APP_VERSION } from "../ui/version";
 import { Logo } from "../ui/Logo";
 import { useWorkspaceController } from "./useWorkspaceController";
 import { TemplateCards } from "../features/boards/TemplateCards";
@@ -23,7 +24,6 @@ const shortcutRows = [
   ["Delete selection", "Delete / ⌫"],
   ["Select all", "⌘ / Ctrl A"],
   ["Fit to screen", "Shift 1"],
-  ["Export board", "⌘ / Ctrl S"],
 ];
 
 export default function App() {
@@ -56,11 +56,15 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
     toast,
     setToast,
     home,
-    inputRef,
+    routeError,
+    retryBoardLink,
     showEditor,
-    exportJson,
+    showHome,
+    exportPng,
+    isExporting,
+    creating,
+    openBoard,
     newBoard,
-    importFile,
   } = controller;
   return (
     <div className="app-shell">
@@ -80,18 +84,15 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
         <BoardHome
           boards={workspace.visibleBoards}
           activeId={board.id}
-          notice={cloud.error || auth.authError || undefined}
+          notice={routeError || cloud.error || auth.authError || undefined}
+          onRetry={routeError ? retryBoardLink : undefined}
           onSettings={() => setModal("cloud")}
-          onOpen={(id) => {
-            workspace.switchBoard(id);
-            showEditor();
-          }}
+          onOpen={openBoard}
           onNew={() => setModal("templates")}
           onJoin={() => {
             setInvitationInput("");
             setModal("join");
           }}
-          onImport={() => inputRef.current?.click()}
           onRemove={async (id) => {
             if (cloud.status === "saving")
               throw new Error("Wait for saving to finish, then try again.");
@@ -120,14 +121,6 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
         </>
       )}
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".json,application/json"
-        hidden
-        aria-label="Import board file"
-        onChange={(event) => importFile(event.target.files?.[0])}
-      />
       {toast && (
         <div className="toast" role="status">
           <CheckCheck size={17} />
@@ -142,8 +135,8 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
       )}
       {workspace.localStatus === "error" && (
         <div className="storage-error" role="alert">
-          Your browser could not save this board. Export a JSON backup to keep
-          your work.
+          Your browser could not save a recovery copy. Keep this board open and
+          check that changes save online before closing it.
         </div>
       )}
 
@@ -155,16 +148,32 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
           wide
         >
           <div className="template-modal-grid">
-            {<TemplateCards onChoose={newBoard} />}
+            <TemplateCards disabled={creating} onChoose={newBoard} />
           </div>
         </Modal>
       )}
-      {modal === "shortcuts" && (
-        <Modal
-          title="Less clicking. More thinking."
-          subtitle="A few shortcuts to keep your ideas flowing."
-          onClose={() => setModal(null)}
-        >
+      {(modal === "join" || modal === "share") && (
+        <SharingDialog
+          key={modal === "join" ? invitationInput : "share"}
+          mode={modal}
+          board={board}
+          cloud={cloud}
+          initialCode={invitationInput}
+          onJoined={(code, rejoined) => rejoined ? showHome() : showEditor(code)}
+          onSettings={() => setModal("cloud")}
+          onClose={() => {
+            if (modal === "join") showHome();
+            else setModal(null);
+          }}
+        />
+      )}
+      {(modal === "help" || modal === "shortcuts") && (
+        <Modal title="A space for your systems." onClose={() => setModal(null)}>
+          <div className="help-content">
+            <p>Create or join a shared board. Drag, connect and annotate; export PNGs from Settings.</p>
+            <p>Changes autosave online with local recovery. Keep your invitation code to rejoin removed boards.</p>
+          </div>
+          <h3>Keyboard shortcuts</h3>
           <div className="shortcuts-list">
             {shortcutRows.map(([label, keys]) => (
               <div key={label}>
@@ -173,30 +182,7 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
               </div>
             ))}
           </div>
-          <p className="modal-footnote">
-            Select a component to edit its properties. Drag between connection
-            handles to connect components.
-          </p>
         </Modal>
-      )}
-      {(modal === "join" || modal === "share") && (
-        <SharingDialog
-          mode={modal}
-          board={board}
-          cloud={cloud}
-          initialCode={invitationInput}
-          onJoined={showEditor}
-          onSettings={() => setModal("cloud")}
-          onClose={() => {
-            setModal(null);
-            if (location.hash.startsWith("#/join/"))
-              history.replaceState(
-                null,
-                "",
-                location.pathname + location.search,
-              );
-          }}
-        />
       )}
       {modal === "cloud" && (
         <BoardSettingsDialog
@@ -204,10 +190,12 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
           board={board}
           cloud={cloud}
           onShare={() => setModal("share")}
-          exportJson={exportJson}
+          exportPng={home ? undefined : exportPng}
+          isExporting={isExporting}
           onClose={() => setModal(null)}
         />
       )}
+      <footer className="app-footer"><span className="app-version">blueprint · {APP_VERSION}</span></footer>
     </div>
   );
 }

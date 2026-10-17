@@ -1,5 +1,5 @@
 import { memo, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { Columns3, RefreshCw, Search, Settings2, Users } from 'lucide-react';
+import { Columns3, RefreshCw, Search } from 'lucide-react';
 import type { Board, Card, CardDropTarget, CardFilters, Column } from '../../domain/boards/types';
 import { activeCards, LIMITS } from '../../domain/boards/board';
 import { cardFields, fieldVisible } from '../../domain/boards/fields';
@@ -11,7 +11,6 @@ import { ColumnView } from './ColumnView';
  */
 export const BoardView = memo(function BoardView({
   board,
-  busy,
   disabled,
   refreshDisabled,
   refreshing,
@@ -23,8 +22,6 @@ export const BoardView = memo(function BoardView({
   onClearFilters,
   today,
   onRefresh,
-  onSettings,
-  onInvite,
   onAddCard,
   onEditColumn,
   onEditCard,
@@ -33,7 +30,6 @@ export const BoardView = memo(function BoardView({
   onReorderCard,
 }: {
   board: Board;
-  busy: boolean;
   disabled: boolean;
   refreshDisabled: boolean;
   refreshing: boolean;
@@ -46,8 +42,6 @@ export const BoardView = memo(function BoardView({
   /** Today's date as YYYY-MM-DD, to mark overdue cards. */
   today: string;
   onRefresh: () => void;
-  onSettings: () => void;
-  onInvite: () => void;
   onAddCard: (column: Column) => void;
   onEditColumn: (column: Column) => void;
   onEditCard: (card: Card) => void;
@@ -73,35 +67,11 @@ export const BoardView = memo(function BoardView({
   );
   return (
     <>
-      <section className="board-heading">
-        <div>
-          <h1>{board.title}</h1>
-          {board.description && <p className="board-description">{board.description}</p>}
-        </div>
-        <div className="board-actions">
-          <button
-            type="button"
-            className="button secondary"
-            aria-label="Settings"
-            title="Settings"
-            onClick={onSettings}
-            disabled={busy}
-          >
-            <Settings2 size={16} />
-            <span>Settings</span>
-          </button>
-          <button
-            type="button"
-            className="button primary"
-            aria-label="Invite people"
-            title="Invite people"
-            onClick={onInvite}
-          >
-            <Users size={16} />
-            <span>Invite people</span>
-          </button>
-        </div>
-      </section>
+      {board.description && (
+        <section className="board-heading">
+          <p className="board-description">{board.description}</p>
+        </section>
+      )}
       <section className="board-toolbar" aria-label="Card filters">
         <div className="board-view">
           <Columns3 size={17} />

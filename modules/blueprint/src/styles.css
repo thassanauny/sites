@@ -2272,7 +2272,14 @@ button:disabled:hover {
   line-height: 1.7;
   margin: 0;
 }
-.home-intro > .button {
+.home-actions {
+  display: flex;
+  gap: 9px;
+  flex-shrink: 0;
+  margin-bottom: 7px;
+  max-width: 100%;
+}
+.home-actions > .button {
   min-height: 42px;
   flex-shrink: 0;
 }

@@ -1,3 +1,4 @@
+import { sameShape, useRecoveryDraft } from '../../../application/useRecoveryDraft';
 import { useState, type FormEvent } from 'react';
 import type { Board, Card, Operation } from '../../../domain/boards/types';
 import { cardPatch, nextPosition } from '../../../domain/boards/board';
@@ -46,9 +47,22 @@ export function CardDialog({
   onRecover: (code: string) => Promise<boolean>;
   onNotice: (text: string) => void;
 }) {
-  const [title, setTitle] = useState(initial.title);
-  const [description, setDescription] = useState(initial.description);
-  const [card, setCard] = useState<Card>(initial);
+  const sample = {
+    baseline: initial,
+    title: initial.title,
+    description: initial.description,
+    card: initial,
+  };
+  const recovery = useRecoveryDraft(
+    `${board.invite_code}:card:${isNew ? `new-${initial.columnId}` : initial.id}`,
+    sample,
+    (value): value is typeof sample => sameShape(sample, value),
+  );
+  const { title, description, card, baseline } = recovery.value;
+  const setTitle = (title: string) => recovery.setValue((current) => ({ ...current, title }));
+  const setDescription = (description: string) =>
+    recovery.setValue((current) => ({ ...current, description }));
+  const setCard = (card: Card) => recovery.setValue((current) => ({ ...current, card }));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const { localError, setLocalError, copy } = useDialogMessages(onNotice);
   const liveBoard = currentBoard ?? board;
@@ -62,7 +76,7 @@ export function CardDialog({
       ? [...new Set(card.labels.map((label) => label.trim()).filter(Boolean))]
       : card.labels,
   };
-  const patch = cardPatch(initial, edited);
+  const patch = cardPatch(baseline, edited);
   const discard = useDraftClose(removed || Object.keys(patch).length > 0, closeModal);
   const locked = busy || offline || removed;
   const currentColumns = liveBoard.columns;
@@ -90,14 +104,20 @@ export function CardDialog({
             id: card.id,
             patch,
           }));
-      if (saved) closeModal();
+      if (saved) {
+        recovery.clear();
+        closeModal();
+      }
     } catch (error) {
       setLocalError(message(error));
     }
   }
   async function remove() {
     if (locked) return;
-    if (await onSave(board.id, { type: 'delete_card', id: initial.id })) closeModal();
+    if (await onSave(board.id, { type: 'delete_card', id: initial.id })) {
+      recovery.clear();
+      closeModal();
+    }
   }
   async function archive() {
     if (locked || isNew) return;
@@ -109,8 +129,10 @@ export function CardDialog({
           id: initial.id,
           patch: { ...patch, archived: true },
         })
-      )
+      ) {
+        recovery.clear();
         closeModal();
+      }
     } catch (failure) {
       setLocalError(message(failure));
     }
@@ -130,7 +152,9 @@ export function CardDialog({
           busy={busy}
           removed={removed}
           onKeep={discard.keepEditing}
-          onDiscard={closeModal}
+          onDiscard={() => {
+            if (recovery.clear()) closeModal();
+          }}
         />
       ) : (
         <EditorForm
@@ -151,7 +175,7 @@ export function CardDialog({
               />
             )
           }
-          localError={localError}
+          localError={localError || recovery.error}
           serverError={serverError}
           offline={offline}
           busy={busy}
@@ -163,6 +187,11 @@ export function CardDialog({
           onArchive={isNew ? undefined : () => void archive()}
           onSubmit={(event) => void submit(event)}
         >
+          {recovery.recovered && (
+            <p className="soft-note">
+              Recovered unsaved draft from this device. Review it before saving.
+            </p>
+          )}
           <TitleField
             label="Card title"
             value={title}

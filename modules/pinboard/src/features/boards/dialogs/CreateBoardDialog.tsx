@@ -1,3 +1,4 @@
+import { sameShape, useRecoveryDraft } from '../../../application/useRecoveryDraft';
 import { useState, type FormEvent } from 'react';
 import { Dialog } from '../../../ui/Dialog';
 import { message } from '../../../ui/message';
@@ -16,11 +17,15 @@ export function CreateBoardDialog({
   onClose: () => void;
   onCreate: (id: string, title: string, description: string) => Promise<boolean>;
 }) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const sample = { title: '', description: '', createId: crypto.randomUUID() };
+  const recovery = useRecoveryDraft('new-board', sample, (value): value is typeof sample =>
+    sameShape(sample, value),
+  );
+  const { title, description, createId } = recovery.value;
+  const setTitle = (title: string) => recovery.setValue((current) => ({ ...current, title }));
+  const setDescription = (description: string) =>
+    recovery.setValue((current) => ({ ...current, description }));
   const [localError, setLocalError] = useState('');
-  // The ID is kept until success so a lost response can be retried safely.
-  const [createId] = useState(() => crypto.randomUUID());
   const discard = useDraftClose(title.trim() !== '' || description.trim() !== '', closeModal);
   const locked = busy || offline;
   async function submit(event: FormEvent) {
@@ -28,7 +33,10 @@ export function CreateBoardDialog({
     setLocalError('');
     if (locked) return;
     try {
-      if (await onCreate(createId, title.trim(), description.trim())) closeModal();
+      if (await onCreate(createId, title.trim(), description.trim())) {
+        recovery.clear();
+        closeModal();
+      }
     } catch (error) {
       setLocalError(message(error));
     }
@@ -44,11 +52,13 @@ export function CreateBoardDialog({
           busy={busy}
           removed={false}
           onKeep={discard.keepEditing}
-          onDiscard={closeModal}
+          onDiscard={() => {
+            if (recovery.clear()) closeModal();
+          }}
         />
       ) : (
         <EditorForm
-          localError={localError}
+          localError={localError || recovery.error}
           serverError={serverError}
           offline={offline}
           busy={busy}
@@ -57,6 +67,11 @@ export function CreateBoardDialog({
           submitLabel="Create board"
           onSubmit={(event) => void submit(event)}
         >
+          {recovery.recovered && (
+            <p className="soft-note">
+              Recovered unsaved draft from this device. Review it before saving.
+            </p>
+          )}
           <TitleField
             label="Board name"
             value={title}

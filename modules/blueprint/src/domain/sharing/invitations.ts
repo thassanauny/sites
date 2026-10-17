@@ -20,7 +20,7 @@ export function invitationCode(value: string): string {
 export function invitationLink(code: string, currentUrl: string): string {
   const url = new URL(currentUrl);
   url.search = "";
-  url.hash = `#/join/${invitationCode(code)}`;
+  url.hash = `#/board/${invitationCode(code)}`;
   return url.href;
 }
 
@@ -33,4 +33,10 @@ export function invitationFromHash(hash: string): string | null {
       "This invitation link is invalid. Paste a complete board invitation.",
     );
   }
+}
+
+/** A board route identifies exactly one invitation; generic routes select no board. */
+export function boardCodeFromHash(hash: string): string | null {
+  const match = /^#\/?board\/([a-f0-9]{32})$/i.exec(hash);
+  return match ? match[1].toLowerCase() : null;
 }

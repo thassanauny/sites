@@ -28,8 +28,8 @@ export default defineConfig({
           url: "http://127.0.0.1:5193",
           reuseExistingServer: false,
           env: {
-            VITE_SUPABASE_URL: "",
-            VITE_SUPABASE_ANON_KEY: "",
+            VITE_SUPABASE_URL: "https://blueprint-test.supabase.co",
+            VITE_SUPABASE_ANON_KEY: "sb_publishable_test",
             BLUEPRINT_VITE_CACHE_DIR: "node_modules/.vite-blueprint-local",
           },
         },

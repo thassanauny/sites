@@ -331,7 +331,7 @@ a {
   color: #839780;
   white-space: nowrap;
 }
-.connection > span,
+.connection > span:first-child,
 .connection-dot {
   width: 5px;
   height: 5px;
@@ -342,7 +342,7 @@ a {
 .connection.offline {
   color: #a18250;
 }
-.connection.offline > span {
+.connection.offline > span:first-child {
   background: #b89652;
 }
 .home {

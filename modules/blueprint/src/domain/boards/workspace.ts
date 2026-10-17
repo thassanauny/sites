@@ -1,6 +1,5 @@
 import type { Board } from "./types";
 import { boardContent } from "./codec";
-import { createBoard } from "./templates";
 
 export type WorkspaceData = { boards: Board[]; activeId: string };
 
@@ -11,7 +10,7 @@ export function mergeWorkspace(
   replaceStarter: boolean,
 ): WorkspaceData {
   if (replaceStarter)
-    return { boards: remoteBoards, activeId: remoteBoards[0].id };
+    return { boards: remoteBoards, activeId: remoteBoards[0]?.id || "" };
   const remote = new Map(remoteBoards.map((item) => [item.id, item]));
   const merged: Board[] = [];
   for (const local of previous.boards) {
@@ -32,7 +31,6 @@ export function mergeWorkspace(
     } else if (!local.revision || !clean) merged.push(local);
   }
   merged.push(...remote.values());
-  if (!merged.length) merged.push(createBoard("blank"));
   if (
     merged.length === previous.boards.length &&
     merged.every((board, index) => board === previous.boards[index])
@@ -42,7 +40,7 @@ export function mergeWorkspace(
     boards: merged,
     activeId: merged.some((item) => item.id === previous.activeId)
       ? previous.activeId
-      : merged[0].id,
+      : merged[0]?.id || "",
   };
 }
 

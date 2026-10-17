@@ -25,3 +25,86 @@
 }
 
 @media (min-width: 760px) { .intro h1 { font-size: 60px; } }
+
+.header-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.online-indicator { margin-left: 0; gap: 6px; font-size: 10px; color: var(--ea-muted); white-space: nowrap; }
+.dot { width: 6px; height: 6px; background: var(--ea-jade); }
+.help-button { width: 44px; height: 44px; flex-shrink: 0; border: 0; box-shadow: none; background: transparent; color: var(--ea-muted); }
+.help-button svg { width: 21px; height: 21px; }
+.site-footer { font-size: 10px; }
+.site-footer > span:last-child { white-space: nowrap; margin-left: auto; }
+@media (min-width: 1024px) { .shell { max-width: none; width: 100%; } }
+@media (max-width: 600px) {
+  .site-header { gap: 10px; }
+  .header-actions { gap: 4px; }
+  .help-button { width: 36px; height: 36px; }
+}
+@media (max-width: 360px) { .site-header .brand { font-size: 27px; gap: 7px; } }
+
+/* Shared invitation controls follow IOU's compact desktop buttons. */
+.workspace-actions { gap: 9px; }
+.workspace-actions .workspace-invite,
+.workspace-actions .workspace-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  min-width: 44px;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+  border: 1px solid var(--ea-line);
+  border-radius: 12px;
+  font-family: var(--ea-font-body);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  box-shadow: none;
+}
+.workspace-actions .workspace-invite {
+  background: var(--ea-jade);
+  border-color: var(--ea-jade);
+  color: #fffef7;
+}
+.workspace-actions .workspace-settings {
+  background: var(--ea-surface);
+  border-color: #d4dbd1;
+  color: var(--ea-jade-dark);
+}
+.workspace-actions .workspace-invite:hover:not(:disabled) {
+  background: var(--ea-jade-dark);
+  border-color: var(--ea-jade-dark);
+}
+.workspace-actions .workspace-settings:hover:not(:disabled) {
+  background: #edf1e7;
+  border-color: #a5b5a8;
+}
+.workspace-actions .workspace-invite svg { width: 18px; height: 18px; }
+.workspace-actions .workspace-settings svg { width: 16px; height: 16px; }
+.workspace-actions .workspace-invite > span,
+.workspace-actions .workspace-settings > span { display: none; }
+@media (min-width: 600px) {
+  .workspace-actions .workspace-invite,
+  .workspace-actions .workspace-settings { width: auto; padding-inline: 15px; }
+  .workspace-actions .workspace-invite > span,
+  .workspace-actions .workspace-settings > span { display: inline; }
+}
+
+.snippet-header-actions:not([hidden]) { display: flex; gap: 9px; }
+@media (max-width: 1050px) {
+  .site-header:has(.snippet-header-actions:not([hidden])) .header-note { display: none; }
+}
+@media (max-width: 760px) {
+  .site-header:has(.snippet-header-actions:not([hidden])) #connection-label { display: none; }
+  .site-header:has(.snippet-header-actions:not([hidden])) { flex-wrap: wrap; }
+  .site-header:has(.snippet-header-actions:not([hidden])) .header-actions { flex-wrap: wrap; }
+}
+
+@media (max-width: 599px) {
+  .site-header:has(.snippet-header-actions:not([hidden])),
+  .site-header:has(.snippet-header-actions:not([hidden])) .header-actions { flex-wrap: nowrap; gap: 8px; }
+  .site-header:has(.snippet-header-actions:not([hidden])) .brand > span { display: none; }
+}

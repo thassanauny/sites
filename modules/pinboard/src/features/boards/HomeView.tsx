@@ -43,7 +43,7 @@ export function HomeView({
           </button>
           <button type="button" className="button secondary" disabled={disabled} onClick={onJoin}>
             <Link size={17} />
-            Join with a code
+            Join a board
           </button>
         </div>
       </div>

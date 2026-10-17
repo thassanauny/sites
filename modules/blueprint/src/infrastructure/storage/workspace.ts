@@ -4,7 +4,6 @@ import {
   parseBoard,
   serializeBoard,
 } from "../../domain/boards/codec";
-import { createBoard } from "../../domain/boards/templates";
 export const STORAGE_KEY = "blueprint.workspace.v1";
 import type { WorkspaceData } from "../../domain/boards/workspace";
 export function readRemoved(value: string | null): Set<string> | undefined {
@@ -31,7 +30,7 @@ export function hasWorkspace(key: string) {
 export function readWorkspace(storageKey: string): WorkspaceData {
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) || "null");
-    if (Array.isArray(stored?.boards) && stored.boards.length) {
+    if (Array.isArray(stored?.boards)) {
       const boards = stored.boards.map((board: Board) => {
         const sanitized = {
           ...parseBoard(serializeBoard(board)),
@@ -53,14 +52,13 @@ export function readWorkspace(storageKey: string): WorkspaceData {
         boards,
         activeId: boards.some((board: Board) => board.id === stored.activeId)
           ? stored.activeId
-          : boards[0].id,
+          : boards[0]?.id || "",
       };
     }
   } catch {
     /* A corrupt local draft must not prevent opening the app. */
   }
-  const board = createBoard();
-  return { boards: [board], activeId: board.id };
+  return { boards: [], activeId: "" };
 }
 
 /** The only browser-storage adapter for workspace drafts and device removals. */
@@ -85,7 +83,7 @@ export function workspaceStorage(userId?: string) {
         const ids = readRemoved(localStorage.getItem(removedKey));
         if (!ids)
           throw new Error(
-            "Could not read removed boards. Export a backup before clearing browser data.",
+            "Could not read removed boards. Keep this page open and restore browser storage access before clearing any data.",
           );
         const wasRemoved = ids.has(id);
         if (remove) ids.add(id);

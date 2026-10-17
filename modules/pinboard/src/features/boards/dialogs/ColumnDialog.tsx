@@ -1,3 +1,4 @@
+import { sameShape, useRecoveryDraft } from '../../../application/useRecoveryDraft';
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { Check } from 'lucide-react';
 import type { Board, Column, ColumnColor, Operation } from '../../../domain/boards/types';
@@ -40,15 +41,22 @@ export function ColumnDialog({
   onRecover: (code: string) => Promise<boolean>;
   onNotice: (text: string) => void;
 }) {
-  const [title, setTitle] = useState(initial.title);
-  const [color, setColor] = useState<ColumnColor>(initial.color);
+  const sample = { baseline: initial, title: initial.title, color: initial.color };
+  const recovery = useRecoveryDraft(
+    `${board.invite_code}:column:${isNew ? 'new' : initial.id}`,
+    sample,
+    (value): value is typeof sample => sameShape(sample, value),
+  );
+  const { title, color, baseline } = recovery.value;
+  const setTitle = (title: string) => recovery.setValue((current) => ({ ...current, title }));
+  const setColor = (color: ColumnColor) => recovery.setValue((current) => ({ ...current, color }));
   const [target, setTarget] = useState(
     board.columns.find((column) => column.id !== initial.id)?.id ?? '',
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const colorLabelId = useId();
   const { localError, setLocalError, copy } = useDialogMessages(onNotice);
-  const unsaved = title.trim() !== initial.title || color !== initial.color;
+  const unsaved = title.trim() !== baseline.title || color !== baseline.color;
   const discard = useDraftClose(removed || unsaved, closeModal);
   const locked = busy || offline || removed;
   const currentColumns = (currentBoard ?? board).columns;
@@ -63,10 +71,10 @@ export function ColumnDialog({
     setLocalError('');
     if (locked) return;
     try {
-      const column = { ...initial, title: title.trim(), color };
+      const column = { ...baseline, title: title.trim(), color };
       const patch: { title?: string; color?: ColumnColor } = {};
-      if (column.title !== initial.title) patch.title = column.title;
-      if (column.color !== initial.color) patch.color = column.color;
+      if (column.title !== baseline.title) patch.title = column.title;
+      if (column.color !== baseline.color) patch.color = column.color;
       const saved = isNew
         ? await onSave(board.id, { type: 'add_column', column })
         : Object.keys(patch).length === 0 ||
@@ -75,7 +83,10 @@ export function ColumnDialog({
             id: column.id,
             patch,
           }));
-      if (saved) closeModal();
+      if (saved) {
+        recovery.clear();
+        closeModal();
+      }
     } catch (error) {
       setLocalError(message(error));
     }
@@ -88,8 +99,10 @@ export function ColumnDialog({
         id: initial.id,
         targetColumnId: target,
       })
-    )
+    ) {
+      recovery.clear();
       closeModal();
+    }
   }
   return (
     <Dialog
@@ -108,7 +121,9 @@ export function ColumnDialog({
           busy={busy}
           removed={removed}
           onKeep={discard.keepEditing}
-          onDiscard={closeModal}
+          onDiscard={() => {
+            if (recovery.clear()) closeModal();
+          }}
         />
       ) : (
         <EditorForm
@@ -129,7 +144,7 @@ export function ColumnDialog({
               />
             )
           }
-          localError={localError}
+          localError={localError || recovery.error}
           serverError={serverError}
           offline={offline}
           busy={busy}
@@ -140,6 +155,11 @@ export function ColumnDialog({
           onDelete={!isNew && currentColumns.length > 1 ? () => setConfirmDelete(true) : undefined}
           onSubmit={(event) => void submit(event)}
         >
+          {recovery.recovered && (
+            <p className="soft-note">
+              Recovered unsaved draft from this device. Review it before saving.
+            </p>
+          )}
           <TitleField
             label="Column name"
             value={title}

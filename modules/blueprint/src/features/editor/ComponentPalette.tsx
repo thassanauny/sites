@@ -1,13 +1,11 @@
+import { useEffect, useState } from "react";
 import type { WorkspaceController } from "../../application/useWorkspaceController";
 import { TemplateCards } from "../boards/TemplateCards";
 import {
-  ArrowUpRight,
-  CircleHelp,
   Grid2X2,
   LayoutTemplate,
   Plus,
   Search,
-  Sparkles,
 } from "lucide-react";
 import { ComponentIcon } from "../../ui/ComponentIcon";
 import { componentKinds } from "../../domain/boards/types";
@@ -18,7 +16,8 @@ export function ComponentPalette({
   controller: Pick<
     WorkspaceController,
     | "readOnly"
-    | "setModal"
+    | "cloud"
+    | "auth"
     | "sidebarTab"
     | "setSidebarTab"
     | "search"
@@ -28,9 +27,20 @@ export function ComponentPalette({
     | "newBoard"
   >;
 }) {
+  const [online, setOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
   const {
     readOnly,
-    setModal,
+    cloud,
+    auth,
     sidebarTab,
     setSidebarTab,
     search,
@@ -139,27 +149,17 @@ export function ComponentPalette({
         )}
       </div>
       <div className="sidebar-footer">
-        <div className="little-tip">
-          <span>
-            <Sparkles size={17} />
-          </span>
-          <div>
-            <strong>Room for your big ideas</strong>
-            <p>
-              Drag a component onto the canvas.
-              <br />
-              Connect the dots. Think it through.
-            </p>
-          </div>
+        <div className="sidebar-sync-status" title={cloud.lastSync ? `Last synced ${cloud.lastSync.toLocaleString()}` : undefined}>
+          {!auth.configured
+            ? "Setup required"
+            : !online || cloud.error || cloud.status === "error" || cloud.status === "conflict"
+              ? "Sync paused"
+              : cloud.status === "saved"
+                ? cloud.lastSync ? `Synced ${cloud.lastSync.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Connecting…"
+                : cloud.status === "saving"
+                  ? "Syncing…"
+                  : "Connecting…"}
         </div>
-        <button
-          className="sidebar-bottom-link"
-          onClick={() => setModal("shortcuts")}
-        >
-          <CircleHelp size={15} />
-          <span>A few handy shortcuts</span>
-          <ArrowUpRight size={14} />
-        </button>
       </div>
     </aside>
   );

@@ -77,7 +77,7 @@ export class DialogController {
     const { ui, root, session } = this.host;
     const opening = this.opening;
     if (!force && opening && session.state.phase === 'opening') return;
-    if (!force && this.kind === 'join' && readRoute(location.hash).kind === 'join') this.host.showHomeAddress();
+    if (!force && this.kind === 'join' && ['join', 'page'].includes(readRoute(location.hash).kind)) this.host.showHomeAddress();
     ++this.copies;
     this.kind = null;
     this.error = '';

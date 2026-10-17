@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { version as appVersion } from '../../package.json'
-import { ArrowUpRight, Check, CircleHelp, History, Home, Plane, Plus, RefreshCw, Search, Users, WifiOff, X } from 'lucide-react'
+import { ArrowUpRight, Check, CircleHelp, History, Home, Link, Settings2, Plane, Plus, RefreshCw, Search, Users, WifiOff, X } from 'lucide-react'
 import type { Group, Settlement, Transaction } from '../domain/groups/types'
 import { getCurrencyBalances, validateGroup } from '../domain/ledger/calculations'
 import { getTransactionFeed, type TransactionFilter } from '../domain/ledger/transactions'
@@ -318,9 +318,23 @@ export default function App() {
             </button>
           </nav>
           <div className="header-actions">
+            {group && (
+              <div className="group-top-actions workspace-actions">
+                <button type="button" className="icon-button group-invite workspace-invite" onClick={() => setModal({ type: 'invite' })} aria-label="Invite">
+                  <Link size={18} />
+                  <span className="group-invite-label">Invite</span>
+                </button>
+                <button type="button" className="icon-button group-settings workspace-settings" onClick={openSettings} aria-label="Group settings">
+                  <Settings2 size={20} />
+                  <span className="group-settings-label">Settings</span>
+                </button>
+              </div>
+            )}
             <span className={`connection ${!online ? 'offline' : ''}`}>
               {!online ? <WifiOff size={13} /> : <span className="tiny-dot" />}
-              {!online ? 'Offline' : !cloudConfigured ? 'Setup required' : syncing ? 'Syncing' : syncError ? 'Needs attention' : lastSync ? 'Connected' : 'Connecting'}
+              <span className="connection-label">
+                {!online ? 'Offline' : !cloudConfigured ? 'Setup required' : syncing ? 'Syncing' : syncError ? 'Needs attention' : lastSync ? 'Connected' : 'Connecting'}
+              </span>
             </span>
             <button type="button" className="icon-button help-button" aria-label="Help" onClick={() => setModal({ type: 'help' })}>
               <CircleHelp size={21} />
@@ -443,14 +457,11 @@ export default function App() {
             visibleTransactions={visibleTransactions}
             logFilter={logFilter}
             logLimit={pageLimit}
-            pinned={store.pinnedIds.includes(group.id)}
             unsynced={store.outbox.some(item => item.group.id === group.id)}
             synced={!!lastSync}
             canEdit={canEdit}
             version={appVersion}
             onNavigate={target => (target === 'home' ? navigate() : navigate(group.inviteCode, target === 'log'))}
-            onTogglePin={() => void togglePin(group.id)}
-            onInvite={() => setModal({ type: 'invite' })}
             onSettings={openSettings}
             onExpense={() => setModal({ type: 'expense' })}
             onPayment={settlement => setModal({ type: 'payment', settlement })}

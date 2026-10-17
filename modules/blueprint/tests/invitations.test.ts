@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  boardCodeFromHash,
   invitationCode,
   invitationFromHash,
   invitationLink,
@@ -17,7 +18,12 @@ describe("shared invitations on static hosts", () => {
         code,
         "https://example.com/everydayapps/blueprint/?old=1#/board/x",
       ),
-    ).toBe("https://example.com/everydayapps/blueprint/#/join/" + code);
+    ).toBe("https://example.com/everydayapps/blueprint/#/board/" + code);
+  });
+  it("selects a board only with a complete invitation in the route", () => {
+    expect(boardCodeFromHash("#/board/" + code)).toBe(code);
+    for (const hash of ["", "#/board", "#/board/", "#/editor", "#/boards", "#/board/abcd"])
+      expect(boardCodeFromHash(hash)).toBeNull();
   });
   it("requires complete invitations and treats ordinary routes as no invitation", () => {
     expect(invitationFromHash("#/join/" + code)).toBe(code);

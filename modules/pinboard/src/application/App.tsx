@@ -71,12 +71,16 @@ export default function App() {
       </button>
       <WorkspaceHeader
         atHome={!selectedCode}
+        boardTitle={board?.title}
+        busy={busy}
+        onInvite={openInvite}
+        onSettings={openSettings}
         offline={offline || !!error}
         status={
           offline
             ? 'Offline'
             : !cloudConfigured
-              ? 'Setup needed'
+              ? 'Setup required'
               : busy
                 ? 'Saving…'
                 : refreshing
@@ -84,7 +88,7 @@ export default function App() {
                   : error
                     ? 'Sync unavailable'
                     : lastSync
-                      ? 'All changes saved'
+                      ? 'Connected'
                       : 'Connecting'
         }
         onHome={() => navigate()}
@@ -99,7 +103,7 @@ export default function App() {
         disabled={disabled}
         status={
           !cloudConfigured
-            ? 'Setup needed'
+            ? 'Setup required'
             : offline || error
               ? 'Sync paused'
               : lastSync
@@ -149,7 +153,6 @@ export default function App() {
         {board ? (
           <BoardView
             board={board}
-            busy={busy}
             disabled={disabled}
             refreshDisabled={refreshDisabled}
             refreshing={refreshing}
@@ -161,8 +164,6 @@ export default function App() {
             onClearFilters={clearFilters}
             today={today}
             onRefresh={refreshNow}
-            onSettings={openSettings}
-            onInvite={openInvite}
             onAddCard={addCard}
             onEditColumn={openColumn}
             onEditCard={openCard}

@@ -5,7 +5,7 @@ const code = '0123456789abcdef0123456789abcdef';
 describe('snippet invitations on any static hosting path', () => {
   it('uses hash routing and preserves the host path', () => {
     expect(pageHash(code)).toBe(`#/p/${code}`);
-    expect(invitationLink(code, 'https://example.test/apps/textdrop/?query=old#/')).toBe(`https://example.test/apps/textdrop/#/join/${code}`);
+    expect(invitationLink(code, 'https://example.test/apps/textdrop/?query=old#/')).toBe(`https://example.test/apps/textdrop/#/p/${code}`);
     expect(readRoute(`#/p/${code}`)).toEqual({ kind: 'page', code });
     expect(readRoute(`#/join/${code}`)).toEqual({ kind: 'join', code });
     expect(readRoute('')).toEqual({ kind: 'home' });

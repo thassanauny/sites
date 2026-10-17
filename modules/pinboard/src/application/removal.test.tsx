@@ -24,7 +24,7 @@ vi.mock('../infrastructure/cloud/boards', async () => (await import('./cloudMock
 installHarness();
 
 describe('Pinboard UI: removing a board from this device', () => {
-  it('keeps removal and a retryable form when restoring its device preference fails', async () => {
+  it('keeps removal and a retryable error when restoring its device preference fails', async () => {
     const device = new DeviceBoards();
     device.remove(board.invite_code);
     await mount();
@@ -38,7 +38,8 @@ describe('Pinboard UI: removing a board from this device', () => {
     expect(device.removal(board.invite_code)).not.toBeNull();
     await click('Join board');
     expect(device.removal(board.invite_code)).toBeNull();
-    expect(document.querySelector('h1')?.textContent).toBe(board.title);
+    expect(document.querySelector('.board-preview')).not.toBeNull();
+    expect(window.location.hash).toBe('');
   });
 
   it('confirms local removal, preserves cancelled details, and stays hidden after polling and reload', async () => {
@@ -96,21 +97,19 @@ describe('Pinboard UI: removing a board from this device', () => {
     expect(cloud.mutateBoard).not.toHaveBeenCalled();
   });
 
-  it('requires an explicit successful join to restore a removed ordinary board link', async () => {
+  it('restores a removed board to Home only after Join succeeds', async () => {
     const device = new DeviceBoards();
     device.remove(board.invite_code);
     device.remove('b'.repeat(32));
     await mount();
     expect(cloud.joinBoard).not.toHaveBeenCalled();
-    expect(field('Invitation code or link').value).toBe(board.invite_code);
-    await click('Join board');
     expect(device.removal(board.invite_code)).not.toBeNull();
-    expect(document.querySelector('.board-preview')).toBeNull();
     cloud.joinBoard.mockResolvedValueOnce(board);
     await click('Join board');
     expect(device.removal(board.invite_code)).toBeNull();
     expect(device.removal('b'.repeat(32))).not.toBeNull();
-    expect(document.querySelector('h1')?.textContent).toBe(board.title);
+    expect(document.querySelector('.board-preview')).not.toBeNull();
+    expect(window.location.hash).toBe('');
   });
 
   it('does not restore a removed board from a refresh that was already in flight', async () => {
@@ -174,7 +173,7 @@ describe('Pinboard UI: removing a board from this device', () => {
       const storedValues = Array.from({ length: window.localStorage.length }, (_, index) =>
         window.localStorage.getItem(window.localStorage.key(index)!),
       );
-      expect(storedValues.join('')).not.toContain('Unsaved work');
+      expect(storedValues.join('')).toContain('Unsaved work');
       cloud.joinBoard.mockResolvedValueOnce({ ...populated, revision: 2 });
       await click('Join again and keep draft');
       expect(cloud.joinBoard).toHaveBeenCalledWith(board.invite_code);
@@ -263,10 +262,12 @@ describe('Pinboard UI: removing a board from this device', () => {
     expect(button('Save details').disabled).toBe(true);
   });
 
-  it('keeps a newer removal when an older automatic join completes', async () => {
+  it('keeps a newer removal when an older link-confirmed join completes', async () => {
     const pending = deferred<Board>();
     cloud.joinBoard.mockReturnValueOnce(pending.promise);
     await mount([], board.invite_code);
+    await click('Join board');
+    expect(cloud.joinBoard).toHaveBeenCalledExactlyOnceWith(board.invite_code);
     await act(async () => {
       new DeviceBoards().remove(board.invite_code);
       window.dispatchEvent(
@@ -282,7 +283,7 @@ describe('Pinboard UI: removing a board from this device', () => {
 
   it('keeps a newer removal when an older explicit join completes', async () => {
     await mount([], '');
-    await click('Join with a code');
+    await click('Join a board');
     await fill('Invitation code or link', board.invite_code);
     const pending = deferred<Board>();
     cloud.joinBoard.mockReturnValueOnce(pending.promise);
@@ -327,10 +328,11 @@ describe('Pinboard UI: removing a board from this device', () => {
     expect(cloud.joinBoard).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('Could not read boards');
     read.mockRestore();
+    cloud.joinBoard.mockResolvedValueOnce(board);
     await refresh();
-    expect(field('Invitation code or link').value).toBe(board.invite_code);
-    expect(document.querySelector('.board-preview')).toBeNull();
     expect(cloud.joinBoard).not.toHaveBeenCalled();
+    expect(new DeviceBoards().removal(board.invite_code)).not.toBeNull();
+    expect(field('Invitation code or link').value).toBe(board.invite_code);
   });
 
   it('ignores unrelated and session-storage events and stops listening after unmount', async () => {

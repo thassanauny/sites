@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // @vitest-environment-options {"url":"http://localhost/textdrop/#/"}
 import { describe, expect, it, vi } from 'vitest';
-import { useMountHarness, first, second, key, pending, root, cloud, dispose, writeText, element, rows, flush, start, edit } from '../../tests/mountHarness';
+import { useMountHarness, first, second, key, pending, root, cloud, dispose, writeText, element, rows, flush, start, edit, join } from '../../tests/mountHarness';
 import type { TextDropPage } from '../domain/snippets/model';
 import { DEVICE_SNIPPETS_KEY, DeviceSnippets } from '../infrastructure/storage/deviceSnippets';
 
@@ -102,7 +102,7 @@ describe('TextDrop dialogs', () => {
     expect(element('dialog-error').hidden).toBe(true);
     element('invite-copy-link').click();
     await flush();
-    expect(writeText).toHaveBeenLastCalledWith(`http://localhost/textdrop/#/join/${first.code}`);
+    expect(writeText).toHaveBeenLastCalledWith(`http://localhost/textdrop/#/p/${first.code}`);
     element('dialog-close').click();
     expect(document.activeElement).toBe(element('share'));
   });
@@ -135,7 +135,7 @@ describe('TextDrop dialogs', () => {
     expect(cloud.savePage).not.toHaveBeenCalled();
   });
 
-  it('removes through settings with a confirmation and keeps ordinary links hidden across reloads', async () => {
+  it('keeps removed snippets hidden on Home and restores them to Home after a confirmed Open', async () => {
     await start(`#/p/${first.code}`);
     element('settings').click();
     expect(element('dialog-title').textContent).toBe('Snippet settings');
@@ -156,21 +156,19 @@ describe('TextDrop dialogs', () => {
     expect(cloud.createPage).not.toHaveBeenCalled();
     vi.mocked(cloud.joinPage).mockClear();
     dispose!();
-    await start(`#/p/${first.code}`);
+    await start('#/');
     expect(cloud.joinPage).not.toHaveBeenCalled();
-    expect(element('home').hidden).toBe(false);
-    expect(element<HTMLInputElement>('join-code').value).toBe(first.code);
-    window.dispatchEvent(new Event('focus'));
-    await vi.advanceTimersByTimeAsync(3100);
     expect(rows()).toEqual([]);
     dispose!();
-    await start(`#/join/${first.code}`);
+    await start(`#/p/${first.code}`);
     expect(cloud.joinPage).not.toHaveBeenCalled();
-    element('join-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await flush();
-    expect(cloud.joinPage).toHaveBeenLastCalledWith(first.code);
+    expect(element<HTMLDialogElement>('snippet-dialog').open).toBe(true);
+    await join(first.code);
+    expect(cloud.joinPage).toHaveBeenCalledExactlyOnceWith(first.code);
     expect(rows()).toEqual([first.code]);
-    expect(location.hash).toBe(`#/p/${first.code}`);
+    expect(location.hash).toBe('#/');
+    expect(element('home').hidden).toBe(false);
+    expect(element<HTMLDialogElement>('snippet-dialog').open).toBe(false);
   });
 
   it('requires an explicit choice to discard unsaved text and preserves it when local removal fails', async () => {

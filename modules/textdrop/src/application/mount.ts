@@ -4,7 +4,7 @@ import { countLines, exceedsLimit, exportFileName, type DeviceSnippet } from '..
 import { DialogController } from './dialogs';
 import { errorMessage } from './errorMessage';
 import { PageSession } from './PageSession';
-import type { Cloud, DeviceList } from './ports';
+import type { Cloud, DeviceList, DraftRecovery } from './ports';
 import { RefreshScheduler } from './refreshScheduler';
 import { invitationLink, joinCode, pageHash, readRoute } from './routes';
 
@@ -15,7 +15,7 @@ function setText(element: HTMLElement, text: string): void {
   if (element.textContent !== text) element.textContent = text;
 }
 
-export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: DeviceList, options: { configured: boolean; version: string }): () => void {
+export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: DeviceList, options: { configured: boolean; version: string; recovery?: DraftRecovery }): () => void {
   const lifecycle = new AbortController();
   const { signal } = lifecycle;
   root.innerHTML = shell();
@@ -31,7 +31,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
   const editor = ui.editor;
   const codeInput = ui.joinCode;
   const { configured, version } = options;
-  const session = new PageSession(cloud);
+  const session = new PageSession(cloud, 650, 10_000, options.recovery);
   const refreshes = new RefreshScheduler(
     () => session.refresh(),
     () => document.visibilityState === 'visible',
@@ -58,7 +58,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     showHomeAddress,
   });
 
-  ui.version.textContent = `v${version}`;
+  ui.version.textContent = version;
 
   /** Puts Home in the address bar without adding a history entry. */
   function showHomeAddress(): void {
@@ -140,8 +140,12 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     const opening = phase === 'opening';
     ui.home.hidden = Boolean(page);
     ui.workspace.hidden = !page;
-    ui.connection.classList.toggle('disconnected', !online);
-    setText(ui.connectionLabel, online ? 'Online' : 'Offline');
+    ui.snippetActions.hidden = !page;
+    ui.connection.classList.toggle('disconnected', !online || !!error || !configured);
+    setText(
+      ui.connectionLabel,
+      !online ? 'Offline' : !configured ? 'Setup required' : error ? 'Needs attention' : opening ? 'Connecting' : phase === 'saving' ? 'Syncing' : page ? 'Connected' : 'Online',
+    );
     ui.create.disabled = opening || !online || !configured;
     ui.join.disabled = opening || !online || !configured;
     const openingDialog = dialogs.opening;
@@ -182,13 +186,17 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     const notice =
       uiError ||
       (!openingDialog ? error : '') ||
+      session.state.recoveryError ||
       deviceWriteError ||
       deviceReadError ||
       (!configured ? 'Sharing needs Supabase settings. Add the public project settings, then restart this app.' : '') ||
-      (!online ? 'Reconnect to create, open, or edit a page. Text is not stored on this device.' : '');
+      (!online ? 'Reconnect to create, open, or edit a page. Unsaved text has local recovery when browser storage is available.' : '');
     ui.notice.hidden = !notice;
     ui.noticeMessage.textContent = notice;
-    ui.retry.hidden = !page || !dirty || !online || phase === 'saving' || measure(draft).tooLarge;
+    const link = readRoute(location.hash);
+    const retryOpening = !page && !opening && !!error && configured && online && (link.kind === 'page' || link.kind === 'join');
+    ui.retry.hidden = !retryOpening && (!page || !dirty || !online || phase === 'saving' || measure(draft).tooLarge);
+    setText(ui.retry, retryOpening ? 'Retry opening' : 'Retry save');
     ui.newSession.hidden = !(sessionDamaged && notice === error);
     dialogs.render({ page, dirty, phase, sessionError: error, sessionDamaged, online, configured });
   }
@@ -224,6 +232,38 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     refreshes.activity();
     editor.focus();
   }
+
+  const closeHelp = () => {
+    ui.helpDialog.close();
+    ui.help.focus();
+  };
+  ui.help.addEventListener(
+    'click',
+    () => {
+      if (ui.dialog.open || ui.helpDialog.open) return;
+      ui.helpDialog.showModal();
+      ui.helpClose.focus();
+    },
+    { signal },
+  );
+  ui.helpClose.addEventListener('click', closeHelp, { signal });
+  ui.helpDialog.addEventListener(
+    'cancel',
+    event => {
+      event.preventDefault();
+      closeHelp();
+    },
+    { signal },
+  );
+  ui.helpDialog.addEventListener(
+    'click',
+    event => {
+      if (event.target !== ui.helpDialog) return;
+      const bounds = ui.helpDialog.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeHelp();
+    },
+    { signal },
+  );
 
   ui.create.addEventListener(
     'click',
@@ -264,9 +304,18 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
       try {
         const code = joinCode(codeInput.value);
         const expected = deviceSnippets.snapshot(code);
+        const rejoining = deviceSnippets.isRemoved(code);
         loadingLink = true;
         void session.join(code).then(opened => {
-          if (opened) navigateToPage(expected);
+          if (opened) {
+            navigateToPage(expected);
+            if (rejoining && session.state.page && !deviceSnippets.isRemoved(code)) {
+              dialogs.close(true, false);
+              showHomeAddress();
+              session.home();
+              ui.deviceHeading.focus();
+            }
+          }
         });
       } catch (error) {
         dialogs.error = errorMessage(error, 'Check the invitation code and try again.');
@@ -328,7 +377,8 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     'click',
     () => {
       uiError = '';
-      void session.save();
+      if (!session.state.page) void route();
+      else void session.save();
     },
     { signal },
   );
@@ -480,6 +530,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
       const removingCurrent = session.state.page?.code === dialogs.code;
       dialogs.close();
       if (removingCurrent) {
+        if (session.state.dirty && !session.discardRecovery()) return;
         showHomeAddress();
         session.home();
       }
@@ -527,6 +578,10 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
         history.replaceState(null, '', currentHash || '#/');
         return;
       }
+      if (!session.discardRecovery()) {
+        history.replaceState(null, '', currentHash || '#/');
+        return;
+      }
     }
     currentHash = nextHash;
     uiError = '';
@@ -536,16 +591,14 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
       updateDeviceSnippets(() => deviceSnippets.list());
       session.home();
       ui.create.focus();
-    } else if (next.kind === 'page') {
+    } else if (next.kind === 'page' || next.kind === 'join') {
       let expected: string | null;
       try {
         expected = deviceSnippets.snapshot(next.code);
-        if (deviceSnippets.isRemoved(next.code)) {
+        if (deviceSnippets.isRemoved(next.code) || !rememberedSnippets.some(item => item.code === next.code)) {
           session.home();
           codeInput.value = next.code;
-          uiError = 'This snippet was removed from this device. Choose Open a snippet to open it again with its code.';
-          render();
-          ui.join.focus();
+          dialogs.show('join');
           return;
         }
       } catch (error) {
@@ -559,10 +612,6 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
       if (await session.join(next.code)) {
         navigateToPage(expected);
       }
-    } else if (next.kind === 'join') {
-      session.home();
-      codeInput.value = next.code;
-      dialogs.show('join');
     } else {
       session.home();
       uiError = 'That invitation link is invalid. Paste a complete snippet code to open it.';
@@ -666,6 +715,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     clearTimeout(toastTimer);
     session.dispose();
     if (dialog.open) dialog.close();
+    if (ui.helpDialog.open) ui.helpDialog.close();
     root.replaceChildren();
   };
 }

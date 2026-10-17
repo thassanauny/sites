@@ -87,6 +87,17 @@
   .home-intro h1 {
     font-size: 30px;
   }
+  .home-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .home-actions .button {
+    padding-inline: 10px;
+    font-size: 13px;
+    min-width: 0;
+    white-space: normal;
+  }
   .home-tool-actions {
     flex-wrap: wrap;
   }
@@ -101,4 +112,149 @@
     height: 68px;
     min-height: 68px;
   }
+}
+
+.connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ea-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.connection-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ea-jade);
+}
+.connection.offline { color: #8d563d; }
+.connection.offline .connection-dot { background: #8d563d; }
+.help-button { width: 44px; height: 44px; flex-shrink: 0; }
+.help-content { line-height: 1.7; }
+.app-footer {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 10px 26px;
+  font-size: 10px;
+  color: var(--ea-muted);
+  background: var(--ea-paper);
+}
+.app-version { white-space: nowrap; }
+@media (min-width: 1024px) {
+  .home-content { max-width: none; width: 100%; }
+}
+@media (max-width: 760px) {
+  .home-header-label { display: none; }
+  .topbar:has(.header-board-title) .connection-label { display: none; }
+  .help-button { width: 36px; height: 36px; }
+}
+
+@media (max-width: 1050px) {
+  .board-settings-button > span { display: none; }
+}
+
+.sidebar-footer {
+  padding: 20px 20px 19px;
+  border-top: 0;
+}
+.sidebar-sync-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--ea-font-body);
+  font-size: 9px;
+  font-weight: 400;
+  color: #63735d;
+}
+
+.header-board-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0 12px;
+  padding-left: 20px;
+  border-left: 1px solid var(--border);
+  font-family: var(--ea-font-heading);
+  font-size: 24px;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .topbar:has(.header-board-title) {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 100px;
+    padding-block: 10px;
+    gap: 8px;
+  }
+  .header-board-title {
+    order: 3;
+    flex-basis: 100%;
+    margin: 0;
+    padding: 4px 0 0;
+    border: 0;
+    font-size: 22px;
+  }
+}
+
+/* Shared invitation controls follow IOU's compact desktop buttons. */
+.workspace-actions { gap: 9px; }
+.workspace-actions .workspace-invite,
+.workspace-actions .workspace-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  min-width: 44px;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+  border: 1px solid var(--ea-line);
+  border-radius: 12px;
+  font-family: var(--ea-font-body);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  box-shadow: none;
+}
+.workspace-actions .workspace-invite {
+  background: var(--ea-jade);
+  border-color: var(--ea-jade);
+  color: #fffef7;
+}
+.workspace-actions .workspace-settings {
+  background: var(--ea-surface);
+  border-color: #d4dbd1;
+  color: var(--ea-jade-dark);
+}
+.workspace-actions .workspace-invite:hover:not(:disabled) {
+  background: var(--ea-jade-dark);
+  border-color: var(--ea-jade-dark);
+}
+.workspace-actions .workspace-settings:hover:not(:disabled) {
+  background: #edf1e7;
+  border-color: #a5b5a8;
+}
+.workspace-actions .workspace-invite svg { width: 18px; height: 18px; }
+.workspace-actions .workspace-settings svg { width: 16px; height: 16px; }
+.workspace-actions .workspace-invite > span,
+.workspace-actions .workspace-settings > span { display: none; }
+@media (min-width: 600px) {
+  .workspace-actions .workspace-invite,
+  .workspace-actions .workspace-settings { width: auto; padding-inline: 15px; }
+  .workspace-actions .workspace-invite > span,
+  .workspace-actions .workspace-settings > span { display: inline; }
+}
+
+@media (max-width: 599px) {
+  .topbar:has(.header-board-title) { flex-wrap: nowrap; height: 68px; min-height: 68px; gap: 8px; padding-block: 10px; }
+  .header-board-title { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+  .topbar:has(.header-board-title) .brand > span:last-child { display: none; }
 }

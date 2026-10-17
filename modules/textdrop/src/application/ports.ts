@@ -26,3 +26,10 @@ export interface DeviceList {
   /** Whether a `storage` event key shows that another tab changed the list. */
   changedBy(key: string | null): boolean;
 }
+
+/** Local unsaved-text copies; opening still requires online access. */
+export interface DraftRecovery {
+  read(page: TextDropPage): string | undefined;
+  write(page: TextDropPage, text: string): void;
+  clear(page: TextDropPage): void;
+}

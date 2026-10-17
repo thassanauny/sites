@@ -7,13 +7,16 @@ import { workspaceStorage } from "../infrastructure/storage/workspace";
 export function useWorkspace(userId?: string) {
   const storage = useMemo(() => workspaceStorage(userId), [userId]);
   const [removedIds, setRemovedIds] = useState(() => storage.removed());
+  const removalVersion = useRef(0);
   const updateRemoved = useCallback(
     async (id: string, remove: boolean) => {
-      setRemovedIds(await storage.updateRemoved(id, remove));
+      const ids = await storage.updateRemoved(id, remove);
+      removalVersion.current++;
+      setRemovedIds(ids);
     },
     [storage],
   );
-  useEffect(() => storage.watchRemoved(setRemovedIds), [storage]);
+  useEffect(() => storage.watchRemoved((ids) => { removalVersion.current++; setRemovedIds(ids); }), [storage]);
   const hadLocalWorkspace = useRef(storage.hasSaved());
   const [workspace, setWorkspace] = useState(() => storage.load());
   const [localStatus, setLocalStatus] = useState<"saved" | "saving" | "error">(
@@ -22,9 +25,12 @@ export function useWorkspace(userId?: string) {
   const [historyVersion, setHistoryVersion] = useState(0);
   const past = useRef<Diagram[]>([]);
   const future = useRef<Diagram[]>([]);
+  const [emptyBoard] = useState(() => createBoard("blank"));
   const board = workspace.boards.find(
     (item) => item.id === workspace.activeId,
-  )!;
+  ) || emptyBoard;
+  const removedRef = useRef(removedIds);
+  removedRef.current = removedIds;
   const boardRef = useRef(board);
   boardRef.current = board;
   const serialized = JSON.stringify({
@@ -114,7 +120,7 @@ export function useWorkspace(userId?: string) {
     future.current = [];
     setHistoryVersion((v) => v + 1);
     setWorkspace((previous) => ({
-      boards: [newBoard, ...previous.boards],
+      boards: [newBoard, ...previous.boards.filter((item) => item.id !== newBoard.id)],
       activeId: newBoard.id,
     }));
   }, []);
@@ -125,11 +131,10 @@ export function useWorkspace(userId?: string) {
     setHistoryVersion((v) => v + 1);
     setWorkspace((previous) => {
       const remaining = previous.boards.filter((item) => item.id !== id);
-      if (!remaining.length) remaining.push(createBoard("blank"));
       return {
         boards: remaining,
         activeId:
-          previous.activeId === id ? remaining[0].id : previous.activeId,
+          previous.activeId === id ? remaining[0]?.id || "" : previous.activeId,
       };
     });
   }, []);
@@ -176,8 +181,9 @@ export function useWorkspace(userId?: string) {
   );
 
   const openCloudBoard = useCallback(
-    async (remote: Board) => {
-      await updateRemoved(remote.id, false);
+    async (remote: Board, restore = true) => {
+      if (restore) await updateRemoved(remote.id, false);
+      else if (removedRef.current.has(remote.id)) return false;
       past.current = [];
       future.current = [];
       setHistoryVersion((v) => v + 1);
@@ -197,6 +203,8 @@ export function useWorkspace(userId?: string) {
       (board) => !removedIds.has(board.id),
     ),
     activeRemoved: removedIds.has(workspace.activeId),
+    removalVersion: () => removalVersion.current,
+    isRemoved: (id: string) => removedRef.current.has(id),
     removeFromDevice,
     update,
     addBoard,

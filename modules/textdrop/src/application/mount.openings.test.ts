@@ -187,7 +187,8 @@ describe('TextDrop opening snippets', () => {
   it('ignores an old opening after navigation to a different invitation and keeps the new code prefilled', async () => {
     const opening = pending<TextDropPage>();
     vi.mocked(cloud.joinPage).mockReturnValueOnce(opening.promise);
-    await start(`#/p/${first.code}`);
+    await start();
+    await join(first.code);
     history.replaceState(null, '', `/textdrop/#/join/${second.code}`);
     window.dispatchEvent(new Event('hashchange'));
     expect(element('home').hidden).toBe(false);

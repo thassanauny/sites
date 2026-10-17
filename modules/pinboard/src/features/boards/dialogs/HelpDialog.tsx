@@ -20,11 +20,12 @@ export function HelpDialog({ busy, onClose }: { busy: boolean; onClose: () => vo
         </p>
         <p>
           You need a connection to save. Keep your invite codes: you can rejoin if you clear browser
-          data or switch devices.
+          data or switch devices. Unsaved editor drafts have local recovery; reopen the same editor
+          and Save to publish a recovered draft.
         </p>
         <p>
           Use Board settings to remove a board from this device. Everyone else keeps access. Join
-          again with its code whenever you need it.
+          again with its code, or confirm Join from its invitation link to restore it on Home.
         </p>
       </div>
       <div className="dialog-actions">

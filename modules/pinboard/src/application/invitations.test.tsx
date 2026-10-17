@@ -34,11 +34,11 @@ describe('Pinboard UI: invitations and routes', () => {
 
   it('shares explicit invitation links and accepts them in the Join form', async () => {
     await mount();
-    await click('Invite people');
-    expect(field('Invitation link').value).toBe(`http://localhost/#join/${board.invite_code}`);
+    await click('Invite');
+    expect(field('Invitation link').value).toBe(`http://localhost/#board/${board.invite_code}`);
     await click('Close dialog');
     await click('Open workspace');
-    await click('Join with a code');
+    await click('Join a board');
     await fill(
       'Invitation code or link',
       `http://localhost/#/join/${board.invite_code.toUpperCase()}`,
@@ -84,12 +84,16 @@ describe('Pinboard UI: invitations and routes', () => {
     expect(device.removal(board.invite_code)).not.toBeNull();
   });
 
-  it('retries a failed ordinary board link after leaving and returning through history', async () => {
+  it('requires confirmation again after a failed Join is cancelled and the link is reopened', async () => {
     await mount([], board.invite_code);
+    expect(cloud.joinBoard).not.toHaveBeenCalled();
+    await click('Join board');
     expect(cloud.joinBoard).toHaveBeenCalledTimes(1);
     await click('Cancel');
     cloud.joinBoard.mockResolvedValueOnce(board);
     await navigateHash(`#board/${board.invite_code}`);
+    expect(cloud.joinBoard).toHaveBeenCalledTimes(1);
+    await click('Join board');
     expect(cloud.joinBoard).toHaveBeenCalledTimes(2);
     expect(document.querySelector('h1')?.textContent).toBe(board.title);
     expect(document.querySelector('dialog')).toBeNull();
@@ -134,26 +138,20 @@ describe('Pinboard UI: invitations and routes', () => {
     expect(document.querySelector('dialog')).not.toBeNull();
   });
 
-  it('retries an invitation automatically after reconnecting', async () => {
-    cloud.joinBoard.mockRejectedValueOnce(new Error('Connection lost'));
+  it('keeps an invitation pending across reconnect until Join is pressed', async () => {
     await mount([], board.invite_code);
-    expect(cloud.joinBoard).toHaveBeenCalledTimes(1);
-    Object.defineProperty(navigator, 'onLine', {
-      value: false,
-      configurable: true,
-    });
+    expect(cloud.joinBoard).not.toHaveBeenCalled();
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
     await act(async () => {
       window.dispatchEvent(new Event('offline'));
     });
-    cloud.joinBoard.mockResolvedValueOnce(board);
-    Object.defineProperty(navigator, 'onLine', {
-      value: true,
-      configurable: true,
-    });
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
     await act(async () => {
       window.dispatchEvent(new Event('online'));
     });
-    expect(cloud.joinBoard).toHaveBeenCalledTimes(2);
-    expect(document.querySelector('h1')?.textContent).toBe('Weekend plans');
+    expect(cloud.joinBoard).not.toHaveBeenCalled();
+    cloud.joinBoard.mockResolvedValueOnce(board);
+    await click('Join board');
+    expect(cloud.joinBoard).toHaveBeenCalledExactlyOnceWith(board.invite_code);
   });
 });

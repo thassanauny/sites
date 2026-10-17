@@ -1,6 +1,6 @@
 import { SessionDamagedError, validateText, type TextDropPage } from '../domain/snippets/model';
 import { errorMessage } from './errorMessage';
-import type { Cloud } from './ports';
+import type { Cloud, DraftRecovery } from './ports';
 
 export interface SessionState {
   page: TextDropPage | null;
@@ -11,6 +11,7 @@ export interface SessionState {
   error: string;
   /** The error comes from a damaged saved browser session, which "Start a new session" repairs. */
   sessionDamaged: boolean;
+  recoveryError: string;
 }
 
 /** What a poll found: newer text, nothing new, a failure, or nothing to ask (offline, no page, replaced page). */
@@ -27,7 +28,7 @@ function newPageId(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-/** Text and failed drafts stay in memory; this controller has no durable edit queue. */
+/** Local recovery never retries or publishes a restored draft without user action. */
 export class PageSession {
   state: SessionState = {
     page: null,
@@ -37,6 +38,7 @@ export class PageSession {
     online: true,
     error: '',
     sessionDamaged: false,
+    recoveryError: '',
   };
   private generation = 0;
   private edits = 0;
@@ -51,7 +53,9 @@ export class PageSession {
   private maxWait: number;
 
   /** `delay` is the pause after the last keystroke; `maxWait` is the longest an edit waits while typing continues. */
-  constructor(cloud: Cloud, delay = 650, maxWait = 10_000) {
+  private recovery?: DraftRecovery;
+  constructor(cloud: Cloud, delay = 650, maxWait = 10_000, recovery?: DraftRecovery) {
+    this.recovery = recovery;
     this.cloud = cloud;
     this.delay = delay;
     this.maxWait = maxWait;
@@ -109,7 +113,22 @@ export class PageSession {
     try {
       const page = await fetchPage();
       if (generation !== this.generation) return false;
-      this.update({ page, draft: page.text, phase: 'ready' });
+      let recovered: string | undefined;
+      let recoveryError = '';
+      try {
+        recovered = this.recovery?.read(page);
+      } catch {
+        recoveryError = 'Could not read the local recovery copy. It has been kept on this device.';
+      }
+      const dirty = recovered !== undefined && recovered !== page.text;
+      this.update({
+        page,
+        draft: dirty ? recovered! : page.text,
+        dirty,
+        phase: 'ready',
+        recoveryError,
+        error: dirty ? 'Recovered unsaved text from this device. Review it and choose Retry save to publish it.' : '',
+      });
       return true;
     } catch (error) {
       if (generation === this.generation) this.update({ phase: 'home', ...this.failure(error) });
@@ -134,12 +153,23 @@ export class PageSession {
     return this.open(() => this.cloud.joinPage(code));
   }
 
+  discardRecovery(): boolean {
+    if (!this.state.page) return true;
+    try {
+      this.recovery?.clear(this.state.page);
+      return true;
+    } catch {
+      this.update({ recoveryError: 'Could not discard the local recovery copy. Your draft is kept.' });
+      return false;
+    }
+  }
+
   home(): void {
     ++this.generation;
     this.cancelTimer();
     this.saveInFlight = undefined;
     this.refreshInFlight = undefined;
-    this.update({ page: null, draft: '', dirty: false, phase: 'home', error: '' });
+    this.update({ page: null, draft: '', dirty: false, phase: 'home', error: '', recoveryError: '' });
   }
 
   setOnline(online: boolean): void {
@@ -147,7 +177,7 @@ export class PageSession {
       online,
       ...(!online && this.state.dirty
         ? {
-            error: 'Your unsaved text is only in this open page. Reconnect and choose Retry save.',
+            error: 'Reconnect and choose Retry save. Keep this page open until your text is saved.',
           }
         : {}),
     });
@@ -164,7 +194,13 @@ export class PageSession {
     } catch (reason) {
       error = this.message(reason);
     }
-    this.update({ draft: text, dirty: true, error });
+    let recoveryError = '';
+    try {
+      this.recovery?.write(this.state.page, text);
+    } catch {
+      recoveryError = 'Could not save a local recovery copy. Keep this page open or download your text.';
+    }
+    this.update({ draft: text, dirty: true, error, recoveryError });
     this.schedule();
   }
 
@@ -244,7 +280,13 @@ export class PageSession {
         this.remember(saved);
         if (edit === this.edits) {
           // A newer poll may have arrived before this response. Keep that version.
-          this.update({ dirty: false, draft: this.state.page!.text, phase: 'ready', error: '' });
+          let recoveryError = '';
+          try {
+            this.recovery?.clear(page);
+          } catch {
+            recoveryError = 'Saved online, but the local recovery copy could not be cleared.';
+          }
+          this.update({ dirty: false, draft: this.state.page!.text, phase: 'ready', error: '', recoveryError });
         } else {
           this.update({ phase: 'ready' });
         }

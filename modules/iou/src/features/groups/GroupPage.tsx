@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Check, CheckCheck, History, Link, LockKeyhole, Pin, Plus, ReceiptText, Settings2, Users, Wallet } from 'lucide-react'
+import { ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Check, CheckCheck, History, LockKeyhole, Plus, ReceiptText, Users, Wallet } from 'lucide-react'
 import type { Group, MemberBalance, Settlement, Transaction } from '../../domain/groups/types'
 import { formatMoney, totalSpent } from '../../domain/ledger/calculations'
 import type { TransactionFilter } from '../../domain/ledger/transactions'
@@ -21,7 +21,6 @@ interface GroupPageProps {
   visibleTransactions: readonly Transaction[]
   logFilter: TransactionFilter
   logLimit: number
-  pinned: boolean
   /** Changes made here are still waiting to sync. */
   unsynced: boolean
   /** The shared groups have been reached at least once since this page opened. */
@@ -29,8 +28,6 @@ interface GroupPageProps {
   canEdit: boolean
   version: string
   onNavigate: (page: 'home' | 'overview' | 'log') => void
-  onTogglePin: () => void
-  onInvite: () => void
   onSettings: () => void
   onExpense: () => void
   onPayment: (settlement?: Settlement) => void
@@ -49,14 +46,11 @@ export function GroupPage({
   visibleTransactions,
   logFilter,
   logLimit,
-  pinned,
   unsynced,
   synced,
   canEdit,
   version,
   onNavigate,
-  onTogglePin,
-  onInvite,
   onSettings,
   onExpense,
   onPayment,
@@ -84,24 +78,12 @@ export function GroupPage({
         <div className="group-heading-text">
           <div className="group-title-line">
             <h1>{group.name}</h1>
-            <button type="button" className={`icon-button group-pin ${pinned ? 'pinned' : ''}`} aria-label={pinned ? 'Unpin group' : 'Pin group'} aria-pressed={pinned} onClick={onTogglePin}>
-              <Pin size={19} />
-            </button>
           </div>
           <div className="group-meta">
             <span>{group.members.length} members</span>
             <span className="meta-dot">·</span>
             <span>{group.currency}</span>
           </div>
-        </div>
-        <div className="group-top-actions">
-          <button type="button" className="icon-button group-invite" onClick={onInvite} aria-label="Invite">
-            <Link size={18} />
-            <span className="group-invite-label">Invite</span>
-          </button>
-          <button type="button" className="icon-button group-settings" onClick={onSettings} aria-label="Group settings">
-            <Settings2 size={20} />
-          </button>
         </div>
         {group.description.trim() && <p className="group-description">{group.description}</p>}
       </section>

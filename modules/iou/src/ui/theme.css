@@ -75,12 +75,14 @@ select:focus-visible {
   font-weight: 650;
   line-height: 1.35;
 }
-.button.primary {
+.button.primary,
+.group-invite {
   background: var(--ea-jade);
   border-color: var(--ea-jade);
   color: #fffef7;
 }
-.button.primary:hover:not(:disabled) {
+.button.primary:hover:not(:disabled),
+.group-invite:hover:not(:disabled) {
   background: var(--ea-jade-dark);
   border-color: var(--ea-jade-dark);
 }

@@ -10,12 +10,13 @@ import {
 } from "@xyflow/react";
 import type { Connection, NodeChange, EdgeChange } from "@xyflow/react";
 import { toPng } from "html-to-image";
-import { invitationFromHash } from "../domain/sharing/invitations";
+import { boardCodeFromHash, invitationFromHash } from "../domain/sharing/invitations";
 import { useAuth } from "../infrastructure/auth/useAuth";
 import { useCloudBoards } from "./useCloudBoards";
+import { messageFor } from "../infrastructure/cloud/boards";
 import { makeNode } from "../domain/boards/components";
 import { defaultEdgeOptions } from "../domain/boards/connectionStyle";
-import { fileName, parseBoard, serializeBoard } from "../domain/boards/codec";
+import { boardContent, fileName } from "../domain/boards/codec";
 import type {
   ComponentData,
   ComponentKind,
@@ -25,14 +26,14 @@ import { createBoard } from "../domain/boards/templates";
 import type { TemplateId } from "../domain/boards/templates";
 import { useWorkspace } from "./useWorkspace";
 import { download } from "../ui/download";
-type ModalName = "templates" | "cloud" | "shortcuts" | "join" | "share" | null;
+type ModalName = "templates" | "cloud" | "shortcuts" | "join" | "share" | "help" | null;
 type Tool = "select" | "hand" | "connect";
 
 export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
   const workspace = useWorkspace();
   const cloud = useCloudBoards(auth.user, workspace);
   const { board, update } = workspace;
-  const readOnly = board.revision > 0 && (!auth.user || !cloud.ready);
+  const readOnly = !auth.user || !cloud.ready || !board.revision;
   const [invitationInput, setInvitationInput] = useState("");
   const flow = useReactFlow<DiagramNode>();
   const { zoom } = useViewport();
@@ -51,15 +52,16 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
   const [showInspector, setShowInspector] = useState(
     () => window.innerWidth >= 1050,
   );
-  const [exportOpen, setExportOpen] = useState(false);
   const [toast, setToast] = useState("");
-  const [home, setHome] = useState(
-    () => location.hash === "#/boards" || workspace.activeRemoved,
-  );
+  const [routeHash, setRouteHash] = useState(() => location.hash);
+  const routeCode = boardCodeFromHash(routeHash.replace(/^#\/join\//, "#/board/"));
+  const [openedCode, setOpenedCode] = useState("");
+  const [routeError, setRouteError] = useState("");
+  const [routeRetry, setRouteRetry] = useState(0);
+  const home = !routeCode || openedCode !== routeCode || board.inviteCode !== routeCode;
   const activeRemoved = useRef(workspace.activeRemoved);
   activeRemoved.current = workspace.activeRemoved;
   const [isExporting, setIsExporting] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const connectFrom = useRef<string | null>(null);
   const resizing = useRef(false);
@@ -69,26 +71,27 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
   const isPanning = tool === "hand" || spacePressed;
 
   const showHome = () => {
-    setHome(true);
     setModal(null);
-    setExportOpen(false);
     setSpacePressed(false);
-    location.hash = "/boards";
+    location.hash = "";
+    setRouteHash("");
+    setOpenedCode("");
   };
-  const showEditor = () => {
-    setHome(false);
-    if (location.hash === "#/boards") location.hash = "";
+  const showEditor = (code = board.inviteCode) => {
+    if (!code) return;
+    location.hash = `/board/${code}`;
+    setRouteHash(location.hash);
+    setOpenedCode(code);
   };
 
   useEffect(() => {
     const route = () => {
-      setHome(location.hash === "#/boards" || activeRemoved.current);
+      setRouteHash(location.hash);
+      setOpenedCode("");
+      setRouteError("");
       try {
         const code = invitationFromHash(location.hash);
-        if (code) {
-          setInvitationInput(code);
-          setModal("join");
-        }
+        if (code) setInvitationInput(code);
       } catch (error) {
         setToast(
           error instanceof Error ? error.message : "Invalid invitation link.",
@@ -99,6 +102,23 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
     window.addEventListener("hashchange", route);
     return () => window.removeEventListener("hashchange", route);
   }, []);
+  const routeActions = useRef({ workspace, cloud });
+  routeActions.current = { workspace, cloud };
+  const boardRoutes = workspace.visibleBoards.map((item) => item.inviteCode).join(",");
+  useEffect(() => {
+    if (!routeCode || openedCode === routeCode) return;
+    const { workspace, cloud } = routeActions.current;
+    const target = workspace.visibleBoards.find((item) => item.inviteCode === routeCode);
+    if (target) {
+      workspace.switchBoard(target.id);
+      setOpenedCode(routeCode);
+      return;
+    }
+    if (!cloud.ready || !auth.user) return;
+    setInvitationInput(routeCode);
+    setModal("join");
+  }, [routeCode, openedCode, cloud.ready, auth.user, boardRoutes, routeRetry]);
+
   useEffect(() => {
     setTool("select");
   }, [board.id, readOnly]);
@@ -149,16 +169,6 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
     [flow, update, readOnly],
   );
 
-  const exportJson = useCallback(() => {
-    const url = URL.createObjectURL(
-      new Blob([serializeBoard(board)], { type: "application/json" }),
-    );
-    download(url, `${fileName(board.title)}.blueprint.json`);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setExportOpen(false);
-    setToast("Board exported. Your ideas, ready to go.");
-  }, [board]);
-
   const duplicate = useCallback(() => {
     if (readOnly) return;
     const selected = board.nodes.filter((node) => node.selected);
@@ -187,17 +197,13 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
         return;
       const command = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
-      if (command && ["z", "d", "a", "s"].includes(key)) event.preventDefault();
+      if (command && ["z", "d", "a"].includes(key)) event.preventDefault();
       if (command && key === "z") {
         if (!readOnly) event.shiftKey ? workspace.redo() : workspace.undo();
         return;
       }
       if (command && key === "d") {
         duplicate();
-        return;
-      }
-      if (command && key === "s") {
-        exportJson();
         return;
       }
       if (command && key === "a") {
@@ -242,7 +248,6 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
       if (key === "escape") {
         setTool("select");
         connectFrom.current = null;
-        setExportOpen(false);
       }
     };
     const keyup = (event: KeyboardEvent) => {
@@ -324,20 +329,43 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
     }));
   };
 
-  const newBoard = (template: TemplateId) => {
-    workspace.addBoard(createBoard(template));
-    showEditor();
-    setModal(null);
-    setTool("select");
-    setToast(
-      template === "blank"
-        ? "A fresh canvas. What will you build?"
-        : "Template ready. Make it your own.",
-    );
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const pendingCreation = useRef<ReturnType<typeof createBoard> | null>(null);
+  const createSharedBoard = async (draft: ReturnType<typeof createBoard>) => {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    if (!pendingCreation.current || boardContent(pendingCreation.current) !== boardContent(draft)) pendingCreation.current = draft;
+    draft = pendingCreation.current;
+    const startingHash = location.hash;
+    setCreating(true);
+    try {
+      const saved = await cloud.createBoard(draft);
+      workspace.addBoard(saved);
+      pendingCreation.current = null;
+      if (location.hash === startingHash) {
+        showEditor(saved.inviteCode);
+        setModal(null);
+      }
+      setTool("select");
+      setToast("Your shared board is ready.");
+    } catch (error) {
+      setToast(messageFor(error));
+    } finally {
+      creatingRef.current = false;
+      setCreating(false);
+    }
+  };
+  const newBoard = (template: TemplateId) => createSharedBoard(createBoard(template));
+  const openBoard = (id: string) => {
+    const selected = workspace.boards.find((item) => item.id === id);
+    if (!selected) return;
+    if (!selected.inviteCode) { void createSharedBoard(selected); return; }
+    workspace.switchBoard(id);
+    showEditor(selected.inviteCode);
   };
 
   const exportPng = async () => {
-    setExportOpen(false);
     if (!board.nodes.length) {
       setToast("Add a component before exporting an image.");
       return;
@@ -377,27 +405,9 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
       download(dataUrl, `${fileName(board.title)}.png`);
       setToast("Your architecture is ready to share.");
     } catch {
-      setToast("Image export failed. Try exporting a JSON backup instead.");
+      setToast("Image export failed. Keep this board open and try again.");
     } finally {
       setIsExporting(false);
-    }
-  };
-
-  const importFile = async (file?: File) => {
-    if (!file) return;
-    try {
-      if (file.size > 10 * 1024 * 1024)
-        throw new Error("Choose a board file smaller than 10 MB.");
-      workspace.addBoard(parseBoard(await file.text()));
-      showEditor();
-      setModal(null);
-      setToast("Welcome back. Your board has been imported.");
-    } catch (error) {
-      setToast(
-        error instanceof Error ? error.message : "Could not import this board.",
-      );
-    } finally {
-      if (inputRef.current) inputRef.current.value = "";
     }
   };
 
@@ -430,16 +440,13 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
     setShowSidebar,
     showInspector,
     setShowInspector,
-    exportOpen,
-    setExportOpen,
     toast,
     setToast,
     home,
-    setHome,
+    routeError,
+    retryBoardLink: () => { setRouteError(""); cloud.retry(); setRouteRetry((value) => value + 1); },
     activeRemoved,
     isExporting,
-    setIsExporting,
-    inputRef,
     canvasRef,
     connectFrom,
     resizing,
@@ -450,16 +457,16 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
     showHome,
     showEditor,
     addComponent,
-    exportJson,
     duplicate,
     deleteSelection,
     onNodesChange,
     onEdgesChange,
     onConnect,
     updateNode,
+    creating,
+    openBoard,
     newBoard,
     exportPng,
-    importFile,
   };
 }
 export type WorkspaceController = ReturnType<typeof useWorkspaceController>;

@@ -3,14 +3,17 @@ import { templates } from "../../domain/boards/templates";
 import type { TemplateId } from "../../domain/boards/templates";
 export function TemplateCards({
   onChoose,
+  disabled = false,
 }: {
   onChoose: (id: TemplateId) => void;
+  disabled?: boolean;
 }) {
   return (
     <>
       {templates.map((template, index) => (
         <button
           className="template-card"
+          disabled={disabled}
           key={template.id}
           onClick={() => onChoose(template.id)}
         >

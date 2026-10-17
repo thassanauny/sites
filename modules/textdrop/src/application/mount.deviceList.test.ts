@@ -28,7 +28,8 @@ describe('TextDrop device list', () => {
     expect(element<HTMLInputElement>('join-code').value).toBe(first.code);
     writes.mockRestore();
     await join(first.code);
-    expect(element('workspace').hidden).toBe(false);
+    expect(element('home').hidden).toBe(false);
+    expect(rows()).toEqual([first.code]);
     expect(element('notice').hidden).toBe(true);
     expect(history.isRemoved(first.code)).toBe(false);
   });
@@ -63,6 +64,14 @@ describe('TextDrop device list', () => {
     dispose!();
     await start('#/');
     await join(first.code);
+    expect(element('home').hidden).toBe(false);
+    history.replaceState(null, '', `/textdrop/#/p/${first.code}`);
+    window.dispatchEvent(new Event('hashchange'));
+    await flush();
+    expect(element<HTMLTextAreaElement>('editor').value).toBe('Keep this unsaved draft');
+    expect(element('notice-message').textContent).toContain('Recovered unsaved text');
+    element('retry').click();
+    await flush();
     new DeviceSnippets().remove(first.code);
     window.dispatchEvent(new StorageEvent('storage', { key: key(first.code) }));
     expect(element('home').hidden).toBe(false);
@@ -125,7 +134,8 @@ describe('TextDrop device list', () => {
     expect(element('workspace').hidden).toBe(false);
     dispose!();
     vi.mocked(cloud.joinPage).mockRejectedValueOnce(new Error('Invalid snippet'));
-    await start(`#/p/${second.code}`);
+    await start();
+    await join(second.code);
     expect(rows()).toEqual([first.code]);
     expect(localStorage.getItem(key(second.code))).toBeNull();
   });

@@ -3,9 +3,7 @@ import {
   ArrowUpRight,
   Layers3,
   Plus,
-  Search,
   Trash2,
-  Upload,
   Users,
 } from "lucide-react";
 import type { Board } from "../../domain/boards/types";
@@ -16,32 +14,26 @@ export function BoardHome({
   onOpen,
   onNew,
   onJoin,
-  onImport,
   onRemove,
   notice,
   onSettings,
+  onRetry,
 }: {
   boards: Board[];
   activeId: string;
   onOpen: (id: string) => void;
   onNew: () => void;
   onJoin: () => void;
-  onImport: () => void;
   onRemove: (id: string) => Promise<void>;
   notice?: string;
   onSettings: () => void;
+  onRetry?: () => void;
 }) {
-  const [search, setSearch] = useState("");
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => heading.current?.focus(), []);
-  const visible = boards.filter((board) =>
-    `${board.title} ${board.description}`
-      .toLowerCase()
-      .includes(search.trim().toLowerCase()),
-  );
 
   return (
     <main
@@ -63,38 +55,27 @@ export function BoardHome({
               Every architecture, all in one place. Pick up where you left off.
             </p>
           </div>
-          <button className="button primary" onClick={onNew}>
-            <Plus size={17} /> New board
-          </button>
+          <div className="home-actions">
+            <button className="button primary" onClick={onNew}>
+              <Plus size={17} /> Create a board
+            </button>
+            <button className="button secondary" onClick={onJoin}>
+              <Users size={15} /> Join a board
+            </button>
+          </div>
         </div>
         <div className="home-tools">
           <div className="home-board-count">
             <strong>Your boards</strong>
             <span>{boards.length}</span>
           </div>
-          <div className="home-tool-actions">
-            <label className="home-search">
-              <Search size={15} />
-              <input
-                aria-label="Search boards"
-                placeholder="Find a board…"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </label>
-            <button className="button secondary" onClick={onJoin}>
-              <Users size={15} /> Join board
-            </button>
-            <button className="button secondary" onClick={onImport}>
-              <Upload size={15} /> Import
-            </button>
-          </div>
+
         </div>
         {notice && (
           <div className="home-notice" role="alert">
             <p>{notice}</p>
-            <button className="button secondary" onClick={onSettings}>
-              Open Settings
+            <button className="button secondary" onClick={onRetry || onSettings}>
+              {onRetry ? "Retry opening" : "Open Settings"}
             </button>
           </div>
         )}
@@ -104,7 +85,7 @@ export function BoardHome({
           </p>
         )}
         <div className="board-grid">
-          {visible.map((board) => {
+          {boards.map((board) => {
             const shared = board.revision > 0;
             return (
               <article
@@ -127,7 +108,7 @@ export function BoardHome({
                       connections
                     </p>
                     <span className="board-access">
-                      {shared ? "Shared board" : "Local draft"}
+                      {shared ? "Shared board" : "Recovery copy · waiting to save online"}
                     </span>
                   </div>
                 </button>
@@ -195,15 +176,11 @@ export function BoardHome({
             );
           })}
         </div>
-        {!visible.length && (
+        {!boards.length && (
           <div className="home-empty">
-            <Search size={24} />
-            <h2>{search ? "No boards found" : "No boards yet"}</h2>
-            <p>
-              {search
-                ? "Try another name or create a new board."
-                : "Create a board or join one with an invitation."}
-            </p>
+            <Layers3 size={24} />
+            <h2>No boards yet</h2>
+            <p>Create a board or join one with an invitation.</p>
           </div>
         )}
         <p className="home-footnote">

@@ -9,14 +9,16 @@ export function BoardSettingsDialog({
   auth,
   cloud,
   board,
-  exportJson,
+  exportPng,
+  isExporting,
   onClose,
   onShare,
 }: {
   auth: ReturnType<typeof useAuth>;
   cloud: ReturnType<typeof useCloudBoards>;
   board: Board;
-  exportJson: () => void;
+  exportPng?: () => Promise<void>;
+  isExporting: boolean;
   onClose: () => void;
   onShare: () => void;
 }) {
@@ -32,12 +34,12 @@ export function BoardSettingsDialog({
         </span>
         <div>
           <strong>
-            {board.revision ? "A shared space for your ideas" : "Local draft"}
+            {board.revision ? "A shared space for your ideas" : "Connect to your shared boards"}
           </strong>
           <p>
             {board.revision
               ? "Everyone who joins with the invitation can edit this board."
-              : "Your work saves in this browser. Connect to share it."}
+              : "Boards save online. Existing recovery copies stay on this device."}
           </p>
         </div>
       </div>
@@ -120,11 +122,13 @@ export function BoardSettingsDialog({
           )}
         </div>
       )}
-      <div className="settings-actions backup-action">
-        <button className="button secondary" onClick={exportJson}>
-          <Download size={14} /> Export a backup
-        </button>
-      </div>
+      {exportPng && (
+        <div className="settings-actions">
+          <button className="button secondary" disabled={isExporting || !board.nodes.length} onClick={() => void exportPng()}>
+            <Download size={14} /> {isExporting ? "Exporting PNG…" : "Export as PNG"}
+          </button>
+        </div>
+      )}
       <p className="auth-footer">
         Blueprint {APP_VERSION} · Device-based access, no email required.
         <br />

@@ -8,6 +8,25 @@ import { DeviceSnippets } from '../infrastructure/storage/deviceSnippets';
 useMountHarness();
 
 describe('TextDrop page controls', () => {
+  it('shows connection status and Help, keeps the draft, and restores focus after Help closes', async () => {
+    await start(`#/p/${first.code}`);
+    expect(element('connection-label').textContent).toBe('Connected');
+    expect(root.querySelector('.site-footer')?.textContent).toContain('textdrop · test');
+    edit('Keep this draft while reading Help');
+    element('help').focus();
+    element('help').click();
+    expect(element<HTMLDialogElement>('help-dialog').open).toBe(true);
+    expect(document.activeElement).toBe(element('help-close'));
+    const cancel = new Event('cancel', { cancelable: true });
+    element('help-dialog').dispatchEvent(cancel);
+    expect(cancel.defaultPrevented).toBe(true);
+    expect(element<HTMLDialogElement>('help-dialog').open).toBe(false);
+    expect(document.activeElement).toBe(element('help'));
+    expect(element<HTMLTextAreaElement>('editor').value).toBe('Keep this draft while reading Help');
+    window.dispatchEvent(new Event('offline'));
+    expect(element('connection-label').textContent).toBe('Offline');
+  });
+
   it('skips navigation without changing the snippet route or losing unsaved text', async () => {
     await start(`#/p/${first.code}`);
     edit('Keep this draft');
@@ -73,7 +92,7 @@ describe('TextDrop page controls', () => {
     element('share').click();
     element('invite-copy-link').click();
     await flush();
-    expect(writeText).toHaveBeenLastCalledWith(`http://localhost/textdrop/#/join/${first.code}`);
+    expect(writeText).toHaveBeenLastCalledWith(`http://localhost/textdrop/#/p/${first.code}`);
   });
 
   it('clears an old copy error when the next copy succeeds', async () => {
@@ -147,7 +166,8 @@ describe('TextDrop page controls', () => {
   it('tears down listeners and polling and ignores late opens or copy results', async () => {
     const opening = pending<TextDropPage>();
     vi.mocked(cloud.joinPage).mockReturnValueOnce(opening.promise);
-    await start(`#/p/${first.code}`);
+    await start();
+    await join(first.code);
     dispose!();
     await start();
     opening.resolve(first);

@@ -1,3 +1,4 @@
+import { sameShape, useRecoveryDraft } from '../../../application/useRecoveryDraft';
 import { useId, useState, type FormEvent } from 'react';
 import { Archive, ArrowDown, ArrowUp, LogOut, Plus, Trash2 } from 'lucide-react';
 import type { Board, Column, Operation } from '../../../domain/boards/types';
@@ -49,19 +50,48 @@ export function BoardSettingsDialog({
   onRemove: (board: Board) => void;
   onNotice: (text: string) => void;
 }) {
-  const [title, setTitle] = useState(board.title);
-  const [description, setDescription] = useState(board.description);
-  const [fields, setFields] = useState(() => cardFields(board));
-  const [newAssignee, setNewAssignee] = useState('');
+  const sample = {
+    baseline: { title: board.title, description: board.description, fields: cardFields(board) },
+    title: board.title,
+    description: board.description,
+    fields: cardFields(board),
+    newAssignee: '',
+    newColumn: undefined as Column | undefined,
+  };
+  const recovery = useRecoveryDraft(
+    `${board.invite_code}:settings`,
+    sample,
+    (value): value is typeof sample => {
+      if (!value || typeof value !== 'object') return false;
+      const candidate = value as typeof sample;
+      return (
+        sameShape(sample, { ...candidate, newColumn: undefined }) &&
+        (candidate.newColumn === undefined ||
+          sameShape({ id: '', title: '', color: 'blue' }, candidate.newColumn))
+      );
+    },
+  );
+  const { title, description, fields, baseline, newAssignee, newColumn } = recovery.value;
+  const setTitle = (title: string) => recovery.setValue((current) => ({ ...current, title }));
+  const setDescription = (description: string) =>
+    recovery.setValue((current) => ({ ...current, description }));
+  const setFields: React.Dispatch<React.SetStateAction<typeof fields>> = (action) =>
+    recovery.setValue((current) => ({
+      ...current,
+      fields: typeof action === 'function' ? action(current.fields) : action,
+    }));
+  const setNewAssignee = (newAssignee: string) =>
+    recovery.setValue((current) => ({ ...current, newAssignee }));
   const [deleteAssignee, setDeleteAssignee] = useState('');
-  const [newColumn, setNewColumn] = useState<Column>();
+  const setNewColumn = (newColumn: Column | undefined) =>
+    recovery.setValue((current) => ({ ...current, newColumn }));
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
   const { localError, setLocalError, copied, copy } = useDialogMessages(onNotice);
-  const fieldsChanged = !sameFieldSettings(fields, board.card_fields);
+  const fieldsChanged = !sameFieldSettings(fields, baseline.fields);
   const unsaved =
-    title.trim() !== board.title ||
-    description.trim() !== board.description ||
+    title.trim() !== baseline.title ||
+    description.trim() !== baseline.description ||
     fieldsChanged ||
     Boolean(newAssignee.trim()) ||
     Boolean(newColumn?.title || (newColumn && newColumn.color !== 'blue'));
@@ -154,8 +184,8 @@ export function BoardSettingsDialog({
       if (newAssignee.trim())
         throw new Error('Add the new assignee or clear its name before saving board details.');
       const patch: Extract<Operation, { type: 'update_board' }>['patch'] = {};
-      if (title.trim() !== board.title) patch.title = title.trim();
-      if (description.trim() !== board.description) patch.description = description.trim();
+      if (title.trim() !== baseline.title) patch.title = title.trim();
+      if (description.trim() !== baseline.description) patch.description = description.trim();
       if (fieldsChanged)
         patch.card_fields = readCardFieldSettings({
           ...fields,
@@ -164,7 +194,10 @@ export function BoardSettingsDialog({
       const saved =
         Object.keys(patch).length === 0 ||
         (await onSave(board.id, { type: 'update_board', patch }));
-      if (saved) closeModal();
+      if (saved) {
+        recovery.clear();
+        closeModal();
+      }
     } catch (error) {
       setLocalError(message(error));
     }
@@ -208,7 +241,9 @@ export function BoardSettingsDialog({
           busy={busy}
           removed={removed}
           onKeep={discard.keepEditing}
-          onDiscard={closeModal}
+          onDiscard={() => {
+            if (recovery.clear()) closeModal();
+          }}
         />
       ) : view === 'remove' ? (
         <>
@@ -287,7 +322,7 @@ export function BoardSettingsDialog({
               />
             )
           }
-          localError={localError}
+          localError={localError || recovery.error}
           serverError={serverError}
           offline={offline}
           busy={busy}
@@ -299,6 +334,11 @@ export function BoardSettingsDialog({
         >
           <div className="board-settings-grid">
             <div className="settings-column">
+              {recovery.recovered && (
+                <p className="soft-note">
+                  Recovered unsaved draft from this device. Review it before saving.
+                </p>
+              )}
               <TitleField
                 label="Board name"
                 value={title}

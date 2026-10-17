@@ -37,7 +37,7 @@ export function useWorkspace() {
     syncFailed.current = false;
     setErrorText('');
   }, []);
-  const { deviceBoards, removedCodes, removalsReady, removalsRef, syncRemovals, markRemoved } =
+  const { deviceBoards, removedCodes, removalsReady, syncRemovals, markRemoved } =
     useDeviceRemovals();
   const {
     selectedCode,
@@ -90,7 +90,7 @@ export function useWorkspace() {
         setBoards((current) => current.filter((item) => !removed.has(item.invite_code)));
         if (removed.has(routeCode())) {
           leaveRemovedBoard();
-          // Keep the editor mounted: its draft is memory-only and must survive
+          // Keep the editor mounted: its unsaved draft must survive
           // another tab hiding this board. It can be copied or explicitly rejoined.
           setNotice('Board removed from this device. Any open draft is kept.');
         }
@@ -120,29 +120,8 @@ export function useWorkspace() {
       failedLink.current === selectedCode
     )
       return;
-    if (removalsRef.current.has(selectedCode)) {
-      failedLink.current = selectedCode;
-      setModal({ type: 'join', code: selectedCode });
-      return;
-    }
-    let active = true;
-    joinBoard(selectedCode)
-      .then((incoming) => {
-        if (active) {
-          upsert(incoming);
-          setError('');
-        }
-      })
-      .catch((failure) => {
-        if (active) {
-          failedLink.current = selectedCode;
-          setError(message(failure));
-          setModal({ type: 'join', code: selectedCode });
-        }
-      });
-    return () => {
-      active = false;
-    };
+    failedLink.current = selectedCode;
+    setModal({ type: 'join', code: selectedCode });
   }, [
     selectedCode,
     board,
@@ -150,18 +129,15 @@ export function useWorkspace() {
     loaded,
     removalsReady,
     offline,
-    upsert,
-    setError,
     joinRetry,
     failedLink,
-    removalsRef,
     setModal,
   ]);
   const action = useCallback(
     async (
       work: () => Promise<Board>,
       success: string,
-      open = false,
+      open: boolean | 'home' = false,
       restore?: { code: string; marker: string | null },
     ) => {
       if (busyRef.current) {
@@ -195,7 +171,7 @@ export function useWorkspace() {
         if (open) {
           modalRef.current = undefined;
           setModal(undefined);
-          navigate(saved);
+          navigate(open === 'home' ? undefined : saved);
         }
         return true;
       } catch (failure) {
@@ -226,10 +202,15 @@ export function useWorkspace() {
   const join = useCallback(
     (code: string) => {
       const marker = deviceBoards.removal(code);
-      return action(() => joinBoard(code), 'Welcome to the board', true, {
-        code,
-        marker,
-      });
+      return action(
+        () => joinBoard(code),
+        'Welcome to the board',
+        marker === null ? true : 'home',
+        {
+          code,
+          marker,
+        },
+      );
     },
     [action, deviceBoards],
   );

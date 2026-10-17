@@ -8,3 +8,133 @@
 #main-content:focus {
   outline: none;
 }
+
+@media (min-width: 1024px) {
+  .header-inner,
+  .main-container,
+  .main-container.groups-page {
+    max-width: none;
+  }
+}
+
+.group-settings-label {
+  display: none;
+}
+@media (min-width: 600px) {
+  .group-settings {
+    width: auto;
+    gap: 8px;
+    padding-inline: 15px;
+    background: var(--ea-surface);
+    border-color: #d4dbd1;
+    color: var(--ea-jade-dark);
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .group-settings-label {
+    display: inline;
+  }
+  .group-settings svg {
+    width: 16px;
+    height: 16px;
+  }
+  .group-settings:hover:not(:disabled) {
+    background: #edf1e7;
+    border-color: #a5b5a8;
+  }
+}
+
+/* Shared invitation controls follow IOU's compact desktop buttons. */
+.workspace-actions {
+  gap: 9px;
+}
+.workspace-actions .workspace-invite,
+.workspace-actions .workspace-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  min-width: 44px;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+  border: 1px solid var(--ea-line);
+  border-radius: 12px;
+  font-family: var(--ea-font-body);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  box-shadow: none;
+}
+.workspace-actions .workspace-invite {
+  background: var(--ea-jade);
+  border-color: var(--ea-jade);
+  color: #fffef7;
+}
+.workspace-actions .workspace-settings {
+  background: var(--ea-surface);
+  border-color: #d4dbd1;
+  color: var(--ea-jade-dark);
+}
+.workspace-actions .workspace-invite:hover:not(:disabled) {
+  background: var(--ea-jade-dark);
+  border-color: var(--ea-jade-dark);
+}
+.workspace-actions .workspace-settings:hover:not(:disabled) {
+  background: #edf1e7;
+  border-color: #a5b5a8;
+}
+.workspace-actions .workspace-invite svg {
+  width: 18px;
+  height: 18px;
+}
+.workspace-actions .workspace-settings svg {
+  width: 16px;
+  height: 16px;
+}
+.workspace-actions .workspace-invite > span,
+.workspace-actions .workspace-settings > span {
+  display: none;
+}
+@media (min-width: 600px) {
+  .workspace-actions .workspace-invite,
+  .workspace-actions .workspace-settings {
+    width: auto;
+    padding-inline: 15px;
+  }
+  .workspace-actions .workspace-invite > span,
+  .workspace-actions .workspace-settings > span {
+    display: inline;
+  }
+}
+
+@media (max-width: 760px) {
+  .header-inner:has(.workspace-actions) {
+    flex-wrap: nowrap;
+  }
+  .header-inner:has(.workspace-actions) .header-actions {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 599px) {
+  .header-inner:has(.workspace-actions) {
+    gap: 8px;
+  }
+  .header-inner:has(.workspace-actions) .connection-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .header-inner:has(.workspace-actions) .header-actions {
+    gap: 8px;
+  }
+}

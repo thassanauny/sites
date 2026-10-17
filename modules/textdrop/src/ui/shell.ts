@@ -8,7 +8,7 @@ export function shell(): string {
       <header class="site-header">
         <a class="brand" href="#/" aria-label="TextDrop home"><img src="./logo.svg" alt="" width="36" height="36" /><span>textdrop<span class="brand-dot">.</span></span></a>
         <span class="header-note">Shared text, one code away</span>
-        <span class="online-indicator" id="connection"><span class="dot"></span><span id="connection-label">Online</span></span>
+        <div class="header-actions"><div class="snippet-header-actions workspace-actions" id="snippet-actions" hidden><button class="button primary workspace-invite" id="share" aria-label="Invite">${icon('link')}<span>Invite</span></button><button class="button secondary workspace-settings" id="settings" aria-label="Snippet settings" title="Snippet settings">${icon('settings')}<span>Settings</span></button></div><span class="online-indicator" id="connection"><span class="dot" aria-hidden="true"></span><span id="connection-label">Online</span></span><button type="button" class="icon-button help-button" id="help" aria-label="Help">${icon('help')}</button></div>
       </header>
       <main id="main-content" tabindex="-1">
         <section id="home" class="home">
@@ -38,7 +38,7 @@ export function shell(): string {
           <div class="workspace-heading"><a class="back-link" href="#/">${icon('back')}Home</a><span class="workspace-kind">SHARED SNIPPET</span></div>
           <div class="page-header">
             <div><h1><span id="page-name">Shared snippet</span><span class="brand-dot">.</span></h1><p>A shared space for your text. Everyone with the code can edit.</p></div>
-            <div class="page-actions"><button class="button primary" id="share">${icon('link')}Invite</button><button class="icon-button" id="settings" aria-label="Snippet settings" title="Snippet settings">${icon('settings')}</button></div>
+
           </div>
           <div class="code-strip"><span class="code-label">SNIPPET CODE</span><code id="page-code"></code><button class="icon-button" id="copy-code" aria-label="Copy snippet code" title="Copy snippet code">${icon('copy')}</button><span class="code-hint">Keep this code to open your snippet again.</span></div>
           <div class="editor-card">
@@ -51,9 +51,18 @@ export function shell(): string {
         </section>
         <div class="notice" id="notice" hidden><p id="notice-message" role="alert"></p><button class="button small-button" id="retry" hidden>Retry save</button><button class="button small-button" id="new-session" hidden>Start a new session</button></div>
       </main>
-      <footer class="site-footer"><span>Your text, within reach.</span><span>textdrop <span id="version"></span></span></footer>
+      <footer class="site-footer"><span>Your text, within reach.</span><span>textdrop · <span id="version"></span></span></footer>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <dialog id="help-dialog" aria-labelledby="help-title">
+      <div class="dialog-heading"><h2 id="help-title">Your text, within reach.</h2><button type="button" class="icon-button" id="help-close" aria-label="Close help">×</button></div>
+      <div class="dialog-stack">
+        <p>Create a snippet or open one with its invitation code. Anyone with the code can read and edit its text.</p>
+        <p>Changes save online as you type. If two people edit at once, the latest accepted save wins.</p>
+        <p>Unsaved text has local recovery when browser storage is available. Reopen the snippet, review recovered text and choose Retry save to publish it.</p>
+        <p>Keep the invitation code before removing a snippet or clearing browser data. Confirm Open to restore a removed snippet to Home.</p>
+      </div>
+    </dialog>
     <dialog id="snippet-dialog" aria-labelledby="dialog-title">
       <div class="dialog-heading"><h2 id="dialog-title"></h2><button type="button" class="icon-button" id="dialog-close" aria-label="Close dialog">×</button></div>
       <form id="create-form" class="dialog-stack" hidden>
@@ -114,6 +123,9 @@ export function shellElements(root: HTMLElement) {
   };
   return {
     connection: get<HTMLElement>('connection'),
+    help: get<HTMLButtonElement>('help'),
+    helpDialog: get<HTMLDialogElement>('help-dialog'),
+    helpClose: get<HTMLButtonElement>('help-close'),
     skipLink: get<HTMLAnchorElement>('skip-link'),
     main: get<HTMLElement>('main-content'),
     connectionLabel: get<HTMLElement>('connection-label'),
@@ -126,6 +138,7 @@ export function shellElements(root: HTMLElement) {
     deviceEmpty: get<HTMLElement>('device-empty'),
     workspace: get<HTMLElement>('workspace'),
     pageName: get<HTMLElement>('page-name'),
+    snippetActions: get<HTMLElement>('snippet-actions'),
     share: get<HTMLButtonElement>('share'),
     settings: get<HTMLButtonElement>('settings'),
     pageCode: get<HTMLElement>('page-code'),
