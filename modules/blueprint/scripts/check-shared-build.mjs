@@ -7,6 +7,8 @@ import { SHARED_APPS } from './catalog.mjs';
 const names = new Set(SHARED_APPS.map(app => app.id));
 const digest = value => createHash('sha256').update(value).digest('hex');
 const digestPattern = /^[a-f0-9]{64}$/;
+const rootScriptPattern = /^(?:registerSW|sw|workbox-[A-Za-z0-9_-]+)\.js$/;
+const scriptPattern = /^(?:assets\/[\w.-]+|registerSW|sw|workbox-[A-Za-z0-9_-]+)\.js$/;
 
 function containsLiteral(bundle, value) {
   // Rolldown may choose single quotes or a template literal for a constant.
@@ -21,6 +23,12 @@ function containsLiteral(bundle, value) {
 
 function scriptFiles(directory) {
   const files = Object.create(null);
+  for (const name of readdirSync(directory).filter(name => rootScriptPattern.test(name)).sort()) {
+    const path = join(directory, name);
+    const info = lstatSync(path);
+    if (info.isSymbolicLink() || !info.isFile()) throw new Error('Only regular shared app scripts are accepted.');
+    files[name] = digest(readFileSync(path));
+  }
   const assets = join(directory, 'assets');
   if (!lstatSync(assets).isDirectory() || lstatSync(assets).isSymbolicLink()) throw new Error('Invalid shared app assets directory.');
   for (const name of readdirSync(assets).sort()) {
@@ -81,7 +89,7 @@ export function checkSharedBuild(directory, app) {
     || !['publishable', 'anon'].includes(report.publicConfig.keyKind)
     || !report.scripts || typeof report.scripts !== 'object' || Array.isArray(report.scripts)
     || !Object.keys(report.scripts).length
-    || Object.entries(report.scripts).some(([name, hash]) => !/^assets\/[\w.-]+\.js$/.test(name) || !digestPattern.test(hash))) {
+    || Object.entries(report.scripts).some(([name, hash]) => !scriptPattern.test(name) || !digestPattern.test(hash))) {
     throw new Error('Invalid ' + app + ' public build report.');
   }
   const actual = scriptFiles(directory);

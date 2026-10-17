@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { fitBrand } from "../../ui/fitBrand";
+import { useEffect, useState, useLayoutEffect, useRef } from "react";
 import type { WorkspaceController } from "../../application/useWorkspaceController";
 import { Logo } from "../../ui/Logo";
 import {
@@ -37,9 +38,11 @@ export function WorkspaceHeader({
       window.removeEventListener("offline", update);
     };
   }, []);
+  const header = useRef<HTMLElement>(null);
+  useLayoutEffect(() => fitBrand(header.current!), []);
   const connection = !online ? "Offline" : !auth.configured ? "Setup required" : auth.authError || cloud.error ? "Needs attention" : !auth.user || !cloud.ready ? "Connecting" : cloud.status === "loading" || cloud.status === "saving" ? "Syncing" : "Connected";
   return (
-    <header className="topbar">
+    <header className="topbar" ref={header}>
       <button
         className="brand-button"
         aria-label="Open your boards"
@@ -47,12 +50,7 @@ export function WorkspaceHeader({
       >
         <Logo />
       </button>
-      {home ? (
-        <>
-          <div className="header-divider" />
-          <span className="home-header-label">My workspace</span>
-        </>
-      ) : (
+      {!home && (
         <h1 className="header-board-title" title={board.title}>{board.title}</h1>
       )}
       <div className="header-actions workspace-actions">

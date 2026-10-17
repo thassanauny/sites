@@ -276,6 +276,30 @@ describe('automatic sync', () => {
     expect(cloud.versions).not.toHaveBeenCalled()
   })
 
+  it('shows the last successful sync time and changes it only after a successful retry', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 9, 18, 2, 15))
+    await mount()
+    expect(host.querySelector('.home-footer')?.textContent).toContain('Synced 02:15 AM')
+    vi.setSystemTime(new Date(2026, 9, 18, 2, 16))
+    cloud.versions.mockRejectedValueOnce(new Error('Network unavailable'))
+    await setVisibility('visible')
+    expect(host.querySelector('.home-footer')?.textContent).toContain('Synced 02:15 AM')
+    vi.setSystemTime(new Date(2026, 9, 18, 2, 17))
+    await clickButton('Retry')
+    expect(host.querySelector('.home-footer')?.textContent).toContain('Synced 02:17 AM')
+  })
+  it.each(['#/', '#/groups', '#/transactions', '#/group/a', '#/group/a/log'])('keeps one sync and version footer on %s', async route => {
+    const group = makeGroup('a')
+    saveStore({ ...emptyStore(), groups: [group], cloudRevisions: { a: 1 } })
+    serverHas(group)
+    window.history.replaceState(null, '', route.replace('/group/a', `/group/${group.inviteCode}`))
+    await mount()
+    expect(host.querySelectorAll('.app-version')).toHaveLength(1)
+    expect(host.querySelector('.home-footer')?.textContent).toMatch(/Synced \d{2}:\d{2} [AP]M/)
+    expect(host.textContent).not.toContain('is fixed for this group.')
+  })
+
   it('reports a failed sync, keeps working on this device and retries on demand', async () => {
     cloud.versions.mockRejectedValueOnce(new Error('Could not connect to shared groups. Check your connection and try again.'))
     await mount()

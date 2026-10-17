@@ -177,9 +177,9 @@ export async function dragCard(title: string, columnTitle: string, drop = true, 
     });
   }
 }
-/** The top bar's connection text and the sidebar's sync text. */
+/** The top bar's connection text and the page footer's sync text. */
 export const status = () => document.querySelector('.connection')?.textContent ?? '';
-export const syncLabel = () => document.querySelector('.sidebar-footer span')?.textContent ?? '';
+export const syncLabel = () => document.querySelector('.footer-sync')?.textContent ?? '';
 /** Let fake time pass, running timers and the promises they start. */
 export async function advance(milliseconds: number) {
   await act(async () => {

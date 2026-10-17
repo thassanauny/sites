@@ -9,12 +9,13 @@ const page = {
   id: '22222222-2222-4222-8222-222222222222',
   code: 'a'.repeat(32),
   text: 'Shared text',
+  name: null,
   version: 1,
   updatedAt: '2026-10-10T01:00:00.123456+00:00',
 };
 const reply = (url: unknown) => {
-  const { id, code, version, updatedAt } = page;
-  const data = String(url).endsWith('textdrop_save_page_receipt') ? { id, code, version, updatedAt } : page;
+  const { id, code, version, updatedAt, name } = page;
+  const data = String(url).endsWith('textdrop_save_page_receipt') ? { id, code, version, updatedAt, name } : page;
   return new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } });
 };
 const stalled = () => new Promise<Response>(() => {});

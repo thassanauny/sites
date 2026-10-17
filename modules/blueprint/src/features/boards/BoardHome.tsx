@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   ArrowUpRight,
   Layers3,
   Plus,
-  Trash2,
   Users,
 } from "lucide-react";
 import type { Board } from "../../domain/boards/types";
@@ -14,7 +13,6 @@ export function BoardHome({
   onOpen,
   onNew,
   onJoin,
-  onRemove,
   notice,
   onSettings,
   onRetry,
@@ -24,14 +22,10 @@ export function BoardHome({
   onOpen: (id: string) => void;
   onNew: () => void;
   onJoin: () => void;
-  onRemove: (id: string) => Promise<void>;
   notice?: string;
   onSettings: () => void;
   onRetry?: () => void;
 }) {
-  const [removeId, setRemoveId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => heading.current?.focus(), []);
 
@@ -46,10 +40,10 @@ export function BoardHome({
         <div className="home-intro">
           <div>
             <p className="home-eyebrow">
-              <Layers3 size={14} /> YOUR WORKSPACE
+              VISUAL SYSTEM DESIGN FOR YOUR BIG IDEAS
             </p>
             <h1 ref={heading} tabIndex={-1}>
-              A home for your big ideas.
+              Your systems, <em>at a glance.</em>
             </h1>
             <p>
               Every architecture, all in one place. Pick up where you left off.
@@ -79,11 +73,6 @@ export function BoardHome({
             </button>
           </div>
         )}
-        {error && (
-          <p className="form-message error" role="alert">
-            {error}
-          </p>
-        )}
         <div className="board-grid">
           {boards.map((board) => {
             const shared = board.revision > 0;
@@ -112,16 +101,6 @@ export function BoardHome({
                     </span>
                   </div>
                 </button>
-                {removeId === board.id && shared && (
-                  <div className="board-remove-note">
-                    <p>Keep this invitation to rejoin:</p>
-                    <code>{board.inviteCode}</code>
-                    <p>
-                      This only hides the board on this device. Shared work and
-                      other devices are unaffected.
-                    </p>
-                  </div>
-                )}
                 <div className="board-card-footer">
                   <span>
                     Updated{" "}
@@ -130,47 +109,7 @@ export function BoardHome({
                       day: "numeric",
                     })}
                   </span>
-                  {removeId === board.id ? (
-                    <div className="board-remove-confirm">
-                      <button
-                        className="danger"
-                        disabled={busy}
-                        onClick={async () => {
-                          setBusy(true);
-                          setError("");
-                          try {
-                            await onRemove(board.id);
-                            setRemoveId(null);
-                          } catch (error) {
-                            setError(
-                              error instanceof Error
-                                ? error.message
-                                : "Could not remove this board. Check browser storage and try again.",
-                            );
-                          } finally {
-                            setBusy(false);
-                          }
-                        }}
-                      >
-                        {busy ? "Working…" : shared ? "Remove?" : "Delete?"}
-                      </button>
-                      <button disabled={busy} onClick={() => setRemoveId(null)}>
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      className="icon-button"
-                      aria-label={
-                        shared
-                          ? `Remove ${board.title} from this device`
-                          : `Delete local draft ${board.title}`
-                      }
-                      onClick={() => setRemoveId(board.id)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+
                 </div>
               </article>
             );
@@ -183,9 +122,6 @@ export function BoardHome({
             <p>Create a board or join one with an invitation.</p>
           </div>
         )}
-        <p className="home-footnote">
-          Your own boards and boards you’ve joined appear here.
-        </p>
       </div>
     </main>
   );

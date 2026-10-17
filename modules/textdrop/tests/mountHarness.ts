@@ -94,11 +94,13 @@ export function useMountHarness(): void {
     localStorage.clear();
     document.body.innerHTML = '<div id="app"></div>';
     root = document.querySelector<HTMLDivElement>('#app')!;
+    let nameVersion = 1;
     cloud = {
       createPage: vi.fn().mockResolvedValue(first),
       joinPage: vi.fn(async code => (code === second.code ? second : first)),
       pollPage: vi.fn().mockResolvedValue(first),
       savePage: vi.fn(async (_id, text) => ({ ...first, text, version: 2 })),
+      renamePage: vi.fn(async (id, name) => ({ ...(id === second.id ? second : first), name, version: ++nameVersion })),
       startNewSession: vi.fn().mockResolvedValue(undefined),
     };
   });

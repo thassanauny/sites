@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Plus, Trash2, ArrowRight } from 'lucide-react'
+import { Check, Plus, Trash2, ArrowRight, Download } from 'lucide-react'
 import type { Group, Member, Transaction } from '../../domain/groups/types'
 import { CURRENCIES, currencyDigits, formatDecimal, formatMoney, parseAmount, parsePercentage, splitByPercentages, splitByShares, splitEqually } from '../../domain/ledger/calculations'
 import { GROUP_ICONS, CATEGORIES, Avatar } from '../../ui/components'
@@ -550,6 +550,7 @@ export function SettingsForm({ group, yourId, onSubmit, onExport }: { group: Gro
       <FormError error={error} />
       <div className="settings-form-actions">
         <button className="button secondary full" type="button" onClick={onExport}>
+          <Download size={16} aria-hidden="true" />
           Export group CSV
         </button>
         <SubmitButton busy={busy}>Save changes</SubmitButton>

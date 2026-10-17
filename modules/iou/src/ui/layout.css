@@ -120,6 +120,22 @@
   }
 }
 
+@media (min-width: 760px) and (max-width: 999px) {
+  .header-inner:has(.workspace-actions) .desktop-nav {
+    margin-left: 24px;
+    gap: 18px;
+  }
+  .workspace-actions .workspace-invite,
+  .workspace-actions .workspace-settings {
+    width: 44px;
+    padding-inline: 0;
+  }
+  .workspace-actions .workspace-invite > span,
+  .workspace-actions .workspace-settings > span {
+    display: none;
+  }
+}
+
 @media (max-width: 599px) {
   .header-inner:has(.workspace-actions) {
     gap: 8px;
@@ -137,4 +153,20 @@
   .header-inner:has(.workspace-actions) .header-actions {
     gap: 8px;
   }
+}
+
+/* Sync metadata and the version share one footer typography. */
+.home-footer {
+  font: 400 10px / 12px var(--ea-font-body);
+  color: var(--ea-muted);
+  letter-spacing: normal;
+}
+.home-footer :is(span, time) {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+.device-group-actions .button.secondary {
+  color: #bc7669;
 }

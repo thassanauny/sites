@@ -219,7 +219,7 @@ describe('TextDrop opening snippets', () => {
     await flush();
     expect(cloud.joinPage).not.toHaveBeenCalled();
     expect(element<HTMLButtonElement>('create').disabled).toBe(true);
-    expect(root.querySelector<HTMLButtonElement>('.snippet-remove')!.disabled).toBe(false);
+    expect(root.querySelector('.snippet-remove')).toBeNull();
   });
 });
 

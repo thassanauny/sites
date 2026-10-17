@@ -1,12 +1,10 @@
-import { ArrowRight, CalendarDays, Check, Link, LoaderCircle, Plus, Users } from 'lucide-react';
+import { ArrowUpRight, CalendarDays, Check, Link, LoaderCircle, Plus } from 'lucide-react';
 import type { BoardSummary } from '../../domain/boards/types';
 
 export function HomeView({
   boards,
   loaded,
   disabled,
-  cardCount,
-  showCardCount,
   onCreate,
   onJoin,
   onOpen,
@@ -14,8 +12,6 @@ export function HomeView({
   boards: BoardSummary[];
   loaded: boolean;
   disabled: boolean;
-  cardCount: number;
-  showCardCount: boolean;
   onCreate: () => void;
   onJoin: () => void;
   onOpen: (board: BoardSummary) => void;
@@ -58,7 +54,6 @@ export function HomeView({
             <h2>
               Your boards <span>{boards.length}</span>
             </h2>
-            <span>Pick up where you left off</span>
           </div>
           <div className="board-grid">
             {boards.map((item) => (
@@ -66,9 +61,11 @@ export function HomeView({
                 type="button"
                 key={item.id}
                 className="board-preview"
+                aria-label={`Open ${item.title}`}
+                title={item.description || undefined}
                 onClick={() => onOpen(item)}
               >
-                <div className="preview-art">
+                <div className="preview-art" aria-hidden="true">
                   {item.columns.slice(0, 4).map((column) => (
                     <div className={`preview-column color-${column.color}`} key={column.id}>
                       <span />
@@ -79,42 +76,34 @@ export function HomeView({
                 </div>
                 <div className="preview-info">
                   <h3>
-                    {item.title}
-                    <ArrowRight size={18} />
+                    <span>{item.title}</span>
+                    <ArrowUpRight size={16} />
                   </h3>
-                  <p>{item.description || 'A fresh space for good ideas.'}</p>
-                  <div>
-                    <span>
-                      {item.active_card_count} cards · {item.columns.length} columns
-                    </span>
-                    <Users size={15} />
-                  </div>
+                  <p>
+                    {item.active_card_count} cards · {item.columns.length} columns
+                  </p>
+                  <span className="preview-access">
+                    {item.localPending ? 'Waiting to sync' : 'Shared board'}
+                  </span>
+                </div>
+                <div className="preview-updated">
+                  <span>
+                    Updated{' '}
+                    <time dateTime={item.updated_at}>
+                      {new Date(item.updated_at).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </time>
+                  </span>
                 </div>
               </button>
             ))}
-            <button type="button" className="new-board-tile" disabled={disabled} onClick={onCreate}>
-              <span>
-                <Plus size={23} />
-              </span>
-              Create a new board
-            </button>
           </div>
         </>
       ) : (
         <WelcomePanel />
       )}
-      <div className="home-bottom">
-        <span>
-          <span className="connection-dot" />
-          Small projects, one step at a time.
-        </span>
-        {showCardCount && (
-          <span>
-            {cardCount} {cardCount === 1 ? 'card' : 'cards'}
-            {' across your boards'}
-          </span>
-        )}
-      </div>
     </section>
   );
 }

@@ -8,7 +8,7 @@ export interface DialogHost {
   ui: ShellElements;
   root: HTMLElement;
   session: PageSession;
-  /** The name saved on this device for a snippet, to prefill the rename field. */
+  /** The current shared name for this snippet, to prefill the rename field. */
   nameOf(code: string): string;
   /** Redraws the page after the dialog changed. */
   render(): void;
@@ -24,6 +24,7 @@ export class DialogController {
   /** The snippet the dialog is about: the one being invited to, named or removed. */
   code = '';
   error = '';
+  busy = false;
   private copies = 0;
   private returnFocus: HTMLElement | null = null;
   private host: DialogHost;
@@ -47,6 +48,7 @@ export class DialogController {
   }
 
   show(kind: DialogKind, code = this.host.session.state.page?.code ?? ''): void {
+    if (this.busy) return;
     const { ui } = this.host;
     if (kind !== 'create' && kind !== 'join' && !code) return;
     ++this.copies;
@@ -75,6 +77,7 @@ export class DialogController {
 
   close(force = false, restoreFocus = true): void {
     const { ui, root, session } = this.host;
+    if (this.busy && !force) return;
     const opening = this.opening;
     if (!force && opening && session.state.phase === 'opening') return;
     if (!force && this.kind === 'join' && ['join', 'page'].includes(readRoute(location.hash).kind)) this.host.showHomeAddress();

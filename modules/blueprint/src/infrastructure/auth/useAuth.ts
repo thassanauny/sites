@@ -8,6 +8,11 @@ async function ensureSession(): Promise<User> {
   const client = supabase;
   if (!client) throw new Error("Supabase is not configured.");
   const start = async () => {
+    if (!navigator.onLine) {
+      const saved = JSON.parse(localStorage.getItem('blueprint-auth') || 'null');
+      if (saved?.access_token && saved?.refresh_token && typeof saved?.user?.id === 'string') return saved.user as User;
+      throw new Error('Connect once to start a Blueprint device session.');
+    }
     const { data, error } = await client.auth.getSession();
     if (error) throw error;
     if (data.session?.user) return data.session.user;
@@ -47,6 +52,11 @@ export function useAuth() {
   const [checking, setChecking] = useState(Boolean(supabase));
   const [authError, setAuthError] = useState(configError);
   const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    const online = () => setRetry(value => value + 1);
+    window.addEventListener('online', online);
+    return () => window.removeEventListener('online', online);
+  }, []);
   useEffect(() => {
     if (!supabase) return;
     let active = true;

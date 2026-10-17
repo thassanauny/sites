@@ -1,4 +1,4 @@
-import { MAX_SNIPPET_NAME_LENGTH, normalizeCode, type DeviceSnippet } from '../../domain/snippets/model';
+import { MAX_SNIPPET_NAME_LENGTH, normalizeCode, validateName, type DeviceSnippet } from '../../domain/snippets/model';
 
 export const DEVICE_SNIPPETS_KEY = 'textdrop-snippets';
 type SnippetStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'length' | 'key'>;
@@ -38,7 +38,7 @@ function readName(code: string, saved: string | null): string | undefined {
   const name = readRow(code, saved)?.name;
   if (typeof name !== 'string') return undefined;
   const normalized = normalizedName(name);
-  return normalized && normalized.length <= MAX_SNIPPET_NAME_LENGTH ? normalized : undefined;
+  return normalized && Array.from(normalized).length <= MAX_SNIPPET_NAME_LENGTH ? normalized : undefined;
 }
 
 function readEntry(code: string, saved: string | null): StoredSnippet | null {
@@ -140,7 +140,9 @@ export class DeviceSnippets {
         const snippet = readEntry(code, state.row);
         if (snippet && !isRemovedState(code, state)) {
           const name = readName(code, storage.getItem(`${namePrefix}${code}`));
-          snippets.push({ code, openedAt: snippet.openedAt, ...(name === undefined ? {} : { name }) });
+          const savedName = readRow(code, storage.getItem(namePrefix + code));
+          const shared = Number.isSafeInteger(savedName?.version) && Number(savedName?.version) > 0;
+          snippets.push({ code, openedAt: snippet.openedAt, ...(name === undefined ? {} : { name }), ...(shared ? { nameShared: true } : {}) });
         }
       }
     } catch {
@@ -151,6 +153,19 @@ export class DeviceSnippets {
 
   list(): DeviceSnippet[] {
     return this.read(this.storage());
+  }
+
+  /** Cache shared metadata without opening or restoring a snippet. */
+  sharedName(code: string, name: string | null, version: number, pending = false): DeviceSnippet[] {
+    const normalized = normalizeCode(code);
+    const storage = this.storage();
+    const current = readRow(normalized, storage.getItem(namePrefix + normalized));
+    const known = typeof current?.version === 'number' ? current.version : 0;
+    if (!Number.isSafeInteger(version) || version < 1) throw new Error('The snippet version is invalid.');
+    if (version < known && !pending) return this.read(storage);
+    const next = JSON.stringify({ code: normalized, name: validateName(name) ?? '', version: Math.max(version, known) });
+    if (storage.getItem(namePrefix + normalized) !== next) storage.setItem(namePrefix + normalized, next);
+    return this.read(storage);
   }
 
   /** An opaque opening guard includes both the row and its independent removal. */

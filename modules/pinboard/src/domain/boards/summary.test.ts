@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { summarizeBoard, readBoardSummary } from './summary';
+import { summarizeBoard, readBoardSummary, acceptSummary } from './summary';
 import type { Board } from './types';
 
 describe('collection payload', () => {
@@ -33,5 +33,9 @@ describe('collection payload', () => {
     const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
     expect(bytes(summary)).toBeLessThan(bytes(board) / 100);
     expect(readBoardSummary(summary)).toEqual(summary);
+    const newerHead = { ...summary, revision: 2 };
+    expect(acceptSummary(newerHead, summary)).toBe(newerHead);
+    const cachedDocument = { ...summary, localCached: true };
+    expect(acceptSummary(newerHead, cachedDocument)).toBe(cachedDocument);
   });
 });

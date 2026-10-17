@@ -29,7 +29,6 @@ const backgrounds = new Map([
   ['.device-count', '#e9ecdf'],
   ['.notice', '#fff2dc'],
   ['textarea:disabled', '#f2f2eb'],
-  ['.snippet-remove:hover', '#f8eee8'],
   ['.snippet-rename:hover', '#eef1e7'],
   ['.disconnected', PAGE],
   ['#save-status', CARD],

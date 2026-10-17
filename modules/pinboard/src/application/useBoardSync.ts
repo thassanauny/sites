@@ -82,7 +82,7 @@ export function useBoardSync({
         setLoaded(true);
         return;
       }
-      if (!cloudConfigured || !navigator.onLine) {
+      if (!cloudConfigured) {
         setLoaded(true);
         return;
       }
@@ -124,8 +124,11 @@ export function useBoardSync({
           return next.length === current.length ? current : next;
         });
         poll.current = { failures: 0, notBefore: 0 };
-        setLastSync(new Date());
-        if (manual) {
+        if (navigator.onLine && !incoming.some((board) => board.localPending || board.localCached))
+          setLastSync(new Date());
+        const cachedError = incoming.find((board) => board.localError)?.localError;
+        if (cachedError) onError(cachedError);
+        else if (manual) {
           onError('');
           onNotice('Boards are up to date');
         } else onSynced();
@@ -148,7 +151,12 @@ export function useBoardSync({
   const held = boards.find((item) => item.invite_code === selectedCode);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a successful poll retries a previously failed detail load even when its revision stayed unchanged.
   useEffect(() => {
-    if (!selected || (held && held.revision >= selected.revision) || !navigator.onLine) {
+    if (
+      !selected ||
+      (held &&
+        held.revision >= selected.revision &&
+        Boolean(held.localPending) === Boolean(selected.localPending))
+    ) {
       if (!selected || (held && held.revision >= selected.revision)) setDetailError('');
       setLoadingBoard(false);
       return;
@@ -171,7 +179,7 @@ export function useBoardSync({
     void request
       .then((incoming) => {
         if (!active) return;
-        if (incoming.revision < selected.revision)
+        if (incoming.revision < selected.revision && !incoming.localCached)
           throw new Error('The board changed while loading. Refresh and try again.');
         detailFailures.current.delete(selected.id);
         upsert(incoming);

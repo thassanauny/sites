@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Check, CheckCheck, History, LockKeyhole, Plus, ReceiptText, Users, Wallet } from 'lucide-react'
+import { ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Check, CheckCheck, History, Plus, ReceiptText, Users, Wallet } from 'lucide-react'
 import type { Group, MemberBalance, Settlement, Transaction } from '../../domain/groups/types'
 import { formatMoney, totalSpent } from '../../domain/ledger/calculations'
 import type { TransactionFilter } from '../../domain/ledger/transactions'
@@ -21,12 +21,7 @@ interface GroupPageProps {
   visibleTransactions: readonly Transaction[]
   logFilter: TransactionFilter
   logLimit: number
-  /** Changes made here are still waiting to sync. */
-  unsynced: boolean
-  /** The shared groups have been reached at least once since this page opened. */
-  synced: boolean
   canEdit: boolean
-  version: string
   onNavigate: (page: 'home' | 'overview' | 'log') => void
   onSettings: () => void
   onExpense: () => void
@@ -46,10 +41,7 @@ export function GroupPage({
   visibleTransactions,
   logFilter,
   logLimit,
-  unsynced,
-  synced,
   canEdit,
-  version,
   onNavigate,
   onSettings,
   onExpense,
@@ -68,10 +60,6 @@ export function GroupPage({
           <ArrowLeft size={16} />
           Home
         </button>
-        <span>
-          <span className="tiny-dot" />
-          {unsynced ? 'Saved on this device' : synced ? 'Synced' : 'Shared group'}
-        </span>
       </div>
       <section className="group-heading">
         <GroupIcon id={group.icon} color={group.color} />
@@ -295,13 +283,6 @@ export function GroupPage({
           </section>
         </div>
       )}
-      <div className="group-footer">
-        <span>
-          <LockKeyhole size={13} />
-          {group.currency} is fixed for this group.
-        </span>
-        <span className="app-version">iou · {version}</span>
-      </div>
     </>
   )
 }

@@ -1,6 +1,7 @@
+import { fitBrand } from '../ui/fitBrand';
 import { renderDeviceList } from '../ui/deviceList';
 import { shell, shellElements } from '../ui/shell';
-import { countLines, exceedsLimit, exportFileName, type DeviceSnippet } from '../domain/snippets/model';
+import { countLines, exceedsLimit, exportFileName, validateName, type TextDropPage, type DeviceSnippet } from '../domain/snippets/model';
 import { DialogController } from './dialogs';
 import { errorMessage } from './errorMessage';
 import { PageSession } from './PageSession';
@@ -20,6 +21,10 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
   const { signal } = lifecycle;
   root.innerHTML = shell();
   const ui = shellElements(root);
+  const stopBrandFit = fitBrand(root.querySelector<HTMLElement>('.site-header')!);
+  const stopSyncTime = cloud.subscribeSync?.(at => {
+    setText(root.querySelector<HTMLElement>('#footer-sync')!, `Synced ${at.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`);
+  });
   ui.skipLink.addEventListener(
     'click',
     event => {
@@ -33,13 +38,29 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
   const { configured, version } = options;
   const session = new PageSession(cloud, 650, 10_000, options.recovery);
   const refreshes = new RefreshScheduler(
-    () => session.refresh(),
+    async () => {
+      if (session.state.page) return session.refresh();
+      try {
+        await cloud.syncPending?.();
+        await refreshNames();
+        nameSyncError = '';
+        render();
+        return 'unchanged';
+      } catch (error) {
+        if (!signal.aborted) {
+          nameSyncError = errorMessage(error, 'Could not sync snippet names.');
+          render();
+        }
+        return 'failed';
+      }
+    },
     () => document.visibilityState === 'visible',
   );
   let rememberedSnippets: DeviceSnippet[] = [];
   let deviceReadError = '';
   let deviceWriteError = '';
   let uiError = '';
+  let nameSyncError = '';
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   let currentHash = location.hash;
   let loadingLink = false;
@@ -48,7 +69,10 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     ui,
     root,
     session,
-    nameOf: code => rememberedSnippets.find(snippet => snippet.code === code)?.name ?? '',
+    nameOf: code => {
+      const row = rememberedSnippets.find(snippet => snippet.code === code);
+      return row?.name ?? '';
+    },
     render: () => {
       render();
     },
@@ -57,6 +81,48 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     },
     showHomeAddress,
   });
+
+  let naming = false;
+  let sharedMark = '';
+  function cacheName(page: TextDropPage): boolean {
+    if (page.name === undefined || !deviceSnippets.sharedName) return true;
+    return updateDeviceSnippets(() => deviceSnippets.sharedName!(page.code, page.name!, page.version, page.localPending), true);
+  }
+  async function refreshNames(): Promise<void> {
+    if (!configured || !cloud.listNames || !rememberedSnippets.length) return;
+    const names = await cloud.listNames(rememberedSnippets.map(row => row.code));
+    if (signal.aborted) return;
+    for (const row of names) {
+      const local = rememberedSnippets.find(item => item.code === row.code);
+      if (!local?.nameShared && local?.name && row.name === null) {
+        await migrateName(row.code, local.name);
+        continue;
+      }
+      if (!deviceSnippets.isRemoved(row.code)) updateDeviceSnippets(() => deviceSnippets.sharedName?.(row.code, row.name, row.version) ?? deviceSnippets.list(), true);
+    }
+  }
+
+  const migratingNames = new Set<string>();
+  async function migrateName(code: string, name: string): Promise<void> {
+    if (migratingNames.has(code) || !cloud.renamePage) return;
+    migratingNames.add(code);
+    try {
+      const page = session.state.page?.code === code ? session.state.page : await cloud.joinPage(code);
+      if (signal.aborted || deviceSnippets.isRemoved(code)) return;
+      const saved = page.name ? page : await cloud.renamePage(page.id, name);
+      if (!signal.aborted) {
+        cacheName(saved);
+        session.acceptName(saved);
+      }
+    } catch (error) {
+      if (!signal.aborted) {
+        uiError = errorMessage(error, 'Could not sync the snippet name.');
+        render();
+      }
+    } finally {
+      migratingNames.delete(code);
+    }
+  }
 
   ui.version.textContent = version;
 
@@ -126,59 +192,67 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     lastStatus = status;
   }
 
-  /** Formatting a time is slow next to the rest of a redraw, so keep the label until the page is saved again. */
-  let savedLabel: { updatedAt: string; text: string } | undefined;
-  function lastSaved(updatedAt: string): string {
-    if (savedLabel?.updatedAt !== updatedAt) {
-      savedLabel = { updatedAt, text: `Last saved ${new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` };
-    }
-    return savedLabel.text;
-  }
-
   function render(): void {
     const { page, draft, phase, dirty, error, online, sessionDamaged } = session.state;
     const opening = phase === 'opening';
     ui.home.hidden = Boolean(page);
     ui.workspace.hidden = !page;
     ui.snippetActions.hidden = !page;
-    ui.connection.classList.toggle('disconnected', !online || !!error || !configured);
+    ui.connection.classList.toggle('disconnected', !online || !!error || !!nameSyncError || !configured);
     setText(
       ui.connectionLabel,
-      !online ? 'Offline' : !configured ? 'Setup required' : error ? 'Needs attention' : opening ? 'Connecting' : phase === 'saving' ? 'Syncing' : page ? 'Connected' : 'Online',
+      !online ? 'Offline' : !configured ? 'Setup required' : error || nameSyncError ? 'Needs attention' : opening ? 'Connecting' : phase === 'saving' ? 'Syncing' : 'Connected',
     );
     ui.create.disabled = opening || !online || !configured;
     ui.join.disabled = opening || !online || !configured;
     const openingDialog = dialogs.opening;
     codeInput.disabled = opening;
     for (const button of [ui.createConfirm, ui.joinConfirm]) button.disabled = opening || !online || !configured;
-    for (const button of [ui.createCancel, ui.joinCancel, ui.dialogClose]) button.disabled = openingDialog && opening;
+    for (const button of [ui.createCancel, ui.joinCancel, ui.dialogClose]) button.disabled = naming || (openingDialog && opening);
+    ui.renameConfirm.disabled = naming;
+    ui.renamePage.disabled = opening;
+    ui.renameCancel.disabled = naming;
+    ui.snippetNameInput.disabled = naming;
+    setText(ui.renameConfirm, naming ? 'Saving name…' : 'Save name');
     setText(ui.createLabel, opening && !loadingLink ? 'Creating…' : 'Create snippet');
     setText(ui.joinLabel, opening && loadingLink ? 'Opening…' : 'Open snippet');
     if (!page) {
       // The snippet list is hidden while a snippet is open; showing Home draws again.
       for (const open of root.querySelectorAll<HTMLAnchorElement>('.snippet-open')) {
-        const disabled = opening || !online || !configured;
+        const disabled = opening || (!online && !cloud.offlineCapable) || !configured;
         open.setAttribute('aria-disabled', String(disabled));
         open.tabIndex = disabled ? -1 : 0;
       }
-      for (const action of root.querySelectorAll<HTMLButtonElement>('.snippet-remove, .snippet-rename')) action.disabled = opening;
+      for (const action of root.querySelectorAll<HTMLButtonElement>('.snippet-rename')) action.disabled = opening;
     }
 
     if (page) {
-      const name = rememberedSnippets.find(snippet => snippet.code === page.code)?.name || 'Shared snippet';
+      const name = page.name || rememberedSnippets.find(snippet => snippet.code === page.code)?.name || 'Untitled snippet';
       setText(ui.pageName, name);
       if (document.title !== `${name} — TextDrop`) document.title = `${name} — TextDrop`;
       setText(ui.pageCode, page.code);
       if (editor.value !== draft) editor.value = draft;
-      editor.disabled = !online;
+      editor.disabled = !online && !cloud.offlineCapable;
       const { lines, tooLarge } = measure(draft);
       setText(ui.textCount, `${draft.length.toLocaleString()} characters · ${lines.toLocaleString()} lines${tooLarge ? ' · over 1 MiB limit' : ''}`);
       ui.textCount.classList.toggle('over-limit', tooLarge);
-      const status = !online ? 'Offline · editing paused' : phase === 'saving' ? 'Saving…' : dirty ? (error ? 'Not saved' : 'Unsaved changes…') : error ? 'Sync unavailable' : 'All changes saved';
+      const status =
+        !online && !cloud.offlineCapable
+          ? 'Offline · editing paused'
+          : phase === 'saving'
+            ? 'Saving…'
+            : dirty
+              ? error
+                ? 'Not saved'
+                : 'Unsaved changes…'
+              : error
+                ? 'Sync unavailable'
+                : page.localPending
+                  ? 'Saved on this device · waiting to sync'
+                  : 'All changes saved';
       setText(ui.saveStatus, status);
       announceSave(status);
       ui.saveStatus.classList.toggle('unsaved', dirty || Boolean(error) || !online);
-      setText(ui.updatedAt, lastSaved(page.updatedAt));
     } else {
       if (document.title !== 'TextDrop — share text') document.title = 'TextDrop — share text';
       announceSave('');
@@ -187,10 +261,15 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
       uiError ||
       (!openingDialog ? error : '') ||
       session.state.recoveryError ||
+      nameSyncError ||
       deviceWriteError ||
       deviceReadError ||
       (!configured ? 'Sharing needs Supabase settings. Add the public project settings, then restart this app.' : '') ||
-      (!online ? 'Reconnect to create, open, or edit a page. Unsaved text has local recovery when browser storage is available.' : '');
+      (!online
+        ? cloud.offlineCapable
+          ? 'Offline. Saved snippets can be edited on this device and sync automatically when connected.'
+          : 'Reconnect to create, open, or edit a page. Unsaved text has local recovery when browser storage is available.'
+        : '');
     ui.notice.hidden = !notice;
     ui.noticeMessage.textContent = notice;
     const link = readRoute(location.hash);
@@ -203,7 +282,19 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
 
   renderDeviceSnippets();
   updateDeviceSnippets(() => deviceSnippets.list());
-  session.subscribe(render);
+  session.subscribe(state => {
+    const page = state.page;
+    if (page?.name !== undefined) {
+      const mark = JSON.stringify([page.code, page.version, page.name, page.localPending]);
+      if (mark !== sharedMark) {
+        sharedMark = mark;
+        const local = rememberedSnippets.find(row => row.code === page.code);
+        if (page.name === null && local?.name && !local.nameShared) void migrateName(page.code, local.name);
+        else cacheName(page);
+      }
+    }
+    render();
+  });
   session.setOnline(navigator.onLine);
 
   function navigateToPage(expected?: string | null): void {
@@ -337,7 +428,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
         return;
       }
       const open = target.closest<HTMLAnchorElement>('.snippet-open');
-      if (open && (session.state.phase === 'opening' || !session.state.online || !configured)) {
+      if (open && (session.state.phase === 'opening' || (!session.state.online && !cloud.offlineCapable) || !configured)) {
         event.preventDefault();
         return;
       }
@@ -346,10 +437,6 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
         void route();
         return;
       }
-      const remove = target.closest<HTMLButtonElement>('.snippet-remove');
-      const code = remove?.dataset.code;
-      if (!code) return;
-      dialogs.show('remove', code);
     },
     { signal },
   );
@@ -431,13 +518,14 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     },
     { signal },
   );
-  ui.settingsRename.addEventListener(
-    'click',
-    () => {
-      dialogs.show('rename');
-    },
-    { signal },
-  );
+  for (const opener of [ui.settingsRename, ui.renamePage])
+    opener.addEventListener(
+      'click',
+      () => {
+        dialogs.show('rename');
+      },
+      { signal },
+    );
   ui.settingsRemove.addEventListener(
     'click',
     () => {
@@ -449,14 +537,34 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     'submit',
     event => {
       event.preventDefault();
-      if (dialogs.kind !== 'rename') return;
-      if (!updateDeviceSnippets(() => deviceSnippets.rename(dialogs.code, ui.snippetNameInput.value), true)) {
-        dialogs.error = deviceWriteError;
+      if (dialogs.kind !== 'rename' || naming) return;
+      const code = dialogs.code;
+      const nameDraft = ui.snippetNameInput.value;
+      void (async () => {
+        naming = true;
+        dialogs.busy = true;
+        dialogs.error = '';
         render();
-        return;
-      }
-      dialogs.close();
-      showToast('Name saved on this device');
+        try {
+          const name = validateName(nameDraft);
+          if (deviceSnippets.isRemoved(code) || !rememberedSnippets.some(row => row.code === code)) throw new Error('This snippet is no longer saved on this device. Open it again before naming it.');
+          if (!cloud.renamePage) throw new Error('Shared names need an app and database update.');
+          const page = session.state.page?.code === code ? session.state.page : await cloud.joinPage(code);
+          const saved = await cloud.renamePage(page.id, name);
+          if (signal.aborted) return;
+          if (!cacheName(saved)) throw new Error('Name saved for everyone, but could not save its local copy. Keep this name and retry.');
+          session.acceptName(saved);
+          dialogs.busy = false;
+          dialogs.close();
+          showToast(saved.localPending ? 'Name saved on this device · waiting to sync' : 'Snippet name shared');
+        } catch (error) {
+          if (!signal.aborted) dialogs.error = errorMessage(error, 'Could not save the snippet name. Your input is kept.');
+        } finally {
+          naming = false;
+          dialogs.busy = false;
+          if (!signal.aborted) render();
+        }
+      })();
     },
     { signal },
   );
@@ -534,7 +642,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
         showHomeAddress();
         session.home();
       }
-      const remaining = ui.deviceList.querySelectorAll<HTMLButtonElement>('.snippet-remove');
+      const remaining = ui.deviceList.querySelectorAll<HTMLAnchorElement>('.snippet-open');
       (remaining[Math.min(index, remaining.length - 1)] ?? ui.deviceHeading).focus();
       showToast('Snippet removed from this device');
     },
@@ -707,9 +815,12 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     { signal },
   );
   refreshes.start();
+  if (cloud.listNames) void refreshes.wake();
   void route();
 
   return () => {
+    stopBrandFit();
+    stopSyncTime?.();
     lifecycle.abort();
     refreshes.stop();
     clearTimeout(toastTimer);

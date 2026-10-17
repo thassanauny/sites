@@ -1,6 +1,6 @@
+import { useCallback, useEffect, useId, useRef } from "react";
 import type { WorkspaceController } from "../../application/useWorkspaceController";
 import {
-  BookOpen,
   Check,
   Copy,
   Layers3,
@@ -17,7 +17,6 @@ export function PropertiesPanel({
 }: {
   controller: Pick<
     WorkspaceController,
-    | "board"
     | "update"
     | "readOnly"
     | "setShowInspector"
@@ -30,7 +29,6 @@ export function PropertiesPanel({
   >;
 }) {
   const {
-    board,
     update,
     readOnly,
     setShowInspector,
@@ -41,21 +39,55 @@ export function PropertiesPanel({
     deleteSelection,
     updateNode,
   } = controller;
+  const popup = useRef<HTMLElement>(null);
+  const titleId = useId();
+  const close = useCallback(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && popup.current?.contains(active)) active.blur();
+    setShowInspector(false);
+  }, [setShowInspector]);
+  useEffect(() => {
+    const element = popup.current!;
+    const opener = document.activeElement;
+    const position = () => {
+      const header = document.querySelector('.topbar')!.getBoundingClientRect();
+      element.style.setProperty('--properties-top', `${header.bottom + 12}px`);
+    };
+    position();
+    element.showPopover();
+    (element.querySelector<HTMLElement>('input, textarea') ?? element.querySelector<HTMLElement>('button'))?.focus({ preventScroll: true });
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !element.contains(event.target)) close();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+      }
+    };
+    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('keydown', escape, true);
+    window.addEventListener('resize', position);
+    const resize = new ResizeObserver(position);
+    resize.observe(document.querySelector('.topbar')!);
+    return () => {
+      const restoreFocus = element.contains(document.activeElement) || document.activeElement === document.body;
+      document.removeEventListener('pointerdown', outside, true);
+      document.removeEventListener('keydown', escape, true);
+      window.removeEventListener('resize', position);
+      resize.disconnect();
+      element.hidePopover();
+      if (restoreFocus && opener instanceof HTMLElement && opener.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, [close]);
   return (
-    <aside className="inspector">
-      <div className="inspector-title">
-        <span>
-          {selectedNode || selectedEdge ? "Properties" : "Board details"}
-        </span>
-        <button
-          className="icon-button"
-          aria-label="Close properties"
-          onClick={() => setShowInspector(false)}
-        >
-          <X size={15} />
-        </button>
+    <aside ref={popup} popover="manual" className="properties-popup" role="dialog" aria-labelledby={titleId}>
+      <div className="properties-popup-heading">
+        <h2 id={titleId}>Properties</h2>
+        <button className="icon-button" aria-label="Close properties" onClick={close}><X size={17} /></button>
       </div>
-      <div className="inspector-content">
+      <div className="properties-popup-content">
         {selectedNode ? (
           <>
             <div
@@ -244,100 +276,7 @@ export function PropertiesPanel({
               Delete selection
             </button>
           </>
-        ) : (
-          <>
-            <div className="board-details-icon">
-              <BookOpen size={22} strokeWidth={1.5} />
-            </div>
-            <p className="eyebrow">THE BIG PICTURE</p>
-            <h2>
-              A system worth
-              <br />
-              thinking through.
-            </h2>
-            <p className="details-intro">
-              A place to map the pieces, connect your ideas, and see how it all
-              fits.
-            </p>
-            <label className="field">
-              Board name
-              <input
-                key={`${board.id}-title-${board.title}`}
-                readOnly={readOnly}
-                defaultValue={board.title}
-                onBlur={(event) => {
-                  if (event.target.value !== board.title)
-                    update(
-                      (current) => ({
-                        ...current,
-                        title: event.target.value.trim() || "Untitled board",
-                      }),
-                      false,
-                    );
-                }}
-                maxLength={120}
-              />
-            </label>
-            <label className="field">
-              Description
-              <textarea
-                key={`${board.id}-description-${board.description}`}
-                readOnly={readOnly}
-                defaultValue={board.description}
-                placeholder="What are we designing?"
-                onBlur={(event) => {
-                  if (event.target.value !== board.description)
-                    update(
-                      (current) => ({
-                        ...current,
-                        description: event.target.value,
-                      }),
-                      false,
-                    );
-                }}
-                rows={4}
-                maxLength={4000}
-              />
-            </label>
-            <div className="board-stats">
-              <div>
-                <strong>
-                  {board.nodes
-                    .filter(
-                      (node) =>
-                        !["note", "text", "boundary"].includes(node.data.kind),
-                    )
-                    .length.toString()
-                    .padStart(2, "0")}
-                </strong>
-                <span>components</span>
-              </div>
-              <div>
-                <strong>
-                  {board.edges.length.toString().padStart(2, "0")}
-                </strong>
-                <span>connections</span>
-              </div>
-            </div>
-            <div className="inspector-divider" />
-            <div className="design-checklist">
-              <span className="eyebrow">A GOOD DESIGN ASKS</span>
-              <p>
-                <span>01</span>Where does the data flow?
-              </p>
-              <p>
-                <span>02</span>What happens when it fails?
-              </p>
-              <p>
-                <span>03</span>How does it grow?
-              </p>
-            </div>
-          </>
-        )}
-      </div>
-      <div className="inspector-footer">
-        <span className="private-dot" />
-        <span>Just you and your next big idea.</span>
+        ) : null}
       </div>
     </aside>
   );

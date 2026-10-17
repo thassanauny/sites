@@ -41,6 +41,9 @@ export interface Card {
 }
 
 export interface Board {
+  localPending?: boolean;
+  localCached?: boolean;
+  localError?: string;
   id: string;
   invite_code: string;
   title: string;

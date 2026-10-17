@@ -124,9 +124,9 @@ describe('TextDrop device list', () => {
     await start();
     const joining = join(first.code);
     await flush();
-    const remove = root.querySelector<HTMLButtonElement>('.snippet-remove')!;
-    expect(remove.disabled).toBe(true);
-    remove.click();
+    expect(root.querySelector('.snippet-remove')).toBeNull();
+    const rename = root.querySelector<HTMLButtonElement>('.snippet-rename')!;
+    expect(rename.disabled).toBe(true);
     expect(localStorage.getItem(key(first.code))).not.toBeNull();
     opening.resolve(first);
     await joining;
@@ -143,11 +143,12 @@ describe('TextDrop device list', () => {
   it('keeps failed removals visible and removes only local metadata after a retry', async () => {
     new DeviceSnippets().remember(first.code);
     new DeviceSnippets().remember(second.code);
-    await start();
+    await start(`#/p/${first.code}`);
+    element('settings').click();
     const removal = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('Denied');
     });
-    root.querySelector<HTMLButtonElement>('.snippet-remove')!.click();
+    element('settings-remove').click();
     element('remove-confirm').click();
     expect(rows()).toEqual([first.code, second.code]);
     expect(element('toast').hidden).toBe(true);
@@ -157,9 +158,9 @@ describe('TextDrop device list', () => {
     expect(rows()).toEqual([second.code]);
     expect(new DeviceSnippets().isRemoved(first.code)).toBe(true);
     expect(element('toast').textContent).toBe('Snippet removed from this device');
-    expect(document.activeElement).toBe(root.querySelector('.snippet-remove'));
+    expect(document.activeElement).toBe(root.querySelector('.snippet-open'));
     expect(cloud.createPage).not.toHaveBeenCalled();
-    expect(cloud.joinPage).not.toHaveBeenCalled();
+    expect(cloud.joinPage).toHaveBeenCalledTimes(1);
     expect(cloud.pollPage).not.toHaveBeenCalled();
     expect(cloud.savePage).not.toHaveBeenCalled();
     await join(first.code);
@@ -202,7 +203,7 @@ describe('TextDrop device list', () => {
     expect(rows()).toEqual([second.code]);
   });
 
-  it('names snippets on this device, keeps the code underneath, and restores the name after remounting', async () => {
+  it('shares optional snippet names, keeps the code underneath, and restores the name after remounting', async () => {
     new DeviceSnippets().remember(first.code);
     await start();
     const rename = root.querySelector<HTMLButtonElement>('.snippet-rename')!;
@@ -212,12 +213,13 @@ describe('TextDrop device list', () => {
     expect(document.activeElement).toBe(element('snippet-name-input'));
     element<HTMLInputElement>('snippet-name-input').value = 'Travel notes <draft>';
     element('rename-confirm').click();
+    await flush();
     expect(element<HTMLDialogElement>('snippet-dialog').open).toBe(false);
     expect(root.querySelector('.snippet-name')!.textContent).toBe('Travel notes <draft>');
     expect(root.querySelector('.snippet-name draft')).toBeNull();
     expect(root.querySelector('.snippet-metadata code')!.textContent).toBe('aaaaaa…aaaaaa');
     expect(document.activeElement).toBe(root.querySelector('.snippet-rename'));
-    expect(cloud.joinPage).not.toHaveBeenCalled();
+    expect(cloud.renamePage).toHaveBeenCalledWith(first.id, 'Travel notes <draft>');
     expect(cloud.savePage).not.toHaveBeenCalled();
     dispose!();
     await start();
@@ -226,6 +228,7 @@ describe('TextDrop device list', () => {
     expect(element<HTMLInputElement>('snippet-name-input').value).toBe('Travel notes <draft>');
     element<HTMLInputElement>('snippet-name-input').value = '';
     element('rename-confirm').click();
+    await flush();
     expect(root.querySelector('.snippet-name')!.textContent).toBe('Untitled snippet');
   });
 
@@ -250,17 +253,12 @@ describe('TextDrop device list', () => {
     devices.remember(second.code);
     devices.rename(second.code, 'Travel notes');
     await start();
-    const labels = [...root.querySelectorAll<HTMLElement>('#device-list .snippet-open, #device-list .snippet-rename, #device-list .snippet-remove')].map(control => [
-      control.getAttribute('aria-label'),
-      control.title,
-    ]);
+    const labels = [...root.querySelectorAll<HTMLElement>('#device-list .snippet-open, #device-list .snippet-rename')].map(control => [control.getAttribute('aria-label'), control.title]);
     expect(labels).toEqual([
       ['Open snippet aaaaaa…aaaaaa', 'Open snippet aaaaaa…aaaaaa'],
-      ['Rename snippet aaaaaa…aaaaaa', 'Name on this device'],
-      ['Remove snippet aaaaaa…aaaaaa from this device', 'Remove from this device'],
+      ['Rename snippet aaaaaa…aaaaaa', 'Snippet name (optional)'],
       ['Open Travel notes', 'Open Travel notes'],
-      ['Rename Travel notes', 'Name on this device'],
-      ['Remove Travel notes from this device', 'Remove from this device'],
+      ['Rename Travel notes', 'Snippet name (optional)'],
     ]);
     const leaks = [...root.querySelectorAll('*')].flatMap(item =>
       [...item.attributes]

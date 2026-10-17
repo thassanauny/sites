@@ -19,9 +19,10 @@ export function HelpDialog({ busy, onClose }: { busy: boolean; onClose: () => vo
           accepted by the server wins. Separate changes are kept.
         </p>
         <p>
-          You need a connection to save. Keep your invite codes: you can rejoin if you clear browser
-          data or switch devices. Unsaved editor drafts have local recovery; reopen the same editor
-          and Save to publish a recovered draft.
+          Open a board online once to edit it offline. Saved changes sync automatically when
+          connected. Keep your invite codes: you can rejoin if you clear browser data or switch
+          devices. Unsaved editor drafts have local recovery; reopen the same editor and Save to
+          publish a recovered draft.
         </p>
         <p>
           Use Board settings to remove a board from this device. Everyone else keeps access. Join

@@ -115,7 +115,7 @@ describe('dialog controller', () => {
     dialogs.close();
     expect(document.activeElement).toBe(root.querySelector('.snippet-rename'));
 
-    root.querySelector<HTMLButtonElement>('.snippet-remove')!.focus();
+    root.querySelector<HTMLAnchorElement>('.snippet-open')!.focus();
     dialogs.show('remove', code);
     renderDeviceList(ui, [], value => `#/p/${value}`);
     dialogs.close();

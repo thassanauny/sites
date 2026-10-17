@@ -1,3 +1,4 @@
+import { VitePWA } from 'vite-plugin-pwa';
 import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 import { loadEnv } from "vite";
@@ -47,7 +48,7 @@ export function createConfig(appDirectory: string) {
           },
         },
       },
-      plugins: [react()],
+      plugins: [react(), VitePWA({ registerType: 'autoUpdate', manifest: false, workbox: { globPatterns: ['**/*.{js,css,html,woff2,svg,png}'], navigateFallback: 'index.html', cleanupOutdatedCaches: true } })],
       define: testing
         ? undefined
         : {

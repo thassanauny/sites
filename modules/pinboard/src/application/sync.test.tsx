@@ -98,7 +98,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     expect(cloud.joinBoard).not.toHaveBeenCalled();
   });
 
-  it('keeps an offline editor draft and allows saving after reconnecting', async () => {
+  it('keeps offline editing available and preserves the draft until saved', async () => {
     await mount();
     await click('Settings');
     await fill('Board name', 'Keep this title');
@@ -109,7 +109,7 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     await act(async () => {
       window.dispatchEvent(new Event('offline'));
     });
-    expect(button('Save details').disabled).toBe(true);
+    expect(button('Save details').disabled).toBe(false);
     expect(field('Board name').value).toBe('Keep this title');
     expect(cloud.mutateBoard).not.toHaveBeenCalled();
     Object.defineProperty(navigator, 'onLine', {
@@ -142,12 +142,15 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     cloud.loadBoardList.mockReturnValueOnce(pending.promise);
     await mount();
     expect(status()).toBe('Syncing');
-    expect(syncLabel()).toBe('Connecting…');
+    expect(document.querySelector('.sidebar')).toBeNull();
     await act(async () => {
       pending.resolve([board]);
     });
     expect(status()).toBe('Connected');
     expect(syncLabel()).toMatch(/^Synced \d{1,2}:\d{2}/);
+    expect(document.querySelector('.sidebar-footer time')?.getAttribute('datetime')).toBe(
+      board.updated_at,
+    );
 
     await click('Settings');
     await fill('Board name', 'Renamed');
@@ -163,7 +166,6 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     cloud.loadBoardList.mockRejectedValueOnce(new Error('Could not connect to shared boards.'));
     await refresh();
     expect(status()).toBe('Sync unavailable');
-    expect(syncLabel()).toBe('Sync paused');
     expect(document.querySelector('[role="alert"]')?.textContent).toContain(
       'Could not connect to shared boards.',
     );
@@ -176,7 +178,6 @@ describe('Pinboard UI: synchronization and connectivity', () => {
       window.dispatchEvent(new Event('offline'));
     });
     expect(status()).toBe('Offline');
-    expect(syncLabel()).toBe('Sync paused');
     expect(document.body.textContent).toContain('You’re offline.');
   });
 
@@ -243,7 +244,6 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     cloud.loadBoardList.mockRejectedValueOnce(new Error('Could not connect to shared boards.'));
     await refresh();
     expect(status()).toBe('Sync unavailable');
-    expect(syncLabel()).toBe('Sync paused');
     expect(document.querySelector('.banner.error')).not.toBeNull();
     await refresh();
     expect(document.querySelector('.banner.error')).toBeNull();

@@ -1,3 +1,4 @@
+import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { loadEnv } from 'vite';
@@ -17,6 +18,7 @@ export default defineConfig(({ mode, command }) => {
   if (!testing && (url || key)) validatePublicConfig(url, key);
   return {
     base: './',
+    plugins: [VitePWA({ registerType: 'autoUpdate', manifest: false, workbox: { globPatterns: ['**/*.{js,css,html,woff2,svg,png}'], navigateFallback: 'index.html', cleanupOutdatedCaches: true } })],
     define: testing
       ? undefined
       : {

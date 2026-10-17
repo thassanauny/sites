@@ -8,7 +8,7 @@ PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
 
 help:
 	@printf '%s\n' \
-	  'TextDrop shares text between devices and people; browser only, online Supabase required.' \
+	  'TextDrop shares text between devices and people; local editing with automatic Supabase sync.' \
 	  'Requires Make, Node.js 24+ and npm.' \
 	  'make setup      Install or refresh missing npm dependencies' \
 	  'make build      Build static files into dist/ (default; no publishing)' \

@@ -144,10 +144,6 @@ export function useWorkspace() {
         setNotice('Another change is still saving. Try again in a moment.');
         return false;
       }
-      if (!navigator.onLine) {
-        setError('Reconnect to save changes.');
-        return false;
-      }
       busyRef.current = true;
       const startedNavigation = navigationVersion.current;
       setBusy(true);
@@ -166,8 +162,8 @@ export function useWorkspace() {
         }
         if (!upsert(saved)) return false;
         if (startedNavigation !== navigationVersion.current) return false;
-        setLastSync(new Date());
-        setNotice(success);
+        if (!saved.localPending) setLastSync(new Date());
+        setNotice(saved.localPending ? 'Saved on this device. Waiting to sync.' : success);
         if (open) {
           modalRef.current = undefined;
           setModal(undefined);
@@ -270,8 +266,8 @@ export function useWorkspace() {
       setError(message(failure));
     }
   }, [retry, setError]);
-  const disabled = busy || offline || !cloudConfigured;
-  const refreshDisabled = disabled || refreshing || !loaded;
+  const disabled = busy || !cloudConfigured;
+  const refreshDisabled = disabled || offline || refreshing || !loaded;
   // These actions read the board on screen at call time, so their identity never changes and a
   // refresh that changes nothing leaves the board and its cards free to skip rendering.
   const boardRef = useRef(board);
@@ -362,7 +358,6 @@ export function useWorkspace() {
     setDetailError('');
   }, [setError, setDetailError]);
   const boardList = [...visibleSummaries].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  const workspaceCardCount = boardList.reduce((total, item) => total + item.active_card_count, 0);
   // The open dialog edits a snapshot; these follow the live board and this device's removals.
   const modalBoard =
     modal && 'board' in modal ? boards.find((item) => item.id === modal.board.id) : undefined;
@@ -375,7 +370,6 @@ export function useWorkspace() {
       loadingBoard ||
       (!board && visibleSummaries.some((item) => item.invite_code === selectedCode)),
     visibleCount: visibleSummaries.length,
-    workspaceCardCount,
     selectedCode,
     loaded,
     removalsReady,

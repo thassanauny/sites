@@ -172,29 +172,11 @@ p {
   color: #af8668;
 }
 .brand-mark {
-  position: relative;
   display: inline-block;
-  width: 22px;
-  height: 27px;
+  width: 32px;
+  height: 32px;
   margin-right: 1px;
-  transform: rotate(-12deg);
-}
-.brand-mark span {
-  position: absolute;
-  width: 7px;
-  height: 20px;
-  background: var(--jade);
-  border-radius: 4px;
-  transform: rotate(35deg);
-}
-.brand-mark span:first-child {
-  left: 4px;
-  top: 0;
-}
-.brand-mark span:last-child {
-  left: 12px;
-  top: 7px;
-  background: #9ab89d;
+  flex-shrink: 0;
 }
 .desktop-nav,
 .desktop-actions {
@@ -905,20 +887,21 @@ p {
   gap: 12px;
   margin-top: auto;
   padding-top: 24px;
+  padding-inline: 6px;
   font-size: 10px;
   color: #606d57;
 }
-.app-shell:has(> .main-container > :is(.home-footer, .group-footer)) {
+.app-shell:has(> .main-container > .home-footer) {
   display: flex;
   flex-direction: column;
 }
-.main-container:has(> :is(.home-footer, .group-footer)) {
+.main-container:has(> .home-footer) {
   display: flex;
   flex: 1;
   flex-direction: column;
   padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
 }
-.main-container:has(> .group-footer) {
+.in-group > .main-container:has(> .home-footer) {
   /* The group action bar is 9px taller than the main navigation. */
   padding-bottom: calc(89px + env(safe-area-inset-bottom, 0px));
 }
@@ -926,7 +909,7 @@ p {
   display: flex;
   align-items: center;
   gap: 7px;
-  line-height: 1.6;
+  line-height: 12px;
 }
 .home-footer > span > svg {
   flex-shrink: 0;
@@ -1737,24 +1720,6 @@ p {
   margin-top: 8px;
   font-size: 11px;
 }
-.group-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: auto;
-  padding: 24px 0 0;
-  color: #606d57;
-  font-size: 9px;
-}
-.group-footer > span {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  line-height: 1.7;
-}
-
 /* Native dialogs act as a roomy bottom sheet on small screens. */
 .modal {
   position: fixed;
@@ -2763,6 +2728,10 @@ p {
   .main-container {
     padding: 32px 32px calc(112px + env(safe-area-inset-bottom, 0px));
   }
+  .home-footer {
+    margin-inline: -6px;
+    padding-inline: 0;
+  }
   .header-inner {
     padding-inline: 32px;
   }
@@ -3099,8 +3068,11 @@ p {
   .mobile-group-actions {
     display: none;
   }
-  .main-container:has(> :is(.home-footer, .group-footer)) {
-    padding-bottom: 24px;
+  .main-container:has(> .home-footer) {
+    padding-bottom: 10px;
+  }
+  .in-group > .main-container:has(> .home-footer) {
+    padding-bottom: 10px;
   }
   .toast {
     bottom: 28px;

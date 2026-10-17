@@ -10,8 +10,6 @@ export function Sidebar({
   visibleCardCount,
   showEmptyHint,
   disabled,
-  status,
-  statusTitle,
   onOpen,
   onCreate,
 }: {
@@ -21,8 +19,6 @@ export function Sidebar({
   visibleCardCount: number;
   showEmptyHint: boolean;
   disabled: boolean;
-  status: string;
-  statusTitle?: string;
   onOpen: (board: BoardSummary) => void;
   onCreate: () => void;
 }) {
@@ -120,7 +116,18 @@ export function Sidebar({
           </section>
         )}
         <div className="sidebar-footer">
-          <span title={statusTitle}>{status}</span>
+          {currentBoard && (
+            <span className="footer-board-change">
+              Last board change:{' '}
+              <time dateTime={currentBoard.updated_at}>
+                {new Date(currentBoard.updated_at).toLocaleString('en-US', {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                  hour12: true,
+                })}
+              </time>
+            </span>
+          )}
         </div>
       </div>
     </aside>

@@ -14,6 +14,7 @@ import {
 } from "../infrastructure/cloud/boards";
 type CloudStatus =
   | "local"
+  | "offline"
   | "loading"
   | "saving"
   | "saved"
@@ -29,9 +30,22 @@ export function useCloudBoards(
   const [ready, setReady] = useState(!user);
   const [retry, setRetry] = useState(0);
   const [saveTick, setSaveTick] = useState(0);
+  const [online, setOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const connected = () => {
+      setOnline(true);
+      failures.current.clear();
+      setRetry(value => value + 1);
+    };
+    const disconnected = () => { setOnline(false); setStatus('offline'); };
+    window.addEventListener('online', connected);
+    window.addEventListener('offline', disconnected);
+    return () => { window.removeEventListener('online', connected); window.removeEventListener('offline', disconnected); };
+  }, []);
   const active = useRef(true);
   const initialized = useRef(false);
   const inFlight = useRef(false);
+  const syncGeneration = useRef(0);
   const conflicts = useRef(new Map<string, string>());
   const failures = useRef(
     new Map<string, { content: string; message: string }>(),
@@ -68,23 +82,29 @@ export function useCloudBoards(
     let reading = false;
     async function refresh() {
       if (reading || inFlight.current) return;
+      if (!navigator.onLine) { setReady(knownBoards.current.some(board => board.revision > 0)); setStatus('offline'); return; }
       reading = true;
+      const generation = syncGeneration.current;
       if (!initialized.current) {
         setStatus("loading");
         setReady(false);
       }
       try {
         const boards = await listCloudBoards(client, knownBoards.current);
-        if (cancelled) return;
+        if (cancelled || generation !== syncGeneration.current) return;
         mergeCloudBoards(boards);
         setLastSync(new Date());
         initialized.current = true;
         setReady(true);
+        failures.current.clear();
+        setSaveTick(value => value + 1);
       } catch (fetchError) {
-        if (!cancelled) {
+        if (!cancelled && generation === syncGeneration.current) {
           if (fetchError instanceof SharingUpdateError) {
             initialized.current = false;
             setReady(false);
+          } else if (knownBoards.current.some(board => board.revision > 0)) {
+            setReady(true);
           }
           setError(messageFor(fetchError));
           setStatus("error");
@@ -110,6 +130,9 @@ export function useCloudBoards(
 
   useEffect(() => {
     if (!supabase || !user || !ready) return;
+    if (!online) { setStatus('offline'); return; }
+    if (workspace.localStatus !== 'saved') return;
+    if (inFlight.current) return;
     if (!pendingBoard) {
       const conflict = conflicts.current.values().next().value;
       const failure = failures.current.values().next().value;
@@ -121,6 +144,7 @@ export function useCloudBoards(
     setStatus("saving");
     const client = supabase;
     const timer = setTimeout(async () => {
+      if (inFlight.current) return;
       inFlight.current = true;
       try {
         const saved = await saveCloudBoard(client, pendingBoard);
@@ -156,6 +180,8 @@ export function useCloudBoards(
     pendingBoard?.id,
     markCloudSaved,
     saveTick,
+    online,
+    workspace.localStatus,
   ]);
 
   const joinBoard = async (input: string, restore = true, current = () => true) => {
@@ -176,8 +202,7 @@ export function useCloudBoards(
     return { ...joined, wasRemoved };
   };
   const saveAsCopy = () => {
-    const source =
-      workspace.boards.find((item) => conflicts.current.has(item.id)) || board;
+    const source = board;
     const copy: Board = {
       ...structuredClone(source),
       id: crypto.randomUUID(),
@@ -187,11 +212,41 @@ export function useCloudBoards(
       inviteCode: undefined,
       updatedAt: new Date().toISOString(),
     };
-    workspace.deleteBoard(source.id);
+    if (conflicts.current.has(source.id)) workspace.deleteBoard(source.id);
     workspace.addBoard(copy);
     conflicts.current.delete(source.id);
     setError("");
     setRetry((v) => v + 1);
+  };
+  const forceSync = async () => {
+    if (!supabase || !user || !ready || !navigator.onLine)
+      throw new Error("Reconnect before force syncing. Your local changes are safe.");
+    if (!board.revision)
+      throw new Error("Save this board online before force syncing.");
+    if (inFlight.current) throw new Error("Wait for saving to finish, then try again.");
+    if (workspace.localStatus !== "saved")
+      throw new Error("Wait for your local recovery copy to save, then try again.");
+    const snapshot = board;
+    const content = boardContent(snapshot);
+    inFlight.current = true;
+    syncGeneration.current++;
+    setStatus("saving");
+    try {
+      const saved = await saveCloudBoard(supabase, snapshot, { force: true });
+      if (active.current) {
+        markCloudSaved(snapshot.id, saved.revision, content, { inviteCode: saved.inviteCode });
+        conflicts.current.delete(snapshot.id);
+        failures.current.delete(snapshot.id);
+        setLastSync(new Date());
+        setError("");
+      }
+    } catch (failure) {
+      if (active.current) conflicts.current.set(snapshot.id, `“${snapshot.title}”: ${messageFor(failure)}`);
+      throw failure;
+    } finally {
+      inFlight.current = false;
+      if (active.current) setSaveTick(value => value + 1);
+    }
   };
   return {
     status,
@@ -199,6 +254,8 @@ export function useCloudBoards(
     error,
     ready,
     saveAsCopy,
+    forceSync,
+    boardConflict: board.revision > 0 && conflicts.current.has(board.id),
     joinBoard,
     createBoard: async (draft: Board) => {
       if (!supabase || !user || !ready)

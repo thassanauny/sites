@@ -1,5 +1,5 @@
 import { sameShape, useRecoveryDraft } from '../../../application/useRecoveryDraft';
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 import { Archive, ArrowDown, ArrowUp, LogOut, Plus, Trash2 } from 'lucide-react';
 import type { Board, Column, Operation } from '../../../domain/boards/types';
 import {
@@ -87,6 +87,8 @@ export function BoardSettingsDialog({
     recovery.setValue((current) => ({ ...current, newColumn }));
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
+  const [deleteColumn, setDeleteColumn] = useState('');
+  const [moveTo, setMoveTo] = useState('');
   const { localError, setLocalError, copied, copy } = useDialogMessages(onNotice);
   const fieldsChanged = !sameFieldSettings(fields, baseline.fields);
   const unsaved =
@@ -103,6 +105,23 @@ export function BoardSettingsDialog({
   const currentColumns = (currentBoard ?? board).columns;
   const archivedCards = (currentBoard ?? board).cards.filter((card) => card.archived);
   const assignees = boardAssignees(currentBoard ?? board);
+  useEffect(() => {
+    if (!currentColumns.some((column) => column.id === deleteColumn)) setDeleteColumn('');
+    if (!currentColumns.some((column) => column.id === moveTo && column.id !== deleteColumn))
+      setMoveTo(currentColumns.find((column) => column.id !== deleteColumn)?.id ?? '');
+  }, [currentColumns, deleteColumn, moveTo]);
+  async function removeColumn() {
+    if (locked || !deleteColumn || !moveTo || currentColumns.length < 2) return;
+    setLocalError('');
+    try {
+      if (
+        await onSave(board.id, { type: 'delete_column', id: deleteColumn, targetColumnId: moveTo })
+      )
+        setDeleteColumn('');
+    } catch (error) {
+      setLocalError(message(error));
+    }
+  }
   const draftText = [
     title,
     description,
@@ -339,13 +358,17 @@ export function BoardSettingsDialog({
                   Recovered unsaved draft from this device. Review it before saving.
                 </p>
               )}
-              <TitleField
-                label="Board name"
-                value={title}
-                placeholder="Give it a name"
-                onChange={setTitle}
-              />
-              <DescriptionField rows={2} value={description} onChange={setDescription} />
+              <section className="settings-details">
+                <h3>Board details</h3>
+                <p>Save details to apply the name, description and card fields.</p>
+                <TitleField
+                  label="Board name"
+                  value={title}
+                  placeholder="Give it a name"
+                  onChange={setTitle}
+                />
+                <DescriptionField rows={2} value={description} onChange={setDescription} />
+              </section>
               <section className="assignee-settings" aria-labelledby={assigneesTitleId}>
                 <h3 id={assigneesTitleId}>Assignees</h3>
                 <p>Manage the card dropdown. Changes save immediately.</p>
@@ -412,8 +435,11 @@ export function BoardSettingsDialog({
                 </div>
               </section>
               <section className="column-order-settings" aria-labelledby={columnOrderTitleId}>
-                <h3 id={columnOrderTitleId}>Column order</h3>
-                <p>Left to right. Changes save immediately.</p>
+                <h3 id={columnOrderTitleId}>Columns</h3>
+                <p>
+                  Ordered left to right. Reordering and deletion save immediately. Cards are kept
+                  when a column is deleted.
+                </p>
                 <ol className="column-order-list">
                   {currentColumns.map((column, index) => (
                     <li key={column.id} className={`color-${column.color}`}>
@@ -441,10 +467,71 @@ export function BoardSettingsDialog({
                         >
                           <ArrowDown size={16} />
                         </button>
+                        <button
+                          className="icon-button column-delete"
+                          type="button"
+                          aria-label={`Delete column ${column.title}`}
+                          title={
+                            currentColumns.length < 2 ? 'Keep at least one column' : 'Delete column'
+                          }
+                          disabled={locked || currentColumns.length < 2}
+                          onClick={() => {
+                            setLocalError('');
+                            setDeleteColumn(column.id);
+                          }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </li>
                   ))}
                 </ol>
+                {deleteColumn && (
+                  <div className="delete-confirm">
+                    <h4>
+                      Delete {currentColumns.find((column) => column.id === deleteColumn)?.title}?
+                    </h4>
+                    <p>
+                      All cards in this column, including archived cards, will move to the
+                      destination below.
+                    </p>
+                    <label className="field">
+                      Move cards to
+                      <select
+                        aria-label="Move cards to"
+                        value={moveTo}
+                        onChange={(event) => setMoveTo(event.target.value)}
+                        disabled={locked}
+                      >
+                        {currentColumns
+                          .filter((column) => column.id !== deleteColumn)
+                          .map((column) => (
+                            <option key={column.id} value={column.id}>
+                              {column.title}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                    <div className="inline-column-actions">
+                      <button
+                        type="button"
+                        className="button danger"
+                        disabled={locked || !moveTo || currentColumns.length < 2}
+                        onClick={() => void removeColumn()}
+                      >
+                        Delete column
+                      </button>
+                      <button
+                        type="button"
+                        className="button quiet"
+                        disabled={busy}
+                        onClick={() => setDeleteColumn('')}
+                      >
+                        Keep column
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {newColumn ? (
                   <div className="inline-column-editor">
                     <label className="field">

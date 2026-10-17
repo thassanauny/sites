@@ -59,7 +59,13 @@ export default function App() {
   const group = store.groups.find(g => g.inviteCode === page.groupCode)
   const canEdit = !!group && cloudConfigured && !recoveryRequired
   const pendingCount = store.outbox.length + store.pendingJoins.length
-  const footerMessage = pendingCount ? 'Saved on this device. Waiting to sync.' : cloudConfigured ? 'Shared with your group. Kept in sync.' : 'Connect Supabase to create and join groups.'
+  const footerMessage = pendingCount
+    ? 'Saved on this device. Waiting to sync.'
+    : !cloudConfigured
+      ? 'Connect Supabase to create and join groups.'
+      : lastSync
+        ? `Synced ${new Date(lastSync).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+        : 'Waiting for first sync.'
   const notify = (message: string, duration = 4500) => setToast({ message, duration })
   const unreadableNotice =
     group && unreadableSharedIds.includes(group.id)
@@ -292,10 +298,7 @@ export default function App() {
       <header className="site-header">
         <div className="header-inner">
           <button type="button" className="brand" onClick={() => navigate()} aria-label="iou home">
-            <span className="brand-mark">
-              <span />
-              <span />
-            </span>
+            <img className="brand-mark" src={`${import.meta.env.BASE_URL}logo.svg`} width="32" height="32" alt="" />
             iou<span className="brand-dot">.</span>
           </button>
           <nav className="desktop-nav" aria-label="Main navigation">
@@ -414,10 +417,7 @@ export default function App() {
             </button>
           </div>
         ) : page.transactions ? (
-          <>
-            <TransactionsPage entries={transactionFeed} filter={logFilter} limit={pageLimit} hasGroups={store.groups.length > 0} onFilter={changeFilter} onShowMore={showMore} onOpenLog={openLog} />
-            <PageFooter message={footerMessage} version={appVersion} />
-          </>
+          <TransactionsPage entries={transactionFeed} filter={logFilter} limit={pageLimit} hasGroups={store.groups.length > 0} onFilter={changeFilter} onShowMore={showMore} onOpenLog={openLog} />
         ) : !group ? (
           <>
             {!page.groups && (
@@ -444,7 +444,6 @@ export default function App() {
               onOpen={openGroup}
               onTogglePin={togglePin}
             />
-            <PageFooter message={footerMessage} version={appVersion} />
           </>
         ) : (
           <GroupPage
@@ -457,10 +456,7 @@ export default function App() {
             visibleTransactions={visibleTransactions}
             logFilter={logFilter}
             logLimit={pageLimit}
-            unsynced={store.outbox.some(item => item.group.id === group.id)}
-            synced={!!lastSync}
             canEdit={canEdit}
-            version={appVersion}
             onNavigate={target => (target === 'home' ? navigate() : navigate(group.inviteCode, target === 'log'))}
             onSettings={openSettings}
             onExpense={() => setModal({ type: 'expense' })}
@@ -470,6 +466,7 @@ export default function App() {
             onDelete={openDelete}
           />
         )}
+        <PageFooter message={footerMessage} version={appVersion} />
       </main>
       {group ? (
         <div className="mobile-group-actions">

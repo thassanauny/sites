@@ -39,14 +39,14 @@ describe('TextDrop dialogs', () => {
   it('restores dialog focus when another tab replaces the list buttons', async () => {
     new DeviceSnippets().remember(first.code);
     await start();
-    const trigger = root.querySelector<HTMLButtonElement>('.snippet-remove')!;
+    const trigger = root.querySelector<HTMLButtonElement>('.snippet-rename')!;
     trigger.focus();
     trigger.click();
     new DeviceSnippets().remember(second.code);
     window.dispatchEvent(new StorageEvent('storage', { key: key(second.code) }));
     expect(trigger.isConnected).toBe(false);
-    element('remove-cancel').click();
-    expect(document.activeElement).toBe(root.querySelector(`.snippet-remove[data-code="${first.code}"]`));
+    element('rename-cancel').click();
+    expect(document.activeElement).toBe(root.querySelector(`.snippet-rename[data-code="${first.code}"]`));
   });
 
   it('keeps a successful newer copy visible when an older copy fails later', async () => {
@@ -256,13 +256,16 @@ describe('TextDrop dialogs', () => {
       throw new Error('Full');
     });
     element('rename-confirm').click();
+    await flush();
     expect(element<HTMLDialogElement>('snippet-dialog').open).toBe(true);
-    expect(element('dialog-error').textContent).toContain('Could not save');
+    expect(element('dialog-error').textContent).toContain('could not save its local copy');
     expect(element<HTMLInputElement>('snippet-name-input').value).toBe('My notes');
     expect(element<HTMLTextAreaElement>('editor').value).toBe('Keep this unsaved text');
-    expect(element('page-name').textContent).toBe('Shared snippet');
+    expect(element('page-name').textContent).toBe('Untitled snippet');
+    expect(document.title).toBe('Untitled snippet — TextDrop');
     writes.mockRestore();
     element('rename-confirm').click();
+    await flush();
     expect(element('page-name').textContent).toBe('My notes');
     expect(document.title).toBe('My notes — TextDrop');
     expect(document.activeElement).toBe(element('settings'));
@@ -289,6 +292,7 @@ describe('TextDrop dialogs', () => {
     window.dispatchEvent(new StorageEvent('storage', { key: `${DEVICE_SNIPPETS_KEY}:removed:${first.code}` }));
     expect(element<HTMLInputElement>('snippet-name-input').value).toBe('Keep my input');
     element('rename-confirm').click();
+    await flush();
     expect(element<HTMLDialogElement>('snippet-dialog').open).toBe(true);
     expect(element('dialog-error').hidden).toBe(false);
     expect(rows()).toEqual([]);

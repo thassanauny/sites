@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from 'react';
+import { fitBrand } from '../../ui/fitBrand';
 import { CircleHelp, Columns3, Link, Settings2 } from 'lucide-react';
 
 export function WorkspaceHeader({
@@ -21,9 +23,11 @@ export function WorkspaceHeader({
   onHome: () => void;
   onHelp: () => void;
 }) {
+  const header = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => fitBrand(header.current!), []);
   return (
     <header className="site-header">
-      <div className="header-inner">
+      <div className="header-inner" ref={header}>
         <button
           type="button"
           className="brand"

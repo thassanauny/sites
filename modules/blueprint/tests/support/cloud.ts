@@ -51,6 +51,7 @@ export async function mockCloud(
   const rows = [original];
   let joined = initiallyJoined;
   let forceConflict = false;
+  let rejectForce = false;
   let sessionCreates = 0;
   let joins = 0;
   let legacySchema = false;
@@ -123,14 +124,20 @@ export async function mockCloud(
       writes.push("PATCH");
       const id = url.searchParams.get("id")?.replace("eq.", "");
       const index = rows.findIndex((row) => row.id === id);
+      const forced = !url.searchParams.has("revision");
+      if (forced && rejectForce) {
+        await route.fulfill({ status: 403, json: { message: "Board access denied" } });
+        return;
+      }
       if (
-        forceConflict ||
+        (!forced && forceConflict) ||
         index < 0 ||
-        url.searchParams.get("revision") !== `eq.${rows[index].revision}`
+        (!forced && url.searchParams.get("revision") !== `eq.${rows[index].revision}`)
       ) {
         await route.fulfill({ json: [] });
         return;
       }
+      if (forced) forceConflict = false;
       Object.assign(rows[index], args, { revision: rows[index].revision + 1 });
       await route.fulfill({ json: [{ revision: rows[index].revision }] });
       return;
@@ -155,6 +162,7 @@ export async function mockCloud(
     useLegacySchema: () => {
       legacySchema = true;
     },
+    rejectForce: () => { rejectForce = true; },
     conflict: () => {
       forceConflict = true;
     },

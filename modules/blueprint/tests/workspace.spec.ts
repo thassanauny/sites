@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { invite, mockCloud, signIn } from "./support/cloud";
+
+async function openSettings(page: Page) {
+  await page.getByRole('button', { name: 'Board settings', exact: true }).click();
+}
 
 test.beforeEach(async ({ page }) => {
   await mockCloud(page, true, undefined, "Untitled architecture");
@@ -13,6 +17,7 @@ test("the base URL shows all boards before and after opening an existing board",
   await page.goto("./");
   await expect(page.getByRole("main", { name: "All boards" })).toBeVisible();
   await expect(page.locator(".board-card")).toHaveCount(1);
+  await expect(page.locator(".board-card-footer button")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create a board", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Join a board", exact: true })).toBeVisible();
   await expect(page.locator(".react-flow")).toHaveCount(0);
@@ -78,11 +83,14 @@ test("the logo opens a persistent home screen and reopens boards without editing
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("./#/board/" + invite);
+  await openSettings(page);
   await page
     .getByLabel("Board name", { exact: true })
     .fill("Payments architecture");
+  await page.keyboard.press("Escape");
   await page.getByTitle("Add Service", { exact: true }).click();
   await expect(page.locator(".architecture-node")).toHaveCount(10);
+  await page.getByRole("button", { name: "Close properties", exact: true }).click();
   await page.getByRole("button", { name: "Open your boards" }).click();
   await expect(page.getByRole("main", { name: "All boards" })).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -143,15 +151,14 @@ test("connects nodes, edits labels, and deletes selected connections", async ({
   page,
 }) => {
   await page.goto("./#/board/" + invite);
-  await page.getByLabel("Toggle properties panel").click();
   await page.getByRole("button", { name: "Connect tool", exact: true }).click();
   await page.locator('[data-id="cdn"]').click();
   await page.locator('[data-id="cache"]').click();
   await expect(page.locator(".react-flow__edge")).toHaveCount(9);
   await page.getByRole("button", { name: "Select tool", exact: true }).click();
-  await page.getByLabel("Toggle properties panel").click();
   const newEdge = page.locator(".react-flow__edge").last();
   await newEdge.locator(".react-flow__edge-interaction").click({ force: true });
+  await newEdge.locator(".react-flow__edge-interaction").dblclick({ force: true });
   await page.getByLabel("Label", { exact: true }).fill("Cache lookup");
   await page.getByText("Show how things flow").click();
   await expect(newEdge).toContainText("Cache lookup");
@@ -159,6 +166,9 @@ test("connects nodes, edits labels, and deletes selected connections", async ({
     .getByRole("button", { name: "Delete connection", exact: true })
     .click();
   await expect(page.locator(".react-flow__edge")).toHaveCount(8);
+  await expect(page.locator(".properties-popup")).toHaveCount(0);
+  await page.keyboard.press("n");
+  await expect(page.getByRole("dialog", { name: "Properties", exact: true })).toBeVisible();
 });
 
 test("exports only PNG from Board settings and creates a blank board", async ({ page }) => {
@@ -188,28 +198,122 @@ test("exports only PNG from Board settings and creates a blank board", async ({ 
   await expect(page.locator(".board-card")).toHaveCount(2);
 });
 
-test("works at a narrow viewport without overflowing the page", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+for (const width of [320, 390, 599, 600]) {
+  test(`keeps the board name and panels visible at ${width}px without overflow`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("./#/board/" + invite);
+    await expect(page.locator(".brand-button")).toContainText("blueprint.");
+    const title = page.getByRole("heading", { name: "Untitled architecture", exact: true });
+    await expect(title).toBeVisible();
+    const titleBounds = await title.boundingBox();
+    expect(titleBounds!.width).toBeGreaterThan(150);
+    expect(titleBounds!.height).toBeGreaterThan(20);
+    await expect(page.locator(".properties-popup")).toHaveCount(0);
+    await expect(page.locator(".sidebar")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Show components", exact: true })).toHaveCount(0);
+    const header = await page.locator(".topbar").boundingBox();
+    const sidebar = await page.locator(".sidebar").boundingBox();
+    expect(sidebar!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
+    await page.getByRole('button', { name: 'Templates', exact: true }).click();
+    await expect(page.locator('.sidebar .template-card').first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.getByRole('button', { name: 'Components', exact: true }).click();
+
+
+    await openSettings(page);
+    await expect(page.getByRole("dialog", { name: "Board settings", exact: true })).toBeVisible();
+    const longName = "A shared architecture with a long name ".repeat(3).trim();
+    await page.getByLabel("Board name", { exact: true }).fill(longName);
+    await page.getByLabel("Board name", { exact: true }).press("Tab");
+    await expect(page.locator(".header-board-title")).toHaveText(longName);
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("button", { name: "Connect tool", exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
+    await page.getByRole("button", { name: "Open your boards" }).click();
+    await expect(page.getByRole("main", { name: "All boards" })).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
+  });
+}
+
+
+test("component properties stay available without a board-details popup", async ({ page }) => {
   await page.goto("./#/board/" + invite);
-  await expect(page.locator(".brand-button")).toContainText("blueprint.");
-  await expect(page.locator(".inspector")).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Show components", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Hide components", exact: true })
-    .click();
-  await expect(
-    page.getByRole("button", { name: "Connect tool", exact: true }),
-  ).toBeVisible();
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390);
-  await page.getByRole("button", { name: "Open your boards" }).click();
+  await expect(page.locator("#main-content")).toBeVisible();
+  const before = await page.locator("#main-content").boundingBox();
+  await page.getByTitle("Add Service", { exact: true }).click();
+  const popup = page.getByRole("dialog", { name: "Properties", exact: true });
+  await expect(popup).toBeVisible();
+  await expect(popup.getByLabel("Name", { exact: true })).toBeFocused();
+  await expect(popup.getByLabel("Board name", { exact: true })).toHaveCount(0);
+  expect((await page.locator("#main-content").boundingBox())!.width).toBe(before!.width);
+  await popup.getByLabel("Name", { exact: true }).fill("My service");
+  await page.keyboard.press("Escape");
+  await expect(popup).toHaveCount(0);
+  await expect(page.locator(".architecture-node").filter({ hasText: "My service" })).toHaveCount(1);
+});
+
+test("compact board settings edits details and commits the focused field on Escape", async ({ page }) => {
+  await page.goto("./#/board/" + invite);
+  await expect(page.locator(".connection")).toHaveText("Connected");
+  await page.getByRole('button', { name: 'Board settings', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: 'Board settings', exact: true });
+  await expect(settings.getByRole('heading', { name: 'Board details', exact: true })).toBeVisible();
+  await expect(settings.getByRole('button', { name: 'Properties', exact: true })).toHaveCount(0);
+  await expect(settings.getByRole('button', { name: 'Open invitation', exact: true })).toHaveCount(0);
+  await settings.getByLabel('Board name', { exact: true }).fill('Compact architecture');
+  await settings.getByRole('textbox', { name: 'Description', exact: true }).fill('A clearer board.');
+  await page.keyboard.press('Escape');
+  await expect(settings).toHaveCount(0);
+  await expect(page.locator('.header-board-title')).toHaveText('Compact architecture');
+  await page.getByRole('button', { name: 'Board settings', exact: true }).click();
+  await expect(settings.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('A clearer board.');
+});
+
+
+test("settings removal shows the invitation, persists across reload, and requires Join", async ({ page }) => {
+  await page.goto("./#/board/" + invite);
+  await expect(page.locator(".connection")).toHaveText("Connected");
+  await openSettings(page);
+  await page.getByRole("button", { name: "Remove from this device", exact: true }).click();
+  await expect(page.getByLabel("Invitation code", { exact: true })).toHaveValue(invite);
+  await page.getByRole("button", { name: "Keep on this device", exact: true }).click();
+  await expect(page.getByLabel("Board name", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Remove from this device", exact: true }).click();
+  await page.getByRole("button", { name: "Remove from this device", exact: true }).click();
   await expect(page.getByRole("main", { name: "All boards" })).toBeVisible();
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390);
+  await expect(page.locator(".board-card")).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator(".board-card")).toHaveCount(0);
+  await page.goto("./#/board/" + invite);
+  await expect(page.getByRole("dialog", { name: "Join a board", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Join board", exact: true }).click();
+  await expect(page.locator(".board-card")).toHaveCount(1);
+  await page.getByRole("button", { name: "Open Untitled architecture", exact: true }).click();
+  await expect(page.locator(".architecture-node")).toHaveCount(9);
+});
+
+test("settings removal keeps the board and confirmation when storage fails", async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "blueprint.workspace.v1.removed") throw new Error("Browser storage unavailable");
+      return original.call(this, key, value);
+    };
+  });
+  await page.goto("./#/board/" + invite);
+  await expect(page.locator(".connection")).toHaveText("Connected");
+  await openSettings(page);
+  await page.getByRole("button", { name: "Remove from this device", exact: true }).click();
+  await page.getByRole("button", { name: "Remove from this device", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Browser storage unavailable");
+  await expect(page.getByLabel("Invitation code", { exact: true })).toHaveValue(invite);
+  await page.getByRole("button", { name: "Keep on this device", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".architecture-node")).toHaveCount(9);
 });

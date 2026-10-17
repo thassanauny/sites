@@ -4,6 +4,10 @@ export interface TextDropPage {
   text: string;
   version: number;
   updatedAt: string;
+  /** Optional shared name; absent only in legacy cached pages. */
+  name?: string | null;
+  /** A durable local edit that has not yet been acknowledged by the server. */
+  localPending?: boolean;
 }
 
 /** The saved browser session is unreadable or conflicts with itself; "Start a new session" is the way out. */
@@ -17,14 +21,23 @@ export class SessionDamagedError extends Error {
 export const MAX_TEXT_BYTES = 1_048_576;
 export const MAX_SNIPPET_NAME_LENGTH = 80;
 
-/** A snippet this device has opened: its invitation code, when it was last opened and an optional local name. */
+/** A snippet this device has opened: its invitation code, when it was last opened and a cached optional shared name. */
 export interface DeviceSnippet {
   code: string;
   openedAt: string;
   name?: string;
+  nameShared?: boolean;
 }
-const PAGE_KEYS = ['id', 'code', 'text', 'version', 'updatedAt'];
+const PAGE_KEYS = ['id', 'code', 'text', 'version', 'updatedAt', 'name'];
 const encoder = new TextEncoder();
+
+export function validateName(input: unknown): string | null {
+  if (input === null) return null;
+  if (typeof input !== 'string') throw new Error('Enter a snippet name or leave it blank.');
+  const name = input.trim();
+  if (Array.from(name).length > MAX_SNIPPET_NAME_LENGTH || /[\p{Cc}\p{Cs}]/u.test(name)) throw new Error('A snippet name supports up to 80 characters without control characters.');
+  return name || null;
+}
 
 export function validateUuid(input: unknown): string {
   if (typeof input !== 'string' || !/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(input)) {
@@ -62,7 +75,7 @@ export function shortCode(code: string): string {
 }
 
 /**
- * A file name for downloaded text: the snippet's name on this device, otherwise today's date.
+ * A file name for downloaded text: the snippet's shared name, otherwise today's date.
  * It never contains the code, because files travel and the code is the credential.
  */
 export function exportFileName(name: string | undefined, now: Date): string {
@@ -125,5 +138,6 @@ export function readPage(input: unknown): TextDropPage {
     text: validateText(page.text),
     version: page.version,
     updatedAt: timestamp(page.updatedAt),
+    ...(Object.hasOwn(page, 'name') ? { name: validateName(page.name) } : {}),
   };
 }

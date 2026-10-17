@@ -40,7 +40,7 @@ async function load(id: string): Promise<TextDropPage> {
 async function save(id: string, text: string | null): Promise<TextDropPage> {
   const result = await database.query<{ receipt: Omit<TextDropPage, 'text'> }>('select public.textdrop_save_page_receipt($1::uuid, $2) as receipt', [id, text]);
   const receipt = result.rows[0]!.receipt;
-  expect(Object.keys(receipt).sort()).toEqual(['code', 'id', 'updatedAt', 'version']);
+  expect(Object.keys(receipt).sort()).toEqual(['code', 'id', 'name', 'updatedAt', 'version']);
   return readPage({ ...receipt, text });
 }
 
@@ -404,7 +404,7 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
     const text = '😀'.repeat(MAX_TEXT_BYTES / 4);
     const response = await database.query<{ receipt: Omit<TextDropPage, 'text'> }>('select public.textdrop_save_page_receipt($1::uuid,$2) as receipt', [page.id, text]);
     const receipt = response.rows[0]!.receipt;
-    expect(Object.keys(receipt).sort()).toEqual(['code', 'id', 'updatedAt', 'version']);
+    expect(Object.keys(receipt).sort()).toEqual(['code', 'id', 'name', 'updatedAt', 'version']);
     expect(receipt).toMatchObject({ id: page.id, code: page.code, version: 2 });
     expect(readPage({ ...receipt, text })).toEqual(await load(page.id));
     expect(Buffer.byteLength(JSON.stringify(receipt))).toBeLessThan(256);

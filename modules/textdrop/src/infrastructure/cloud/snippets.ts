@@ -1,6 +1,6 @@
 import { createClient, navigatorLock, type SupabaseClient } from '@supabase/supabase-js';
 import type { Cloud } from '../../application/ports';
-import { normalizeCode, readPage, validateText, validateUuid, type TextDropPage } from '../../domain/snippets/model';
+import { normalizeCode, readPage, validateName, validateText, validateUuid, type TextDropPage } from '../../domain/snippets/model';
 import { discardDamagedSession, migrateLegacyAuthStorage, TEXTDROP_AUTH_KEY } from '../auth/sessionStorage';
 import { fetchWithTimeout } from './requestTimeout';
 
@@ -20,6 +20,7 @@ function serviceError(error: ServiceError, action: string): Error {
   if (error.message === 'TEXTDROP_ACCESS_DENIED') return new Error('You no longer have access to this snippet. Join again using its code.');
   if (error.message === 'TEXTDROP_PAGE_LIMIT') return new Error('This browser session has reached the supported number of shared snippets.');
   if (error.message === 'TEXTDROP_VERSION_LIMIT') return new Error('This snippet has reached its supported number of saves. Create a new snippet.');
+  if (error.message === 'TEXTDROP_INVALID_NAME') return new Error('A snippet name supports up to 80 characters without control characters.');
   if (error.message === 'TEXTDROP_INVALID_TEXT') return new Error('A snippet supports up to 1 MiB of UTF-8 text.');
   if (error.message === 'TEXTDROP_INVALID_PAGE') return new Error('The snippet ID is invalid. Create a new snippet and try again.');
   if (error.code === 'PGRST202' || error.code === 'PGRST205' || error.code === '42P01' || error.code === '42883') {
@@ -66,7 +67,7 @@ function privateKey(key: string): boolean {
   }
 }
 
-/** Persist only the anonymous session. Page content always comes from Supabase. */
+/** Remote API; the offline adapter separately owns cached content and pending edits. */
 export function createCloud(url: string, key: string): Cloud {
   const projectUrl = url.trim();
   const publicKey = key.trim();
@@ -110,7 +111,7 @@ export function createCloud(url: string, key: string): Cloud {
     ensureOnline();
   }
 
-  async function rpc(action: string, name: string, args: Record<string, string>): Promise<TextDropPage> {
+  async function rpc(action: string, name: string, args: Record<string, unknown>): Promise<TextDropPage> {
     await initialize();
     const { data, error } = await call(action, () => getClient().rpc(name, args));
     if (error) throw serviceError(error, action);
@@ -119,6 +120,7 @@ export function createCloud(url: string, key: string): Cloud {
 
   function parsePage(data: unknown): TextDropPage {
     try {
+      if (!data || typeof data !== 'object' || !Object.hasOwn(data, 'name')) throw new Error(INVALID_RESPONSE);
       return readPage(data);
     } catch {
       throw new Error(INVALID_RESPONSE);
@@ -126,6 +128,36 @@ export function createCloud(url: string, key: string): Cloud {
   }
 
   return {
+    renamePage: async (id, name) => {
+      const pageId = validateUuid(id);
+      const page = await rpc('save the snippet name', 'textdrop_rename_page', { p_id: pageId, p_name: validateName(name) });
+      if (page.id !== pageId) throw new Error(INVALID_RESPONSE);
+      return page;
+    },
+    listNames: async codes => {
+      const normalized = codes.map(normalizeCode);
+      if (normalized.length > 1000) throw new Error('Too many snippets to refresh.');
+      if (!normalized.length) return [];
+      await initialize();
+      const { data, error } = await call('refresh snippet names', () => getClient().rpc('textdrop_names', { p_codes: normalized }));
+      if (error) throw serviceError(error, 'refresh snippet names');
+      if (!Array.isArray(data)) throw new Error(INVALID_RESPONSE);
+      const seen = new Set<string>();
+      return data.map(row => {
+        if (
+          !row ||
+          typeof row !== 'object' ||
+          Object.keys(row).sort().join() !== 'code,name,version' ||
+          !normalized.includes(row.code) ||
+          seen.has(row.code) ||
+          !Number.isSafeInteger(row.version) ||
+          row.version < 1
+        )
+          throw new Error(INVALID_RESPONSE);
+        seen.add(row.code);
+        return { code: row.code, name: validateName(row.name), version: row.version };
+      });
+    },
     createPage: async id => {
       const pageId = validateUuid(id);
       const page = await rpc('create the snippet', 'textdrop_create_page', { p_id: pageId });

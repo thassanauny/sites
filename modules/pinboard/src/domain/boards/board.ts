@@ -497,6 +497,9 @@ function shareBoard(previous: Board, next: Board): Board {
     previous.revision === next.revision &&
     previous.created_at === next.created_at &&
     previous.updated_at === next.updated_at &&
+    previous.localPending === next.localPending &&
+    previous.localError === next.localError &&
+    previous.localCached === next.localCached &&
     sameFieldSettings(previous.card_fields, next.card_fields)
   )
     return previous;

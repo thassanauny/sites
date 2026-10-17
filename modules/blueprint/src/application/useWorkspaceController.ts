@@ -46,12 +46,8 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
   const [spacePressed, setSpacePressed] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [showMiniMap, setShowMiniMap] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(
-    () => window.innerWidth >= 760,
-  );
-  const [showInspector, setShowInspector] = useState(
-    () => window.innerWidth >= 1050,
-  );
+
+  const [showInspector, setShowInspector] = useState(false);
   const [toast, setToast] = useState("");
   const [routeHash, setRouteHash] = useState(() => location.hash);
   const routeCode = boardCodeFromHash(routeHash.replace(/^#\/join\//, "#/board/"));
@@ -69,8 +65,12 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
   const selectedNode = selectedNodes.length === 1 ? selectedNodes[0] : null;
   const selectedEdge = board.edges.find((edge) => edge.selected);
   const isPanning = tool === "hand" || spacePressed;
+  useEffect(() => {
+    if (!selectedNodes.length && !selectedEdge) setShowInspector(false);
+  }, [selectedNodes.length, selectedEdge]);
 
   const showHome = () => {
+    setShowInspector(false);
     setModal(null);
     setSpacePressed(false);
     location.hash = "";
@@ -192,6 +192,7 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
       if (
         target.closest('input, textarea, select, [contenteditable="true"]') ||
         modal ||
+        showInspector ||
         home
       )
         return;
@@ -231,7 +232,6 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
       if (key === "/") {
         event.preventDefault();
         setSidebarTab("components");
-        setShowSidebar(true);
         requestAnimationFrame(() =>
           document
             .querySelector<HTMLInputElement>(".search-field input")
@@ -436,8 +436,6 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
     setShowGrid,
     showMiniMap,
     setShowMiniMap,
-    showSidebar,
-    setShowSidebar,
     showInspector,
     setShowInspector,
     toast,

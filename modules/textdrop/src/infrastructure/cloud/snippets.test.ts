@@ -17,10 +17,11 @@ const page = {
   id: '22222222-2222-4222-8222-222222222222',
   code: 'a'.repeat(32),
   text: 'Shared text',
+  name: null as string | null,
   version: 1,
   updatedAt: '2026-10-10T01:00:00.123456+00:00',
 };
-const receipt = ({ id, code, version, updatedAt }: typeof page) => ({ id, code, version, updatedAt });
+const receipt = ({ id, code, version, updatedAt, name }: typeof page) => ({ id, code, version, updatedAt, name });
 
 function cloud() {
   return createCloud(' https://test-project.supabase.co ', ' public-test-key ');

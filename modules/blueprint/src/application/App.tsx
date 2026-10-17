@@ -93,11 +93,7 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
             setInvitationInput("");
             setModal("join");
           }}
-          onRemove={async (id) => {
-            if (cloud.status === "saving")
-              throw new Error("Wait for saving to finish, then try again.");
-            await workspace.removeFromDevice(id);
-          }}
+
         />
       ) : (
         <>
@@ -116,7 +112,7 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
             <DiagramCanvas controller={controller} />
 
-            {showInspector && <PropertiesPanel controller={controller} />}
+            {showInspector && (controller.selectedNodes.length > 0 || controller.selectedEdge) && <PropertiesPanel controller={controller} />}
           </div>
         </>
       )}
@@ -189,13 +185,23 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
           auth={auth}
           board={board}
           cloud={cloud}
-          onShare={() => setModal("share")}
+          readOnly={readOnly}
+          onDetailsChange={home ? undefined : patch => { if (!readOnly) workspace.update(current => ({ ...current, ...patch })); }}
+          onRemove={home ? undefined : async () => {
+            if (cloud.status === "saving") throw new Error("Wait for saving to finish, then try again.");
+            await workspace.removeFromDevice(board.id);
+            setModal(null);
+            showHome();
+          }}
           exportPng={home ? undefined : exportPng}
           isExporting={isExporting}
           onClose={() => setModal(null)}
         />
       )}
-      <footer className="app-footer"><span className="app-version">blueprint · {APP_VERSION}</span></footer>
+      <footer className="app-footer">
+        <span className="footer-sync">{cloud.lastSync ? <>Synced <time dateTime={cloud.lastSync.toISOString()}>{cloud.lastSync.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</time></> : 'Waiting for first sync.'}</span>
+        <span className="app-version">blueprint · {APP_VERSION}</span>
+      </footer>
     </div>
   );
 }

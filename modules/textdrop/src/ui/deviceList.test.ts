@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe('snippets on this device', () => {
-  it('lists each snippet with its name or a placeholder, the short code, a link and two actions', () => {
+  it('lists each snippet with its name or a placeholder, the short code, an open link and rename action', () => {
     setup();
     const ui = draw([first, second]);
     const rows = [...ui.deviceList.children];
@@ -39,22 +39,16 @@ describe('snippets on this device', () => {
     const link = rows[1]!.querySelector<HTMLAnchorElement>('.snippet-open')!;
     expect(link.getAttribute('href')).toBe(`#/p/${second.code}`);
     expect(link.dataset.code).toBe(second.code);
-    expect(rows[1]!.querySelectorAll('.snippet-rename, .snippet-remove')).toHaveLength(2);
+    expect(rows[1]!.querySelectorAll('.snippet-rename')).toHaveLength(1);
+    expect(ui.deviceList.querySelector('.snippet-remove')).toBeNull();
     expect(rows[0]!.querySelector('time')!.dateTime).toBe(first.openedAt);
   });
 
   it('labels links and actions by name, or by short code, and never by the full code', () => {
     setup();
     draw([first, second]);
-    const labels = [...root.querySelectorAll('.snippet-open, .snippet-rename, .snippet-remove')].map(control => control.getAttribute('aria-label'));
-    expect(labels).toEqual([
-      'Open Travel notes <draft>',
-      'Rename Travel notes <draft>',
-      'Remove Travel notes <draft> from this device',
-      'Open snippet bbbbbb…bbbbbb',
-      'Rename snippet bbbbbb…bbbbbb',
-      'Remove snippet bbbbbb…bbbbbb from this device',
-    ]);
+    const labels = [...root.querySelectorAll('.snippet-open, .snippet-rename')].map(control => control.getAttribute('aria-label'));
+    expect(labels).toEqual(['Open Travel notes <draft>', 'Rename Travel notes <draft>', 'Open snippet bbbbbb…bbbbbb', 'Rename snippet bbbbbb…bbbbbb']);
     const attributes = [...root.querySelectorAll('#device-list *')]
       .flatMap(item => [...item.attributes])
       .filter(attribute => !['href', 'data-code'].includes(attribute.name) && /[a-f\d]{32}/.test(attribute.value));
@@ -90,11 +84,11 @@ describe('snippets on this device', () => {
   it('moves focus to the nearest row when the focused snippet disappears, or to the heading when none is left', () => {
     setup();
     const ui = draw([first, second, third]);
-    root.querySelectorAll<HTMLButtonElement>('.snippet-remove')[1]!.focus();
+    root.querySelectorAll<HTMLAnchorElement>('.snippet-open')[1]!.focus();
     draw([first, third]);
     expect((document.activeElement as HTMLElement).dataset.code).toBe(third.code);
-    expect(document.activeElement?.classList.contains('snippet-remove')).toBe(true);
-    root.querySelectorAll<HTMLButtonElement>('.snippet-remove')[1]!.focus();
+    expect(document.activeElement?.classList.contains('snippet-open')).toBe(true);
+    root.querySelectorAll<HTMLAnchorElement>('.snippet-open')[1]!.focus();
     draw([first]);
     expect((document.activeElement as HTMLElement).dataset.code).toBe(first.code);
     root.querySelector<HTMLButtonElement>('.snippet-rename')!.focus();
@@ -110,12 +104,11 @@ describe('snippets on this device', () => {
     expect(document.activeElement).toBe(ui.create);
   });
 
-  it('tells the three kinds of row action apart', () => {
+  it('tells the two kinds of row action apart', () => {
     setup();
     draw([first]);
     expect(snippetAction(root.querySelector('.snippet-open'))).toBe('snippet-open');
     expect(snippetAction(root.querySelector('.snippet-rename'))).toBe('snippet-rename');
-    expect(snippetAction(root.querySelector('.snippet-remove'))).toBe('snippet-remove');
-    expect(snippetAction(null)).toBe('snippet-remove');
+    expect(snippetAction(null)).toBe('snippet-open');
   });
 });

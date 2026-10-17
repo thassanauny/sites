@@ -2,6 +2,12 @@ import type { DeviceSnippet, TextDropPage } from '../domain/snippets/model';
 
 /** Shared snippet storage. The Supabase client in `infrastructure/cloud` implements it. */
 export interface Cloud {
+  subscribeSync?(listener: (at: Date) => void): () => void;
+  offlineCapable?: boolean;
+  stagePage?(id: string, text: string): Promise<TextDropPage>;
+  syncPending?(): Promise<void>;
+  renamePage?(id: string, name: string | null): Promise<TextDropPage>;
+  listNames?(codes: string[]): Promise<{ code: string; name: string | null; version: number }[]>;
   createPage(id: string): Promise<TextDropPage>;
   joinPage(code: string): Promise<TextDropPage>;
   /**
@@ -22,12 +28,13 @@ export interface DeviceList {
   isRemoved(code: string): boolean;
   remember(code: string, expected?: string | null): DeviceSnippet[];
   rename(code: string, name: string): DeviceSnippet[];
+  sharedName?(code: string, name: string | null, version: number, pending?: boolean): DeviceSnippet[];
   remove(code: string): DeviceSnippet[];
   /** Whether a `storage` event key shows that another tab changed the list. */
   changedBy(key: string | null): boolean;
 }
 
-/** Local unsaved-text copies; opening still requires online access. */
+/** Unsaved editor recovery copies, separate from the durable automatic sync queue. */
 export interface DraftRecovery {
   read(page: TextDropPage): string | undefined;
   write(page: TextDropPage, text: string): void;

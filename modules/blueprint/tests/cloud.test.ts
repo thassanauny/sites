@@ -99,6 +99,20 @@ describe("shared board protocol", () => {
     expect(url.searchParams.get("revision")).toBe("eq.7");
     expect(url.searchParams.has("user_id")).toBe(false);
   });
+  it("explicit force sync replaces only the requested board without a revision filter", async () => {
+    const board = { ...createBoard(), revision: 3, inviteCode: "a".repeat(32) };
+    const { client, calls } = mockClient([{ revision: 12 }]);
+    expect(await saveCloudBoard(client, board, { force: true })).toEqual({ revision: 12, inviteCode: board.inviteCode });
+    const url = new URL(calls[0].url);
+    expect(url.searchParams.get("id")).toBe(`eq.${board.id}`);
+    expect(url.searchParams.has("revision")).toBe(false);
+    const { title, ...document } = JSON.parse(boardContent(board));
+    expect(JSON.parse(calls[0].options?.body as string)).toEqual({ title, document });
+    const missing = mockClient([]);
+    await expect(saveCloudBoard(missing.client, board, { force: true })).rejects.toThrow("no longer accessible");
+    const denied = mockClient({ message: "Access denied" }, 403);
+    await expect(saveCloudBoard(denied.client, board, { force: true })).rejects.toMatchObject({ message: "Access denied" });
+  });
   it("refuses an older sharing schema instead of accepting hidden token requirements", async () => {
     const board = createBoard();
     const { sharing_version: _version, ...legacy } = row(board);

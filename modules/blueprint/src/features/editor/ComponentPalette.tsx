@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import type { WorkspaceController } from "../../application/useWorkspaceController";
 import { TemplateCards } from "../boards/TemplateCards";
 import {
@@ -16,41 +15,27 @@ export function ComponentPalette({
   controller: Pick<
     WorkspaceController,
     | "readOnly"
-    | "cloud"
-    | "auth"
+    | "board"
     | "sidebarTab"
     | "setSidebarTab"
     | "search"
     | "setSearch"
-    | "showSidebar"
     | "addComponent"
     | "newBoard"
   >;
 }) {
-  const [online, setOnline] = useState(() => navigator.onLine);
-  useEffect(() => {
-    const update = () => setOnline(navigator.onLine);
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
-    return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
-    };
-  }, []);
   const {
     readOnly,
-    cloud,
-    auth,
+    board,
     sidebarTab,
     setSidebarTab,
     search,
     setSearch,
-    showSidebar,
     addComponent,
     newBoard,
   } = controller;
   return (
-    <aside className={`sidebar ${!showSidebar ? "sidebar-hidden" : ""}`}>
+    <aside className="sidebar">
       <div className="sidebar-tabs">
         <button
           className={sidebarTab === "components" ? "active" : ""}
@@ -149,17 +134,7 @@ export function ComponentPalette({
         )}
       </div>
       <div className="sidebar-footer">
-        <div className="sidebar-sync-status" title={cloud.lastSync ? `Last synced ${cloud.lastSync.toLocaleString()}` : undefined}>
-          {!auth.configured
-            ? "Setup required"
-            : !online || cloud.error || cloud.status === "error" || cloud.status === "conflict"
-              ? "Sync paused"
-              : cloud.status === "saved"
-                ? cloud.lastSync ? `Synced ${cloud.lastSync.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Connecting…"
-                : cloud.status === "saving"
-                  ? "Syncing…"
-                  : "Connecting…"}
-        </div>
+        <span className="footer-board-change">Last board change: <time dateTime={board.updatedAt}>{new Date(board.updatedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', hour12: true })}</time></span>
       </div>
     </aside>
   );

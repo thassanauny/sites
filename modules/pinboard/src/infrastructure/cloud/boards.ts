@@ -1,3 +1,4 @@
+import { withOfflineBoards } from './offlineBoards';
 import { createClient, navigatorLock, type SupabaseClient } from '@supabase/supabase-js';
 import type { Board, BoardHead, BoardSummary, Operation } from '../../domain/boards/types';
 import { readBoardSummary } from '../../domain/boards/summary';
@@ -139,7 +140,7 @@ async function call<T>(action: string, attempt: () => PromiseLike<T>): Promise<T
   }
 }
 
-/** Only the session is persisted. Boards are always loaded from Supabase. */
+/** Restore the remote API's identity; the offline adapter owns board caches and queues. */
 export async function initializeCloud(): Promise<void> {
   ensureOnline();
   if (!authentication) {
@@ -207,7 +208,7 @@ function readCloudHead(input: unknown): BoardHead {
 const listChanged = () => new Error('The board list changed while loading. Refresh and try again.');
 
 /** One request returns heads and changed summaries, never card documents. */
-export async function loadBoardList(known: readonly BoardSummary[] = []): Promise<BoardSummary[]> {
+async function remoteLoadBoardList(known: readonly BoardSummary[] = []): Promise<BoardSummary[]> {
   await initializeCloud();
   const { data, error } = await call('load your boards', () =>
     getClient().rpc('pinboard_sync_summaries', {
@@ -237,7 +238,7 @@ export async function loadBoardList(known: readonly BoardSummary[] = []): Promis
   return result;
 }
 
-export async function loadBoard(id: string): Promise<Board> {
+async function remoteLoadBoard(id: string): Promise<Board> {
   const boardId = validateUuid(id, 'Board ID');
   await initializeCloud();
   ensureOnline();
@@ -255,7 +256,7 @@ export async function loadBoard(id: string): Promise<Board> {
   return board;
 }
 
-export async function createBoard(id: string, title: string, description: string): Promise<Board> {
+async function remoteCreateBoard(id: string, title: string, description: string): Promise<Board> {
   const boardId = validateUuid(id, 'Board ID');
   const details = validateBoardDetails(title, description);
   await initializeCloud();
@@ -275,7 +276,7 @@ export async function createBoard(id: string, title: string, description: string
   return board;
 }
 
-export async function joinBoard(code: string): Promise<Board> {
+async function remoteJoinBoard(code: string): Promise<Board> {
   const normalized = normalizeInviteCode(code);
   await initializeCloud();
   ensureOnline();
@@ -289,7 +290,7 @@ export async function joinBoard(code: string): Promise<Board> {
   return board;
 }
 
-export async function mutateBoard(boardId: string, operation: Operation): Promise<Board> {
+async function remoteMutateBoard(boardId: string, operation: Operation): Promise<Board> {
   const id = validateUuid(boardId, 'Board ID');
   const payload = validateOperation(operation);
   await initializeCloud();
@@ -306,3 +307,16 @@ export async function mutateBoard(boardId: string, operation: Operation): Promis
     throw new Error('The server returned a different board. Refresh the app and try again.');
   return board;
 }
+
+const offlineBoards = withOfflineBoards({
+  loadBoardList: remoteLoadBoardList,
+  loadBoard: remoteLoadBoard,
+  createBoard: remoteCreateBoard,
+  joinBoard: remoteJoinBoard,
+  mutateBoard: remoteMutateBoard,
+});
+export const loadBoardList = offlineBoards.loadBoardList;
+export const loadBoard = offlineBoards.loadBoard;
+export const createBoard = offlineBoards.createBoard;
+export const joinBoard = offlineBoards.joinBoard;
+export const mutateBoard = offlineBoards.mutateBoard;

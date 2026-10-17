@@ -85,7 +85,7 @@ export class PageSession {
   private schedule(): void {
     const burstStart = this.firstEditAt ?? Date.now();
     this.cancelTimer();
-    if (this.state.online && this.state.dirty && !this.state.error) {
+    if ((this.state.online || this.cloud.offlineCapable) && this.state.dirty && !this.state.error) {
       // Each keystroke restarts the pause, but never beyond `maxWait` after the first unsaved edit.
       this.firstEditAt = burstStart;
       const wait = Math.min(this.delay, Math.max(0, burstStart + this.maxWait - Date.now()));
@@ -175,18 +175,18 @@ export class PageSession {
   setOnline(online: boolean): void {
     this.update({
       online,
-      ...(!online && this.state.dirty
+      ...(!online && this.state.dirty && !this.cloud.offlineCapable
         ? {
             error: 'Reconnect and choose Retry save. Keep this page open until your text is saved.',
           }
         : {}),
     });
-    if (!online) this.cancelTimer();
+    if (!online && !this.cloud.offlineCapable) this.cancelTimer();
     // Reconnection doesn't silently publish a failed draft. The user can retry.
   }
 
   edit(text: string): void {
-    if (!this.state.page || !this.state.online || this.state.phase === 'opening') return;
+    if (!this.state.page || (!this.state.online && !this.cloud.offlineCapable) || this.state.phase === 'opening') return;
     ++this.edits;
     let error = '';
     try {
@@ -206,8 +206,13 @@ export class PageSession {
 
   private remember(page: TextDropPage): void {
     const current = this.state.page;
-    if (!current || current.id !== page.id || page.version <= current.version) return;
+    if (!current || current.id !== page.id || page.version < current.version || (page.version === current.version && !page.localPending && !current.localPending)) return;
     this.update({ page, ...(!this.state.dirty ? { draft: page.text } : {}) });
+  }
+
+  /** A metadata save may complete while the editor has an unsaved text draft. */
+  acceptName(page: TextDropPage): void {
+    this.remember(page);
   }
 
   refresh(): Promise<RefreshResult> {
@@ -256,7 +261,7 @@ export class PageSession {
   save(): Promise<void> {
     this.cancelTimer();
     if (this.saveInFlight) return this.saveInFlight;
-    if (!this.state.page || !this.state.dirty || !this.state.online) return Promise.resolve();
+    if (!this.state.page || !this.state.dirty || (!this.state.online && !this.cloud.offlineCapable)) return Promise.resolve();
     try {
       validateText(this.state.draft);
     } catch (error) {
@@ -271,7 +276,7 @@ export class PageSession {
     const request = Promise.resolve().then(async () => {
       try {
         if (generation !== this.generation) return;
-        if (!this.state.online) {
+        if (!this.state.online && !this.cloud.offlineCapable) {
           this.update({ phase: 'ready' });
           return;
         }

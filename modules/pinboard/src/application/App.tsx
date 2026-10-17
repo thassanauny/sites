@@ -14,11 +14,9 @@ export default function App() {
     board,
     boardList,
     visibleCount,
-    workspaceCardCount,
     selectedCode,
     loaded,
     loadingBoard,
-    removalsReady,
     refreshing,
     busy,
     offline,
@@ -58,7 +56,7 @@ export default function App() {
   // Compared by value, so the board is rendered again at midnight to mark newly overdue cards.
   const today = new Date().toLocaleDateString('en-CA');
   return (
-    <div className="app-shell">
+    <div className={`app-shell${board ? '' : ' at-home'}`}>
       <button
         type="button"
         className="skip-link"
@@ -94,26 +92,18 @@ export default function App() {
         onHome={() => navigate()}
         onHelp={() => setModal({ type: 'help' })}
       />
-      <Sidebar
-        boards={boardList}
-        activeId={board?.id}
-        currentBoard={board}
-        visibleCardCount={filteredCount}
-        showEmptyHint={loaded && visibleCount === 0}
-        disabled={disabled}
-        status={
-          !cloudConfigured
-            ? 'Setup required'
-            : offline || error
-              ? 'Sync paused'
-              : lastSync
-                ? `Synced ${lastSync.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                : 'Connecting…'
-        }
-        statusTitle={lastSync ? `Last synced ${lastSync.toLocaleString()}` : undefined}
-        onOpen={navigate}
-        onCreate={() => setModal({ type: 'create' })}
-      />
+      {board && (
+        <Sidebar
+          boards={boardList}
+          activeId={board?.id}
+          currentBoard={board}
+          visibleCardCount={filteredCount}
+          showEmptyHint={loaded && visibleCount === 0}
+          disabled={disabled || offline}
+          onOpen={navigate}
+          onCreate={() => setModal({ type: 'create' })}
+        />
+      )}
       <main id="main-content" tabIndex={-1} className="main">
         {!cloudConfigured && (
           <div className="banner warning">
@@ -126,7 +116,10 @@ export default function App() {
         {offline && (
           <div className="banner warning">
             <WifiOff size={18} />
-            <span>You’re offline. Reconnect to save changes or open another board.</span>
+            <span>
+              You’re offline. Saved boards can be edited on this device and sync automatically when
+              connected.
+            </span>
           </div>
         )}
         {error && (
@@ -180,29 +173,32 @@ export default function App() {
           <HomeView
             boards={boardList}
             loaded={loaded}
-            disabled={disabled}
-            cardCount={workspaceCardCount}
-            showCardCount={Boolean(lastSync) && removalsReady}
+            disabled={disabled || offline}
             onCreate={() => setModal({ type: 'create' })}
             onJoin={() => setModal({ type: 'join' })}
             onOpen={navigate}
           />
         )}
-        <footer className="app-footer">
-          {board && (
-            <span title="When a card, column, or board setting was last changed.">
-              Last board change:{' '}
-              <time dateTime={board.updated_at}>
-                {new Date(board.updated_at).toLocaleString(undefined, {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
+      </main>
+      <footer className="app-footer">
+        <span className="footer-sync">
+          {lastSync ? (
+            <>
+              Synced{' '}
+              <time dateTime={lastSync.toISOString()}>
+                {lastSync.toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true,
                 })}
               </time>
-            </span>
+            </>
+          ) : (
+            'Waiting for first sync.'
           )}
-          <span className="app-version">pinboard · {version}</span>
-        </footer>
-      </main>
+        </span>
+        <span className="app-version">pinboard · {version}</span>
+      </footer>
       {notice && (
         <div className="toast" role="status">
           <Check size={17} />
@@ -230,7 +226,7 @@ export default function App() {
           }
           modal={modal}
           busy={busy}
-          offline={offline}
+          offline={offline && (modal.type === 'create' || modal.type === 'join' || modalRemoved)}
           removed={modalRemoved}
           serverError={error}
           currentBoard={modalBoard}

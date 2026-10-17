@@ -1,7 +1,7 @@
 {
   "name": "blueprint",
   "private": true,
-  "version": "1.0.26",
+  "version": "1.0.55",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -30,6 +30,7 @@
     "@vitejs/plugin-react": "^6.0.0",
     "typescript": "~5.9.3",
     "vite": "^8.3.4",
+    "vite-plugin-pwa": "2.0.0",
     "vitest": "^4.1.0"
   },
   "engines": {

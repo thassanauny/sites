@@ -75,7 +75,7 @@ describe('Pinboard UI: removing a board from this device', () => {
     });
     expect(button('Settings').disabled).toBe(false);
     await click('Settings');
-    expect(button('Save details').disabled).toBe(true);
+    expect(button('Save details').disabled).toBe(false);
     await click('Remove from this device');
     expect(button('Remove from this device').disabled).toBe(false);
     await click('Remove from this device');

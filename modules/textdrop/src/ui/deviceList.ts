@@ -2,14 +2,14 @@ import { shortCode, type DeviceSnippet } from '../domain/snippets/model';
 import { icon } from './icons';
 import type { ShellElements } from './shell';
 
-type SnippetAction = 'snippet-open' | 'snippet-rename' | 'snippet-remove';
+type SnippetAction = 'snippet-open' | 'snippet-rename';
 
 /** Which action of a list row an element is, so focus can return to the same kind of control. */
 export function snippetAction(item: Element | null | undefined): SnippetAction {
-  return item?.classList.contains('snippet-open') ? 'snippet-open' : item?.classList.contains('snippet-rename') ? 'snippet-rename' : 'snippet-remove';
+  return item?.classList.contains('snippet-rename') ? 'snippet-rename' : 'snippet-open';
 }
 
-/** Redraws "Snippets on this device". Keyboard focus stays on the same action of the same snippet, or the nearest row. */
+/** Redraws "Your snippets". Keyboard focus stays on the same action of the same snippet, or the nearest row. */
 export function renderDeviceList(ui: Pick<ShellElements, 'deviceList' | 'deviceEmpty' | 'deviceCount' | 'deviceHeading'>, snippets: DeviceSnippet[], hrefFor: (code: string) => string): void {
   const list = ui.deviceList;
   const focused = document.activeElement instanceof HTMLElement && list.contains(document.activeElement) ? document.activeElement : null;
@@ -56,18 +56,11 @@ export function renderDeviceList(ui: Pick<ShellElements, 'deviceList' | 'deviceE
     rename.className = 'icon-button snippet-rename';
     rename.dataset.code = snippet.code;
     rename.innerHTML = icon('rename');
-    rename.title = 'Name on this device';
+    rename.title = 'Snippet name (optional)';
     rename.setAttribute('aria-label', `Rename ${label}`);
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'icon-button snippet-remove';
-    remove.dataset.code = snippet.code;
-    remove.innerHTML = icon('remove');
-    remove.title = 'Remove from this device';
-    remove.setAttribute('aria-label', `Remove ${label} from this device`);
     const actions = document.createElement('div');
     actions.className = 'snippet-actions';
-    actions.append(rename, remove);
+    actions.append(rename);
     row.append(open, actions);
     list.append(row);
   }

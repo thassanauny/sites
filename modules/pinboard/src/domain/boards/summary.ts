@@ -28,5 +28,15 @@ export function acceptSummary(
   current: BoardSummary | undefined,
   incoming: BoardSummary,
 ): BoardSummary {
-  return current && current.revision >= incoming.revision ? current : incoming;
+  // A cached document can be older than a recently polled head; keep it openable offline.
+  if (incoming.localCached) return incoming;
+  return current &&
+    (current.revision > incoming.revision ||
+      (current.revision === incoming.revision &&
+        !current.localPending &&
+        !incoming.localPending &&
+        current.localCached === incoming.localCached &&
+        current.localError === incoming.localError))
+    ? current
+    : incoming;
 }

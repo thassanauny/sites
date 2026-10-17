@@ -46,6 +46,40 @@ async function pressEscape() {
 const heading = () => document.querySelector('dialog h2')?.textContent;
 
 describe('Pinboard UI: editing boards, columns and cards', () => {
+  it('deletes a column from settings, preserves cards and unsaved board details, and retains a failed deletion for retry', async () => {
+    await mount([{ ...board, cards: [card, { ...card, id: 'archived', archived: true }] }]);
+    await click('Settings');
+    await fill('Board name', 'Keep my draft');
+    await click('Delete column To do');
+    await select('Move cards to', 'doing');
+    cloud.mutateBoard.mockRejectedValueOnce(new Error('Connection lost'));
+    await click('Delete column');
+    expect(document.querySelector('dialog')?.textContent).toContain('Connection lost');
+    expect(button('Delete column')).toBeDefined();
+    cloud.mutateBoard.mockResolvedValueOnce({
+      ...board,
+      revision: 2,
+      columns: board.columns.slice(1),
+      cards: [
+        { ...card, columnId: 'doing' },
+        { ...card, id: 'archived', columnId: 'doing', archived: true },
+      ],
+    });
+    await click('Delete column');
+    expect(cloud.mutateBoard).toHaveBeenLastCalledWith(board.id, {
+      type: 'delete_column',
+      id: 'todo',
+      targetColumnId: 'doing',
+    });
+    expect(field('Board name').value).toBe('Keep my draft');
+    expect(columnTitles()).not.toContain('To do');
+    expect(document.querySelector('.delete-confirm')).toBeNull();
+  });
+  it('does not offer deletion of the last column', async () => {
+    await mount([{ ...board, columns: [board.columns[0]!] }]);
+    await click('Settings');
+    expect(button('Delete column To do').disabled).toBe(true);
+  });
   it('saves column order immediately while retaining board details and disabling boundary moves', async () => {
     await mount();
     await click('Settings');
@@ -373,7 +407,10 @@ describe('Pinboard UI: editing boards, columns and cards', () => {
       document.querySelector<HTMLInputElement>('input[aria-label="Search cards"]')!;
     const visibleCount = () => document.querySelector('.sidebar-visible-cards')?.textContent;
     expect(visibleCount()).toContain('Showing 1 of 1 card');
-    expect(document.querySelector('.app-footer time')?.getAttribute('datetime')).toBe(
+    expect(document.querySelector('.footer-sync')?.textContent).toMatch(
+      /^Synced \d{2}:\d{2} [AP]M$/,
+    );
+    expect(document.querySelector('.app-footer time')?.getAttribute('datetime')).not.toBe(
       board.updated_at,
     );
     await search('coffee');

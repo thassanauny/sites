@@ -8,6 +8,23 @@ import { DeviceSnippets } from '../infrastructure/storage/deviceSnippets';
 useMountHarness();
 
 describe('TextDrop page controls', () => {
+  it('keeps the confirmed sync time and version on Home and the editor, and stops listening on disposal', async () => {
+    let synced!: (at: Date) => void;
+    const stop = vi.fn();
+    cloud.subscribeSync = listener => {
+      synced = listener;
+      return stop;
+    };
+    await start();
+    expect(element('footer-sync').textContent).toBe('Waiting for first sync.');
+    synced(new Date(2026, 9, 18, 3, 15));
+    expect(element('footer-sync').textContent).toBe('Synced 03:15 AM');
+    await join(first.code);
+    expect(element('footer-sync').textContent).toBe('Synced 03:15 AM');
+    expect(root.querySelector('.site-footer')?.textContent).toContain('textdrop · test');
+    dispose!();
+    expect(stop).toHaveBeenCalledOnce();
+  });
   it('shows connection status and Help, keeps the draft, and restores focus after Help closes', async () => {
     await start(`#/p/${first.code}`);
     expect(element('connection-label').textContent).toBe('Connected');

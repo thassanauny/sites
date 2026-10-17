@@ -193,8 +193,5 @@ describe('Pinboard card archives', () => {
     await click('Clear filters');
     await click('Open workspace');
     expect(document.querySelector('.preview-info')?.textContent).toContain('1 cards');
-    expect(document.querySelector('.home-bottom')?.textContent).toContain(
-      '1 card across your boards',
-    );
   });
 });

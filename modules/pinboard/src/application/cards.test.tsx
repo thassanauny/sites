@@ -209,7 +209,7 @@ describe('Pinboard UI: cards and columns', () => {
     expect(titlesIn('To do')).toEqual(['Visible bags', 'Visible coffee', 'Hidden']);
   });
 
-  it('disables reordering while a save is pending and while offline', async () => {
+  it('disables reordering during a save and allows queued moves offline', async () => {
     await mount([sameColumn]);
     const saving = deferred<Board>();
     cloud.mutateBoard.mockReturnValueOnce(saving.promise);
@@ -223,8 +223,8 @@ describe('Pinboard UI: cards and columns', () => {
       window.dispatchEvent(new Event('offline'));
     });
     await dragCardToCard('Pack bags', 'Buy coffee', 'before');
-    expect(cloud.mutateBoard).toHaveBeenCalledTimes(1);
-    expect(button('Move Pack bags up').disabled).toBe(true);
+    expect(cloud.mutateBoard).toHaveBeenCalledTimes(2);
+    expect(button('Edit Pack bags').closest<HTMLElement>('article')!.draggable).toBe(true);
   });
 
   it('moves a card to the end of another column when it is dropped there', async () => {
@@ -266,7 +266,7 @@ describe('Pinboard UI: cards and columns', () => {
     expect(titlesIn('Done')).toEqual(['Buy coffee']);
   });
 
-  it('ignores a drop on the card’s own column and a drop while offline', async () => {
+  it('ignores a drop on the card’s own column and queues a move while offline', async () => {
     await mount([populated]);
     await dragCard('Buy coffee', 'To do');
     expect(cloud.mutateBoard).not.toHaveBeenCalled();
@@ -277,9 +277,20 @@ describe('Pinboard UI: cards and columns', () => {
       });
       window.dispatchEvent(new Event('offline'));
     });
+    cloud.mutateBoard.mockResolvedValueOnce({
+      ...populated,
+      localPending: true,
+      cards: [{ ...card, columnId: 'done', position: 1024 }, packBags],
+    });
     await dragCard('Buy coffee', 'Done');
-    expect(cloud.mutateBoard).not.toHaveBeenCalled();
-    expect(column('To do').querySelector<HTMLElement>('.task-card')!.draggable).toBe(false);
+    expect(cloud.mutateBoard).toHaveBeenCalledWith(board.id, {
+      type: 'move_card',
+      id: card.id,
+      columnId: 'done',
+      position: 1024,
+    });
+    expect(titlesIn('Done')).toEqual(['Buy coffee']);
+    expect(document.body.textContent).toContain('Saved on this device. Waiting to sync.');
   });
 
   it('tells the person when a drop arrives while another change is still saving', async () => {

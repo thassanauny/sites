@@ -87,6 +87,7 @@ button:disabled:hover {
   background: none;
 }
 .app-shell {
+  --sidebar-width: 246px;
   height: 100dvh;
   min-height: 500px;
   display: flex;
@@ -155,12 +156,6 @@ button:disabled:hover {
   height: 5px;
   top: 20px;
   background: #afd8bc;
-}
-.header-divider {
-  height: 25px;
-  width: 1px;
-  background: var(--border);
-  margin-left: 18px;
 }
 .workspace-link {
   display: flex;
@@ -290,14 +285,13 @@ button:disabled:hover {
   min-height: 0;
 }
 .sidebar {
-  width: 246px;
+  width: var(--sidebar-width);
   background: #fff;
   border-right: 1px solid var(--border);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   z-index: 5;
-  transition: width 0.2s;
 }
 .sidebar-hidden {
   display: none;
@@ -1625,8 +1619,8 @@ button:disabled:hover {
   max-width: none;
 }
 @media (min-width: 1700px) {
-  .sidebar {
-    width: 270px;
+  .app-shell {
+    --sidebar-width: 270px;
   }
   .sidebar-scroll {
     padding-left: 22px;
@@ -1672,9 +1666,6 @@ button:disabled:hover {
     padding: 0 18px;
     gap: 15px;
   }
-  .header-divider {
-    margin-left: 8px;
-  }
   .save-status {
     display: none;
   }
@@ -1682,8 +1673,8 @@ button:disabled:hover {
     font-size: 11px;
     gap: 10px;
   }
-  .sidebar {
-    width: 224px;
+  .app-shell {
+    --sidebar-width: 224px;
   }
   .sidebar-scroll {
     padding-left: 15px;
@@ -1729,9 +1720,6 @@ button:disabled:hover {
   .workspace-link {
     display: none;
   }
-  .header-divider {
-    margin-left: 5px;
-  }
   .board-title-button span {
     max-width: 210px;
   }
@@ -1776,10 +1764,6 @@ button:disabled:hover {
   .board-title-button span {
     max-width: 140px;
   }
-  .header-divider {
-    height: 21px;
-    margin: 0;
-  }
   .header-actions {
     gap: 6px;
   }
@@ -1797,8 +1781,8 @@ button:disabled:hover {
   .cloud-button {
     margin: 0;
   }
-  .sidebar {
-    width: 200px;
+  .app-shell {
+    --sidebar-width: 200px;
   }
   .sidebar-tabs > button {
     font-size: 10px;
@@ -1936,13 +1920,13 @@ button:disabled:hover {
   }
 }
 @media (max-width: 560px) {
+  .app-shell { --sidebar-width: 217px; }
   .sidebar {
     position: absolute;
     left: 0;
     top: 65px;
     bottom: 0;
     box-shadow: 6px 0 20px #24482b12;
-    width: 217px;
   }
   .inspector {
     width: 230px;
@@ -1954,9 +1938,6 @@ button:disabled:hover {
   .brand {
     font-size: 0;
     gap: 0;
-  }
-  .header-divider {
-    margin: 0 2px;
   }
   .board-title-button span {
     max-width: 140px;
@@ -2211,12 +2192,6 @@ button:disabled:hover {
   .connection-banner > span {
     max-width: 250px;
   }
-  .connection-banner + .workspace-body .inspector {
-    top: 114px;
-  }
-  .connection-banner + .workspace-body .sidebar {
-    top: 114px;
-  }
 }
 
 .architecture-node.node-disconnected .react-flow__handle {
@@ -2224,10 +2199,6 @@ button:disabled:hover {
   pointer-events: none;
 }
 
-.home-header-label {
-  font-size: 12px;
-  color: #7b8b81;
-}
 .board-home {
   flex: 1;
   overflow-y: auto;
@@ -2457,12 +2428,6 @@ button:disabled:hover {
 }
 .board-remove-confirm button {
   padding: 8px 3px;
-}
-.home-footnote {
-  margin: 28px 0 0;
-  color: #93a18f;
-  font-size: 10px;
-  text-align: center;
 }
 .home-empty {
   text-align: center;

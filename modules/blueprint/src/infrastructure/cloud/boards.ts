@@ -141,6 +141,7 @@ function stable(value: unknown): string {
 export async function saveCloudBoard(
   client: SupabaseClient,
   board: Board,
+  options: { force?: boolean } = {},
 ): Promise<SavedBoard> {
   const { title, ...document } = JSON.parse(boardContent(board));
   if (!board.revision) {
@@ -162,15 +163,12 @@ export async function saveCloudBoard(
       inviteCode: validated.inviteCode!,
     };
   }
-  const { data, error } = await client
-    .from("blueprint_boards")
-    .update({ title, document })
-    .eq("id", board.id)
-    .eq("revision", board.revision)
-    .select("revision")
-    .maybeSingle();
+  let request = client.from("blueprint_boards").update({ title, document }).eq("id", board.id);
+  // Explicit conflict resolution replaces the document while retaining server access checks.
+  if (!options.force) request = request.eq("revision", board.revision);
+  const { data, error } = await request.select("revision").maybeSingle();
   if (error) throw error;
-  if (!data) throw new CloudConflictError();
+  if (!data) throw new CloudConflictError(options.force ? "This board is no longer accessible. Your local changes are safe; save a new board to keep them." : undefined);
   return {
     revision: data.revision,
     inviteCode: board.inviteCode!,
