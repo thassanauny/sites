@@ -35,7 +35,7 @@ export function shell(app: HTMLElement) {
     h(
       'div',
       { class: 'sidebar-header' },
-      h('a', { class: 'brand', href: '#/' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, '⌘'), h('span', {}, 'Utility Desk Lite', h('small', {}, 'Your everyday toolkit'))),
+      h('a', { class: 'brand', href: '#/' }, h('img', { class: 'brand-mark', src: './logo.svg', alt: '', width: '38', height: '38' }), h('span', {}, 'Utility Desk', h('small', {}, 'Your everyday toolkit'))),
       h(
         'button',
         {
@@ -67,7 +67,7 @@ export function shell(app: HTMLElement) {
       { class: 'workspace' },
       h('header', { class: 'topbar' }, h('span', {}, h('a', { href: '#/' }, 'Home'), h('span', { class: 'breadcrumb-separator' }, '/'), h('strong', { id: 'breadcrumb' }, 'Home')), topbarActions),
       h('main', { id: 'main', tabindex: -1 }),
-      h('footer', {}, h('span', {}, 'Made for everyday tasks. Runs in your browser.'), h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, `Utility Desk Lite · ${version}`)),
+      h('footer', {}, h('span', {}, 'Made for everyday tasks. Runs in your browser.'), h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, `Utility Desk · ${version}`)),
     ),
   );
 }

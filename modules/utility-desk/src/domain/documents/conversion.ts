@@ -8,7 +8,7 @@ export const UNSUPPORTED_FORMATS = [
   { ext: 'azw3 / KF8, MOBI with images', why: 'Only classic text-only MOBI 6 is handled. KF8 (AZW3), Huffman-compressed MOBI and embedded images are not supported.' },
   { ext: 'docx / doc / odt', why: 'Needs a full office-document engine to preserve layout and styles.' },
   { ext: 'Scanned PDF / OCR', why: 'PDF input needs selectable text. OCR, exact page layout, images and complex table reconstruction are not supported.' },
-  { ext: 'DRM-protected books', why: 'Never supported; Utility Desk Lite will not circumvent DRM.' },
+  { ext: 'DRM-protected books', why: 'Never supported; Utility Desk will not circumvent DRM.' },
 ];
 
 export const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

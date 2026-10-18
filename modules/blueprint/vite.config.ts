@@ -13,7 +13,7 @@ export function createConfig(appDirectory: string) {
     // Reuse publishing's shared public settings; this app can override either value.
     const shared = loadEnv(
       mode,
-      resolve(appDirectory, "../../publishing"),
+      resolve(appDirectory, "../../websites"),
       "VITE_",
     );
     const local = loadEnv(mode, appDirectory, "VITE_");
@@ -48,7 +48,15 @@ export function createConfig(appDirectory: string) {
           },
         },
       },
-      plugins: [react(), VitePWA({ registerType: 'autoUpdate', manifest: false, workbox: { globPatterns: ['**/*.{js,css,html,woff2,svg,png}'], navigateFallback: 'index.html', cleanupOutdatedCaches: true } })],
+      plugins: [react(), VitePWA({ registerType: 'autoUpdate', includeAssets: ['favicon.svg', 'icons/*.png'], manifest: {
+name: 'Blueprint', short_name: 'Blueprint', description: 'A little space for big systems.',
+start_url: './', scope: './', display: 'standalone', theme_color: '#064c3d', background_color: '#f7f6f2',
+icons: [
+{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+{ src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+],
+}, workbox: { globPatterns: ['**/*.{js,css,html,woff2,svg,png}'], navigateFallback: 'index.html', cleanupOutdatedCaches: true } })],
       define: testing
         ? undefined
         : {

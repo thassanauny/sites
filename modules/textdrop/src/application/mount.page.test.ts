@@ -60,13 +60,13 @@ describe('TextDrop page controls', () => {
     const leaving = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(leaving);
     expect(leaving.defaultPrevented).toBe(true);
-    root.querySelector<HTMLAnchorElement>('.back-link')!.click();
+    root.querySelector<HTMLAnchorElement>('.brand')!.click();
     await flush();
     expect(window.confirm).toHaveBeenCalledTimes(1);
     expect(location.hash).toBe(`#/p/${first.code}`);
     expect(element<HTMLTextAreaElement>('editor').value).toBe('Keep this draft');
     vi.mocked(window.confirm).mockReturnValue(true);
-    root.querySelector<HTMLAnchorElement>('.back-link')!.click();
+    root.querySelector<HTMLAnchorElement>('.brand')!.click();
     await flush();
     await vi.advanceTimersByTimeAsync(1000);
     expect(element('home').hidden).toBe(false);

@@ -10,7 +10,7 @@ export function createConfig(appDirectory: string) {
   return defineConfig(({ mode, command }) => {
     const testing = process.env.VITEST === 'true' && mode === 'test' && command !== 'build';
     // Reuse publishing's shared public settings; this app can override either value.
-    const shared = loadEnv(mode, resolve(appDirectory, '../../publishing'), 'VITE_');
+    const shared = loadEnv(mode, resolve(appDirectory, '../../websites'), 'VITE_');
     const local = loadEnv(mode, appDirectory, 'VITE_');
     const url =
       process.env.VITE_SUPABASE_URL !== undefined
@@ -32,7 +32,27 @@ export function createConfig(appDirectory: string) {
         react(),
         VitePWA({
           registerType: 'autoUpdate',
-          manifest: false,
+          includeAssets: ['favicon.svg', 'icons/*.png'],
+          manifest: {
+            name: 'Pinboard',
+            short_name: 'Pinboard',
+            description: 'A place for your projects.',
+            start_url: './',
+            scope: './',
+            display: 'standalone',
+            theme_color: '#064c3d',
+            background_color: '#f7f6f2',
+            icons: [
+              { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+              { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+              {
+                src: 'icons/icon-maskable-512.png',
+                sizes: '512x512',
+                type: 'image/png',
+                purpose: 'maskable',
+              },
+            ],
+          },
           workbox: {
             globPatterns: ['**/*.{js,css,html,woff2,svg,png}'],
             navigateFallback: 'index.html',

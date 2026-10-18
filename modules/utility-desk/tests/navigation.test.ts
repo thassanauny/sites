@@ -76,19 +76,19 @@ describe('routes outside the tool list', () => {
   };
 
   it('names an unknown route in the title and breadcrumb and marks no navigation link current', async () => {
-    await route('#/nope', 'Page not found · Utility Desk Lite');
+    await route('#/nope', 'Page not found · Utility Desk');
     expect(document.getElementById('breadcrumb')?.textContent).toBe('Page not found');
     expect(document.querySelector('#main h1')?.textContent).toBe('Page not found');
     expect(document.querySelector('.sidebar a[aria-current]')).toBeNull();
-    await route('#/split-pdf', 'Split PDF · Utility Desk Lite');
+    await route('#/split-pdf', 'Split PDF · Utility Desk');
     expect(document.getElementById('breadcrumb')?.textContent).toBe('Split PDF');
     expect(document.querySelector('.sidebar a[aria-current="page"]')?.getAttribute('href')).toBe('#/split-pdf');
-    await route('#/', 'Utility Desk Lite');
+    await route('#/', 'Utility Desk');
     expect(document.getElementById('breadcrumb')?.textContent).toBe('All utilities');
   });
 
   it('shows the package version in the footer', () => {
-    expect(document.querySelector('footer')?.textContent).toContain(`Utility Desk Lite · ${version}`);
+    expect(document.querySelector('footer')?.textContent).toContain(`Utility Desk · ${version}`);
   });
 
   it('ignores files dropped on the page outside a drop zone', () => {

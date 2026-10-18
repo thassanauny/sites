@@ -230,7 +230,6 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
       const name = page.name || rememberedSnippets.find(snippet => snippet.code === page.code)?.name || 'Untitled snippet';
       setText(ui.pageName, name);
       if (document.title !== `${name} — TextDrop`) document.title = `${name} — TextDrop`;
-      setText(ui.pageCode, page.code);
       if (editor.value !== draft) editor.value = draft;
       editor.disabled = !online && !cloud.offlineCapable;
       const { lines, tooLarge } = measure(draft);
@@ -645,13 +644,6 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
       const remaining = ui.deviceList.querySelectorAll<HTMLAnchorElement>('.snippet-open');
       (remaining[Math.min(index, remaining.length - 1)] ?? ui.deviceHeading).focus();
       showToast('Snippet removed from this device');
-    },
-    { signal },
-  );
-  ui.copyCode.addEventListener(
-    'click',
-    () => {
-      if (session.state.page) void copy(session.state.page.code, 'Snippet code copied');
     },
     { signal },
   );

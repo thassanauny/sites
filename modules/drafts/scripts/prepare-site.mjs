@@ -117,7 +117,7 @@ if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[
       const target = resolve(process.argv[2] ?? join(dirname(file), '../../..'));
       prepareDrafts(target, process.argv[3] ? releaseForApp(resolve(process.argv[3]), target) : undefined);
     } else {
-      if (!process.argv[2]) throw new Error('Use make -C publishing publish-drafts from the development repository root.');
+      if (!process.argv[2]) throw new Error('Use make -C websites publish-drafts from the development repository root.');
       const target = resolve(process.argv[2]);
       const app = process.argv[3] ? resolve(process.argv[3]) : resolve(dirname(file), '../apps/drafts');
       const releaseFile = join(dirname(file), 'releases/drafts.json');

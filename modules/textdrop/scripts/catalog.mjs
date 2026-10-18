@@ -1,7 +1,7 @@
 // Public routes and preparation order, matching the homepage cards.
 // This registry also ships with standalone shared-app preparation helpers.
 export const APPS = [
-  { id: 'utility-desk', folder: 'utility-desk-lite', label: 'Utility Desk Lite', kind: 'utility' },
+  { id: 'utility-desk', folder: 'utility-desk', label: 'Utility Desk', kind: 'utility' },
   { id: 'iou', folder: 'iou', label: 'iou', kind: 'iou' },
   { id: 'drafts', folder: 'drafts', label: 'Drafts', kind: 'drafts' },
   { id: 'textdrop', folder: 'textdrop', label: 'TextDrop', kind: 'shared' },

@@ -1,7 +1,7 @@
 {
   "format": 1,
   "app": "blueprint",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "base": "./",
   "cloudConfigured": true,
   "publicConfig": {
@@ -11,10 +11,10 @@
   },
   "scripts": {
     "registerSW.js": "e12c8db54e3cc247034427f2b661b305a78fea7e7cdec1eac179fecec3da0fc7",
-    "sw.js": "f7a093c0063eb6aa3798328827b42fb40bb478f6c633b54eb24e7aa7ff97e24b",
+    "sw.js": "f55d488dc40f883e1fb2c8ed7ddfdf30be3c0fe607f8ca09015f966ed92ec7ed",
     "workbox-9c191d2f.js": "04b086f1b2f4215ee4b659a7bc9c76162894abdb43fa876247bc7c0bd6fd1c37",
     "assets/canvas-BcpL46PM.js": "99167f8e907a9f4a401ee2909934d7460539ff659a0b6674f90f45e7de686bae",
-    "assets/index-CMa-cAia.js": "346cf6267f193ac7a9ec0d3c150940bd95eed744805da9976e0b876ca4f3b6a0",
+    "assets/index-Duqsxdw8.js": "04fc70019c73d305f82f0782184bd27382a99acb9ffddf8149da451df96e9459",
     "assets/rolldown-runtime-WkwZ5CU-.js": "2629f2ad3cb75a57d98de697127f5af7d777ef572bbcdfa6e3ce8f438cd4527e",
     "assets/supabase-DtuMx0jC.js": "cbd4eb09998778677a096913dd8741158d9882e11eb8156cb8e866f8d65b16a6"
   }

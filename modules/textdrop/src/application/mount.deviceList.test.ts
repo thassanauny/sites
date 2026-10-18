@@ -84,7 +84,7 @@ describe('TextDrop device list', () => {
     await create();
     expect(location.hash).toBe(`#/p/${first.code}`);
     expect(rows()).toEqual([first.code]);
-    root.querySelector<HTMLAnchorElement>('.back-link')!.click();
+    root.querySelector<HTMLAnchorElement>('.brand')!.click();
     await flush();
     vi.setSystemTime(new Date('2026-10-10T02:00:00.000Z'));
     await join(second.code);
@@ -176,7 +176,7 @@ describe('TextDrop device list', () => {
     await create();
     expect(element('workspace').hidden).toBe(false);
     expect(element('notice-message').textContent).toContain('Keep the snippet code');
-    root.querySelector<HTMLAnchorElement>('.back-link')!.click();
+    root.querySelector<HTMLAnchorElement>('.brand')!.click();
     await flush();
     window.dispatchEvent(new Event('focus'));
     expect(rows()).toEqual([]);

@@ -4,7 +4,7 @@ NODE ?= node
 NPM ?= npm
 # Capture overrides before assigning defaults, including exported environment values.
 PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
-# Publishing rewrites this exact line (see publishing/snapshot-lib.mjs) in standalone snapshots: keep its shape.
+# Publishing rewrites this exact line (see websites/snapshot-lib.mjs) in standalone snapshots: keep its shape.
 PUBLISH_SCRIPT ?= scripts/prepare-shared.mjs
 DEST ?=
 
@@ -28,7 +28,7 @@ help:
 	  'make format      Apply Biome formatting and safe lint fixes' \
 	  'make check       Run TypeScript, Biome and automated tests' \
 	  'make prepare-shared DEST=<Sites checkout>  Prepare a public source snapshot (used by publishing)' \
-	  'Publishing: run make -C publishing publish from the development repository root' \
+	  'Publishing: run make -C websites publish from the development repository root' \
 	  'Supabase settings: see AGENTS.md.'
 
 node-check:

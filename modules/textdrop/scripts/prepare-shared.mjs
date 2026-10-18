@@ -12,11 +12,12 @@ import {
 const file = fileURLToPath(import.meta.url);
 const checkerName = 'scripts/check-shared-build.mjs';
 const schemaFiles = ['tsconfig.app.json', 'tsconfig.node.json', 'biome.json', 'build-config.test.ts', 'supabase/schema.sql'];
+const iconAssets = ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
 const apps = {
-  textdrop: { assets: new Set(['logo.svg']), files: [...schemaFiles, 'supabase/update-poll-and-grants.sql', 'supabase/update-save-receipt.sql', 'supabase/update-shared-names.sql'], folders: ['src', 'public', 'tests'] },
-  pinboard: { assets: new Set(['favicon.svg']), files: [...schemaFiles, 'supabase/schema.test.mjs', 'supabase/postgres-check.mjs'], folders: ['src', 'public'] },
+  textdrop: { assets: new Set(['logo.svg', ...iconAssets]), files: [...schemaFiles, 'supabase/update-poll-and-grants.sql', 'supabase/update-save-receipt.sql', 'supabase/update-shared-names.sql'], folders: ['src', 'public', 'tests'] },
+  pinboard: { assets: new Set(['favicon.svg', ...iconAssets]), files: [...schemaFiles, 'supabase/schema.test.mjs', 'supabase/postgres-check.mjs'], folders: ['src', 'public'] },
   blueprint: {
-    assets: new Set(['favicon.svg', '.nojekyll', 'licenses/Manrope.txt', 'licenses/DM-Sans.txt', 'licenses/React-Flow.txt']),
+    assets: new Set([...iconAssets, 'favicon.svg', '.nojekyll', 'licenses/Manrope.txt', 'licenses/DM-Sans.txt', 'licenses/React-Flow.txt']),
     files: ['playwright.config.ts', 'supabase/rename-to-blueprint.sql', 'supabase/migrations/001_blueprint_boards.sql', 'supabase/migrations/002_board_invitations.sql', 'supabase/migrations/003_shared_editing.sql', 'supabase/migrations/004_incremental_sync.sql'],
     folders: ['src', 'public', 'tests'], fonts: true,
   },
@@ -34,7 +35,7 @@ function identity(name) {
 
 const allowedFor = app => (kind, name) => ['src', 'tests'].includes(kind) ? new RegExp('^' + kind + '/.+\\.(?:ts|tsx|css)$').test(name)
   : kind === 'public' ? app.assets.has(name.slice('public/'.length))
-  : ['index.html', '.nojekyll', 'registerSW.js', 'sw.js'].includes(name) || /^workbox-[A-Za-z0-9_-]+\.js$/.test(name) || app.assets.has(name) || /^assets\/[A-Za-z0-9._-]+\.(?:js|css)$/.test(name)
+  : ['index.html', '.nojekyll', 'manifest.webmanifest', 'registerSW.js', 'sw.js'].includes(name) || /^workbox-[A-Za-z0-9_-]+\.js$/.test(name) || app.assets.has(name) || /^assets\/[A-Za-z0-9._-]+\.(?:js|css)$/.test(name)
     || (app.fonts && /^assets\/[A-Za-z0-9._-]+\.woff2$/.test(name));
 
 /** Read-only ownership/empty-bootstrap check, before any app build is run. */

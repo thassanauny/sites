@@ -14,7 +14,7 @@ vi.mock('vite', async importOriginal => {
   const actual = await importOriginal<typeof import('vite')>();
   return {
     ...actual,
-    loadEnv: (mode: string, path: string, prefixes: string) => (settings.real ? actual.loadEnv(mode, path, prefixes) : path.endsWith('/publishing') ? settings.shared : settings.local),
+    loadEnv: (mode: string, path: string, prefixes: string) => (settings.real ? actual.loadEnv(mode, path, prefixes) : path.endsWith('/websites') ? settings.shared : settings.local),
   };
 });
 
@@ -136,7 +136,7 @@ describe('textdrop publishing settings from real env files', () => {
     settings.real = true;
     temporary = mkdtempSync(join(tmpdir(), 'textdrop-env-'));
     appDirectory = join(temporary, 'apps', 'textdrop');
-    publishingDirectory = join(temporary, 'publishing');
+    publishingDirectory = join(temporary, 'websites');
     mkdirSync(appDirectory, { recursive: true });
     mkdirSync(publishingDirectory);
     vi.spyOn(process, 'cwd').mockReturnValue(appDirectory);

@@ -110,7 +110,7 @@ export async function documentToPdf(blocks: DocumentBlock[], title: string, auth
     bold = await doc.embedFont(fonts.bold, { subset: true });
   doc.setTitle(title);
   if (author.trim()) doc.setAuthor(author.trim());
-  doc.setCreator('Utility Desk Lite');
+  doc.setCreator('Utility Desk');
   const available = [new Set(regular.getCharacterSet()), new Set(bold.getCharacterSet())];
   const [width, height] = PageSizes.A4,
     margin = 50;

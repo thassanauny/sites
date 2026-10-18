@@ -18,13 +18,13 @@ function isPublicSupabaseKey(key: string): boolean {
 
 export default defineConfig(({ mode, command }) => {
   const testing = process.env.VITEST === 'true' && mode === 'test' && command !== 'build'
-  const shared = loadEnv(mode, resolve(process.cwd(), '../../publishing'), 'VITE_')
+  const shared = loadEnv(mode, resolve(process.cwd(), '../../websites'), 'VITE_')
   const env = loadEnv(mode, process.cwd(), '')
   const supabaseUrl = process.env.VITE_SUPABASE_URL !== undefined ? process.env.VITE_SUPABASE_URL.trim() : env.VITE_SUPABASE_URL?.trim() || shared.VITE_SUPABASE_URL?.trim() || ''
   const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY !== undefined ? process.env.VITE_SUPABASE_ANON_KEY.trim() : env.VITE_SUPABASE_ANON_KEY?.trim() || shared.VITE_SUPABASE_ANON_KEY?.trim() || ''
   if (command === 'build' && (!supabaseUrl || !supabaseKey)) {
     throw new Error(
-      "iou production builds require VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. Set both in the app's .env.local, shared ../../publishing/.env.local, or build environment before publishing.",
+      "iou production builds require VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. Set both in the app's .env.local, shared ../../websites/.env.local, or build environment before publishing.",
     )
   }
   if (!testing && supabaseKey && !isPublicSupabaseKey(supabaseKey)) {

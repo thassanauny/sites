@@ -1,4 +1,4 @@
-# Utility Desk Lite third-party notices
+# Utility Desk third-party notices
 
 These packages are bundled locally. License texts are in [licenses/](licenses/). Their notices apply to the respective components.
 
@@ -30,7 +30,7 @@ The JavaScript wrapper is MIT-licensed. The unmodified @ffmpeg/core 0.12.10 bina
 
 Source and build configuration: [ffmpeg.wasm v0.12.10](https://github.com/ffmpegwasm/ffmpeg.wasm/tree/v0.12.10), including its [Dockerfile](https://github.com/ffmpegwasm/ffmpeg.wasm/blob/v0.12.10/Dockerfile) and [build scripts](https://github.com/ffmpegwasm/ffmpeg.wasm/tree/v0.12.10/build). The Dockerfile pins [FFmpeg n5.1.4](https://github.com/FFmpeg/FFmpeg/tree/n5.1.4) and identifies the component source repositories and revisions for x264, x265, libvpx, LAME, Ogg, Theora, Opus, Vorbis, zlib, WebP, FreeType, FriBidi, HarfBuzz and libass.
 
-The app source, tests, and exact npm lockfile are included under `modules/utility-desk/` in the shared Sites repository, or `source/` in a standalone public distribution. The GPL designation above applies to the FFmpeg core; it is not a newly assigned license for Utility Desk Lite.
+The app source, tests, and exact npm lockfile are included under `modules/utility-desk/` in the shared Sites repository, or `source/` in a standalone public distribution. The GPL designation above applies to the FFmpeg core; it is not a newly assigned license for Utility Desk.
 
 ## PDF.js fonts and character maps
 

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { fitBrand } from '../../ui/fitBrand';
-import { CircleHelp, Columns3, Link, Settings2 } from 'lucide-react';
+import { CircleHelp, Link, Settings2 } from 'lucide-react';
 
 export function WorkspaceHeader({
   atHome,
@@ -36,7 +36,7 @@ export function WorkspaceHeader({
           onClick={onHome}
         >
           <span className="brand-mark">
-            <Columns3 size={23} strokeWidth={2.5} />
+            <img src={`${import.meta.env.BASE_URL}favicon.svg`} width="37" height="37" alt="" />
           </span>
           <span>
             pinboard<span className="brand-dot">.</span>

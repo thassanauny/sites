@@ -2,9 +2,10 @@
 // every public source snapshot ships a copy of this file beside its
 // helper as scripts/snapshot-lib.mjs, so it may only import Node.js built-ins.
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { constants, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseEnv } from 'node:util';
+import { homedir } from 'node:os';
 
 export const manifestName = 'publish-manifest.json';
 export const libraryName = 'snapshot-lib.mjs';
@@ -27,7 +28,7 @@ export function within(parent, child) {
   return !path || (!isAbsolute(path) && path !== '..' && !path.startsWith('..' + sep));
 }
 
-/** The Sites checkout must not be, or sit inside, the development repository (the parent of publishing/). */
+/** The Sites checkout must not be, or sit inside, the development repository (the parent of websites/). */
 export function assertOutsideRepository(file, target, repository = resolve(dirname(file), '..')) {
   if (isShipped(file)) return;
   if (within(realpathSync(repository), existsSync(target) ? realpathSync(target) : resolve(target))) {
@@ -106,7 +107,7 @@ export function approved(name) {
   const parts = name.replaceAll('\\', '/').split('/');
   return parts.every(part => !excludedFolders.includes(part.toLowerCase())
     && !/^(?:readme|agents)(?:\..*)?$/i.test(part)
-    && !/^(?:deployment|publishing)(?:\..*)?$/i.test(part)
+    && !/^(?:deployment|publishing|websites)(?:\..*)?$/i.test(part)
     && !(/^\.env/i.test(part) && name !== '.env.example')
     && !/(?:^|[._-])(?:secrets?|credentials?)(?:[._-]|$)/i.test(part)
     && !/\.(?:pem|key|p12|pfx|sqlite|sqlite3|db|log|dmg|zip)$/i.test(part));
@@ -151,7 +152,7 @@ export function placeholderEnvironment(extra = '') {
 
 /** Point a snapshot Makefile's PUBLISH_SCRIPT at the helper shipped beside it. */
 export function retargetPublishScript(makefile) {
-  writeFileSync(makefile, readFileSync(makefile, 'utf8').replace(/^PUBLISH_SCRIPT\s*\?=\s*\S*publishing\/[\w.-]+\.mjs\s*$/m, 'PUBLISH_SCRIPT ?= ' + helperName));
+  writeFileSync(makefile, readFileSync(makefile, 'utf8').replace(/^PUBLISH_SCRIPT\s*\?=\s*\S*websites\/[\w.-]+\.mjs\s*$/m, 'PUBLISH_SCRIPT ?= ' + helperName));
 }
 
 /** Append a publishing-owned Make target to a snapshot Makefile, once. */
@@ -180,7 +181,7 @@ function fileSettings(directory) {
 }
 
 /** Process environment, then app-local files, then shared defaults; an explicitly empty process value stays authoritative. */
-export function resolveSettings(origin, sharedDirectory = resolve(origin, '../../publishing')) {
+export function resolveSettings(origin, sharedDirectory = resolve(origin, '../../websites')) {
   const shared = fileSettings(sharedDirectory);
   const local = fileSettings(origin);
   const settings = Object.create(null);
@@ -314,16 +315,56 @@ export function replacePaths(pairs, stage, label) {
   }
 }
 
-/**
- * Run the app's Make build and return its dist folder. A publication builds a clean copy of the staged
- * snapshot, so a missing file fails here; a preview builds in place and reuses installed dependencies.
- */
+const dependencyCopy = { recursive: true, verbatimSymlinks: true, mode: constants.COPYFILE_FICLONE };
+
+/** Keep installations local to the source app; source snapshots and output never read this folder. */
+function dependencyCache(origin, stagedSource, env) {
+  if (env.WEBSITE_DEPENDENCY_CACHE === '0' || stat(join(origin, manifestName))) return undefined;
+  const npmOptions = Object.entries(env).filter(([name]) => /^npm_config_/i.test(name)).sort();
+  const option = name => npmOptions.find(([key]) => key.toLowerCase() === 'npm_config_' + name)?.[1];
+  const configFiles = [option('userconfig') || join(env.HOME || homedir(), '.npmrc'),
+    option('globalconfig') || resolve(dirname(process.execPath), '../etc/npmrc')];
+  const key = digest(JSON.stringify({
+    config: configFiles.map(file => existsSync(file) ? digest(readFileSync(file)) : null),
+    node: process.version, platform: process.platform, arch: process.arch,
+    manifest: readFileSync(join(stagedSource, 'package.json'), 'utf8'),
+    lock: readFileSync(join(stagedSource, 'package-lock.json'), 'utf8'),
+    npm: npmOptions, nodeEnvironment: env.NODE_ENV || '',
+  }));
+  const parent = join(origin, '.website-cache');
+  if (!regular(parent, 'directory')) mkdirSync(parent);
+  const root = join(parent, 'dependencies');
+  if (!regular(root, 'directory')) mkdirSync(root);
+  const entry = join(root, key);
+  if (regular(entry, 'directory') && regular(join(entry, 'complete'), 'file')
+      && regular(join(entry, 'node_modules'), 'directory')
+      && regular(join(entry, 'node_modules/.package-lock.json'), 'file')) return { root, entry, ready: true };
+  return { root, entry, ready: false };
+}
+
+/** Check and build fresh staged source, reusing only an exact-key dependency installation. */
 export function buildStagedApp({ run, preview, origin, stagedSource, stage, env, label }) {
   const buildApp = preview ? origin : join(stage, 'build-app');
   if (!preview) cpSync(stagedSource, buildApp, { recursive: true });
+  const cache = preview ? undefined : dependencyCache(origin, stagedSource, env);
+  if (cache?.ready) {
+    cpSync(join(cache.entry, 'node_modules'), join(buildApp, 'node_modules'), dependencyCopy);
+    console.log('Reusing cached dependencies for ' + label + '.');
+  }
+  const started = Date.now();
   run('make', ['-C', buildApp, ...(preview ? ['build'] : ['check', 'build']), 'NODE=' + process.execPath], { stdio: 'inherit', env });
   const dist = join(buildApp, 'dist');
   if (!regular(join(dist, 'index.html'), 'file')) throw new Error('The ' + label + ' build did not produce dist/index.html.');
+  if (cache && !cache.ready && !stat(cache.entry) && regular(join(buildApp, 'node_modules/.package-lock.json'), 'file')) {
+    const pending = mkdtempSync(join(cache.root, '.pending-'));
+    try {
+      cpSync(join(buildApp, 'node_modules'), join(pending, 'node_modules'), dependencyCopy);
+      writeFileSync(join(pending, 'complete'), '1\n');
+      try { renameSync(pending, cache.entry); }
+      catch (error) { if (!['EEXIST', 'ENOTEMPTY'].includes(error.code)) throw error; }
+    } finally { rmSync(pending, { recursive: true, force: true }); }
+  }
+  console.log(label + ' checks/build: ' + ((Date.now() - started) / 1000).toFixed(1) + 's.');
   return dist;
 }
 

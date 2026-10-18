@@ -1,7 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="16" fill="#0b6b57"/>
-  <g transform="translate(32 32) scale(1.35) translate(-32 -32)">
-    <rect x="21" y="14" width="9" height="30" rx="4.5" fill="#f7f6f2" transform="rotate(23 25.5 29)"/>
-    <rect x="36" y="22" width="9" height="30" rx="4.5" fill="#b8d2ba" transform="rotate(23 40.5 37)"/>
-  </g>
+  <rect width="64" height="64" rx="16" fill="#064c3d"/>
+  <path d="M14 13H30L28 18L31 23L28 28L31 33L28 38L30 43L28 51L25 48L22 51L19 48L16 51L13 48L10 51V17A4 4 0 0 1 14 13Z" fill="#f7f5e6"/>
+  <path d="M35 13H50A4 4 0 0 1 54 17V51L51 48L48 51L45 48L42 51L39 48L36 51H34L36 43L33 38L36 33L33 28L36 23L33 18Z" fill="#b8d2ba"/>
+  <rect x="13" y="24" width="13" height="3.5" rx="1.75" fill="#064c3d"/>
+  <rect x="13" y="32" width="13" height="3.5" rx="1.75" fill="#064c3d"/>
+  <rect x="39" y="24" width="12" height="3.5" rx="1.75" fill="#064c3d"/>
+  <rect x="39" y="32" width="12" height="3.5" rx="1.75" fill="#064c3d"/>
 </svg>

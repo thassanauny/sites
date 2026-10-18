@@ -19,7 +19,6 @@ h1 span { color: #67835e; }
 .app-card { display: flex; flex-direction: column; padding: 30px; border: 1px solid #dfe5da; border-radius: 16px; background: #fff; }
 .card-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
 .app-icon { display: block; border-radius: 12px; }
-.utility-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 12px; background: #233a30; color: #e7eee3; font-size: 32px; }
 .platform { font-size: 11px; color: #647168; border: 1px solid #dfe5da; border-radius: 30px; padding: 7px 12px; }
 h2 { margin: 0 0 8px; font-size: 27px; font-weight: 600; letter-spacing: -.8px; }
 .tagline { margin: 0 0 18px; color: #355f49; font-size: 14px; }

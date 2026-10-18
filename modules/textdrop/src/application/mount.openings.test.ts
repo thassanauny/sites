@@ -180,7 +180,7 @@ describe('TextDrop opening snippets', () => {
     expect(location.hash).toBe(`#/p/${second.code}`);
     expect(element<HTMLInputElement>('join-code').value).toBe(second.code);
     await join(second.code);
-    expect(element('page-code').textContent).toBe(second.code);
+    expect(element('workspace').hidden).toBe(false);
     expect(rows()).toEqual([second.code]);
   });
 
@@ -200,7 +200,7 @@ describe('TextDrop opening snippets', () => {
     expect(element<HTMLInputElement>('join-code').value).toBe(second.code);
     expect(rows()).toEqual([]);
     await join(second.code);
-    expect(element('page-code').textContent).toBe(second.code);
+    expect(element('workspace').hidden).toBe(false);
     expect(rows()).toEqual([second.code]);
   });
 

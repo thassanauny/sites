@@ -19,7 +19,7 @@ vi.mock('vite', async (importOriginal) => {
       settings.folders.push(path);
       return settings.real
         ? actual.loadEnv(mode, path, prefixes)
-        : path.endsWith('/publishing')
+        : path.endsWith('/websites')
           ? settings.shared
           : settings.local;
     },
@@ -120,7 +120,7 @@ describe('Pinboard static configuration', () => {
       command: 'build',
     });
     expect(settings.folders).toEqual([
-      resolve(import.meta.dirname, '../../publishing'),
+      resolve(import.meta.dirname, '../../websites'),
       import.meta.dirname,
     ]);
   });
@@ -151,7 +151,7 @@ describe('pinboard publishing settings from real env files', () => {
     settings.real = true;
     temporary = mkdtempSync(join(tmpdir(), 'pinboard-env-'));
     appDirectory = join(temporary, 'apps', 'pinboard');
-    publishingDirectory = join(temporary, 'publishing');
+    publishingDirectory = join(temporary, 'websites');
     mkdirSync(appDirectory, { recursive: true });
     mkdirSync(publishingDirectory);
   });

@@ -31,7 +31,6 @@ describe('page template', () => {
         'join',
         'share',
         'settings',
-        'copyCode',
         'copyText',
         'download',
         'retry',

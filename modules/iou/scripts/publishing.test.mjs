@@ -28,7 +28,7 @@ for (const [name, settings] of [
     assert.equal(result.status, 1)
     assert.match(result.stderr, /iou production builds require VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY/)
     assert.match(result.stderr, /app's \.env\.local/)
-    assert.match(result.stderr, /shared \.\.\/\.\.\/publishing\/\.env\.local/)
+    assert.match(result.stderr, /shared \.\.\/\.\.\/websites\/\.env\.local/)
     assert.match(result.stderr, /or build environment before publishing/)
     assert.equal(existsSync(output), false, 'Unconfigured builds must not produce output')
   })

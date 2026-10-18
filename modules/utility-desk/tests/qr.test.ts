@@ -76,7 +76,7 @@ describe('QR content types', () => {
   });
 });
 
-// Copied from webapps/utility-desk/tests/qr.test.cjs ("payload vectors shared with Lite stay fixed for every QR type").
+// Copied from webapps/utility-desk/tests/qr.test.cjs ("payload vectors shared with the browser app stay fixed for every QR type").
 // Apps never import each other, so each keeps its own copy: change both files together.
 const sharedVectors: [QrType, QrValues, string][] = [
   ['text', { text: 'https://example.com/?a=1&b=2' }, 'https://example.com/?a=1&b=2'],

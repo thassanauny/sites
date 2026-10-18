@@ -285,7 +285,7 @@ describe('TextDrop synchronization and save status', () => {
 
   it('hides a confirmation toast after about 2.4 seconds', async () => {
     await start(`#/p/${first.code}`);
-    element('copy-code').click();
+    element('copy-text').click();
     await flush();
     expect(element('toast').hidden).toBe(false);
     await vi.advanceTimersByTimeAsync(2300);

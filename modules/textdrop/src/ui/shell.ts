@@ -30,12 +30,10 @@ export function shell(): string {
           </section>
         </section>
         <section id="workspace" class="workspace" hidden aria-labelledby="page-name">
-          <div class="workspace-heading"><a class="back-link" href="#/">${icon('back')}Home</a><span class="workspace-kind">SHARED SNIPPET</span></div>
           <div class="page-header">
             <div><h1><button type="button" class="snippet-title-button" id="rename-page" title="Rename snippet" aria-haspopup="dialog"><span class="snippet-title-text"><span id="page-name">Untitled snippet</span><span class="brand-dot">.</span></span>${icon('rename')}</button></h1></div>
 
           </div>
-          <div class="code-strip"><span class="code-label">SNIPPET CODE</span><code id="page-code"></code><button class="icon-button" id="copy-code" aria-label="Copy snippet code" title="Copy snippet code">${icon('copy')}</button><span class="code-hint">Keep this code to open your snippet again.</span></div>
           <div class="editor-card">
             <div class="editor-toolbar"><span class="document-label"><span class="document-dot"></span>Plain text</span><div class="editor-actions"><button class="text-button" id="copy-text">${icon('copy')}Copy text</button><button class="text-button" id="download">${icon('download')}Download</button></div></div>
             <label class="sr-only" for="editor">Shared snippet text</label>
@@ -137,8 +135,6 @@ export function shellElements(root: HTMLElement) {
     snippetActions: get<HTMLElement>('snippet-actions'),
     share: get<HTMLButtonElement>('share'),
     settings: get<HTMLButtonElement>('settings'),
-    pageCode: get<HTMLElement>('page-code'),
-    copyCode: get<HTMLButtonElement>('copy-code'),
     copyText: get<HTMLButtonElement>('copy-text'),
     download: get<HTMLButtonElement>('download'),
     editor: get<HTMLTextAreaElement>('editor'),

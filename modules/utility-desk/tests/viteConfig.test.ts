@@ -89,9 +89,9 @@ describe('pdf.js assets in the dev server', () => {
   });
 
   it('follows the configured base path and leaves other URLs to Vite', () => {
-    expect(request('/tools/lite/pdfjs/standard_fonts/LiberationSans-Regular.ttf', { base: '/tools/lite/' }).status).toBe(200);
-    expect(request('/tools/lite/pdfjs/standard_fonts/LiberationSans-Regular.ttf', { base: '/tools/lite' }).status).toBe(200);
-    expect(request('/pdfjs/standard_fonts/LiberationSans-Regular.ttf', { base: '/tools/lite/' }).passedThrough).toBe(true);
+    expect(request('/tools/utility-desk/pdfjs/standard_fonts/LiberationSans-Regular.ttf', { base: '/tools/utility-desk/' }).status).toBe(200);
+    expect(request('/tools/utility-desk/pdfjs/standard_fonts/LiberationSans-Regular.ttf', { base: '/tools/utility-desk' }).status).toBe(200);
+    expect(request('/pdfjs/standard_fonts/LiberationSans-Regular.ttf', { base: '/tools/utility-desk/' }).passedThrough).toBe(true);
     // A relative base ('./') is resolved to '/' by the dev server.
     expect(request('/pdfjs/standard_fonts/LiberationSans-Regular.ttf', { base: './' }).status).toBe(200);
   });

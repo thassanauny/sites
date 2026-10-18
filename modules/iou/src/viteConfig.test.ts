@@ -22,7 +22,7 @@ describe('iou shared publishing configuration', () => {
     vi.stubEnv('VITE_BASE_PATH', undefined)
     temporary = mkdtempSync(join(tmpdir(), 'iou-env-'))
     appDirectory = join(temporary, 'apps', 'iou')
-    publishingDirectory = join(temporary, 'publishing')
+    publishingDirectory = join(temporary, 'websites')
     mkdirSync(appDirectory, { recursive: true })
     mkdirSync(publishingDirectory)
     vi.spyOn(process, 'cwd').mockReturnValue(appDirectory)

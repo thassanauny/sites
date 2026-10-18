@@ -79,9 +79,12 @@ describe('EPUB archive limits', () => {
   it('refuses archives whose entries add up past the total cap', () => {
     const count = Math.floor(LIMITS.inflatedBytes / LIMITS.archiveEntryBytes) + 1;
     const files: Record<string, Uint8Array> = {};
-    for (let i = 0; i < count; i++) files[`part${i}`] = new Uint8Array(LIMITS.archiveEntryBytes);
-    expect(() => unzipLimited(zipSync(files, { level: 9 }))).toThrow(/inflates to more than 128 MB/);
-  });
+    const entry = new Uint8Array(LIMITS.archiveEntryBytes);
+    for (let i = 0; i < count; i++) files[`part${i}`] = entry;
+    // Fast compression keeps the same real inflated payload without spending seconds optimizing zeroes.
+    const bomb = zipSync(files, { level: 1 });
+    expect(() => unzipLimited(bomb)).toThrow(/inflates to more than 128 MB/);
+  }, 30_000);
   it('still reads a normal archive', () => {
     expect(Object.keys(unzipLimited(zipSync({ 'a.txt': strToU8('a'), 'dir/': new Uint8Array(0) })))).toEqual(['a.txt']);
   });
