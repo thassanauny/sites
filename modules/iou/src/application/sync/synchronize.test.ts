@@ -286,6 +286,26 @@ describe('late invitation responses', () => {
 })
 
 describe('completed queued joins', () => {
+  it.each([false, true])('preserves an explicit unpin before a cached join completes (during request: %s)', async duringRequest => {
+    const joined = group()
+    const initial = queueJoin(
+      { ...emptyStore(), groups: [joined], pinnedIds: duringRequest ? ['trip'] : [], memberByGroup: { trip: 'amy' }, cloudRevisions: { trip: 1 } },
+      { code: joined.inviteCode, name: 'Amy', memberId: 'amy', createdAt: time(1) },
+    )
+    const f = fixture(initial, { group: joined, revision: 1 })
+    if (duringRequest)
+      f.cloud.join = vi.fn(async () => {
+        f.device.update(store => ({ ...store, pinnedIds: [] }))
+        return { group: joined, revision: 1 }
+      })
+
+    await syncOffline(f.device, f.cloud)
+
+    expect(f.store().pinnedIds).toEqual([])
+    expect(f.store().memberByGroup.trip).toBe('amy')
+    expect(f.store().pendingJoins).toEqual([])
+  })
+
   it('pins a group after an offline join request succeeds, preserving other pins', async () => {
     const other = { ...group(), id: 'other', name: 'Other', inviteCode: 'o'.repeat(32) }
     const joined = group()

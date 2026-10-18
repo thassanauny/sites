@@ -42,8 +42,8 @@ describe('split PDF output', () => {
     for (let i = 0; i < pages; i++) doc.addPage([100, 100 + i]);
     return doc.save();
   };
-  const choose = async (name: string, pages: number) => {
-    selectFiles(root, [bytesFile(name, await pdfBytes(pages), 'application/pdf')]);
+  const choose = async (name: string, pages: number, bytes?: Uint8Array) => {
+    selectFiles(root, [bytesFile(name, bytes ?? (await pdfBytes(pages)), 'application/pdf')]);
     await vi.waitFor(() => expect(root.textContent).toContain(`${name}: ${pages} pages`));
   };
   const heights = async (blob: Blob) => {
@@ -98,10 +98,12 @@ describe('split PDF output', () => {
   it('resets a finished status for another PDF but keeps it when the same PDF is chosen again', async () => {
     captureDownloads();
     cleanup = mountSplit(root);
-    await choose('first.pdf', 2);
+    // Reuse the actual bytes: regenerating a PDF can change its creation timestamp.
+    const first = await pdfBytes(2);
+    await choose('first.pdf', 2, first);
     press(root, 'Save PDF pages →');
     await vi.waitFor(() => expect(statuses(root)[0]).toBe('Done. 2 PDF file(s) downloaded as ZIP.'));
-    await choose('first.pdf', 2);
+    await choose('first.pdf', 2, first);
     await settle();
     expect(statuses(root)[0]).toBe('Done. 2 PDF file(s) downloaded as ZIP.');
     await choose('second.pdf', 2);

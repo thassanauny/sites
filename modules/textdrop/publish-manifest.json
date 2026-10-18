@@ -37,7 +37,7 @@
     "scripts/catalog.mjs": "d9eea917e6c23e09d90f4f32a9a3d787e77e916be44f4f37c7bf35b072b33366",
     "scripts/check-shared-build.mjs": "5ef8c033d030448e16cb9b4951eeae1c34af808e2e890444b9c5c41c4e3efbdd",
     "scripts/prepare-shared.mjs": "e6f10f9be7f1088bd1235ea242dbd40c8c16a2e66186261f05756e0ed2939f44",
-    "scripts/snapshot-lib.mjs": "9e5ea6bebeed21a67c3cc7b0ffa136a5e860eac8ba2ee6b6dcca93aa865bfa28",
+    "scripts/snapshot-lib.mjs": "05dffab1a73b37469d3aeb0393236c97a257ff7b940f54e9c417d801b03d135f",
     "src/application/PageSession.test.ts": "181730bcc795b945a0d356933daacebe3382d7e7b5bc2779f939a36260a0e36c",
     "src/application/PageSession.ts": "b7ea87b2d92a35402efd3fb6804078fa05665b51f13a524f136783a760adcd24",
     "src/application/dialogs.test.ts": "28d84c57028dd38cfe4cc623c7766c7126aeafaed6a284c804a7fb19b54c8cc1",

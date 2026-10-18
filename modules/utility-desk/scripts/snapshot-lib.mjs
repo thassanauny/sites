@@ -2,11 +2,10 @@
 // every public source snapshot ships a copy of this file beside its
 // helper as scripts/snapshot-lib.mjs, so it may only import Node.js built-ins.
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseEnv } from 'node:util';
-import { homedir } from 'node:os';
+import { homedir, release } from 'node:os';
 
 export const manifestName = 'publish-manifest.json';
 export const libraryName = 'snapshot-lib.mjs';
@@ -316,75 +315,79 @@ export function replacePaths(pairs, stage, label) {
   }
 }
 
-const dependencyCopy = { recursive: true, verbatimSymlinks: true };
-
-/** Clone dependency files on APFS so staging a large cache copies metadata, not file contents. */
-function copyDependencies(source, destination) {
-  if (process.platform === 'darwin') {
-    try {
-      execFileSync('/bin/cp', ['-cR', source, destination], { stdio: 'ignore' });
-      return;
-    } catch {
-      rmSync(destination, { recursive: true, force: true });
-    }
-  }
-  cpSync(source, destination, dependencyCopy);
-}
-
-/** Keep installations local to the source app; source snapshots and output never read this folder. */
-function dependencyCache(origin, stagedSource, env) {
-  if (env.WEBSITE_DEPENDENCY_CACHE === '0' || stat(join(origin, manifestName))) return undefined;
+function npmContext(env) {
   const npmOptions = Object.entries(env).filter(([name]) => /^npm_config_/i.test(name)).sort();
   const option = name => npmOptions.find(([key]) => key.toLowerCase() === 'npm_config_' + name)?.[1];
   const configFiles = [option('userconfig') || join(env.HOME || homedir(), '.npmrc'),
     option('globalconfig') || resolve(dirname(process.execPath), '../etc/npmrc')];
-  const key = digest(JSON.stringify({
-    config: configFiles.map(file => existsSync(file) ? digest(readFileSync(file)) : null),
-    node: process.version, platform: process.platform, arch: process.arch,
-    manifest: readFileSync(join(stagedSource, 'package.json'), 'utf8'),
-    lock: readFileSync(join(stagedSource, 'package-lock.json'), 'utf8'),
-    npm: npmOptions, nodeEnvironment: env.NODE_ENV || '',
-  }));
-  const parent = join(origin, '.website-cache');
-  if (!regular(parent, 'directory')) mkdirSync(parent);
-  const root = join(parent, 'dependencies');
-  if (!regular(root, 'directory')) mkdirSync(root);
-  const entry = join(root, key);
-  if (regular(entry, 'directory') && regular(join(entry, 'complete'), 'file')
-      && regular(join(entry, 'node_modules'), 'directory')
-      && regular(join(entry, 'node_modules/.package-lock.json'), 'file')) return { root, entry, ready: true };
-  return { root, entry, ready: false };
+  return { config: configFiles.map(file => existsSync(file) ? digest(readFileSync(file)) : null), npm: npmOptions };
 }
 
-/** Check and build fresh staged source, reusing only an exact-key dependency installation. */
+function cacheDirectory(origin, name) {
+  const parent = join(origin, '.website-cache');
+  for (const directory of [parent, join(parent, name)]) {
+    if (!regular(directory, 'directory')) mkdirSync(directory, { recursive: true });
+    regular(directory, 'directory');
+  }
+  return join(parent, name);
+}
+
+/** Include installed build tools, including optional PDF interoperability coverage, without running them. */
+function toolIdentity(command, env) {
+  const suffixes = process.platform === 'win32' ? ['', ...(env.PATHEXT || '.EXE;.CMD;.BAT').split(';')] : [''];
+  const paths = command.includes('/') || command.includes('\\') ? [resolve(command)]
+    : (env.PATH || '').split(delimiter).flatMap(directory => suffixes.map(suffix => join(directory, command + suffix)));
+  for (const candidate of paths) {
+    if (!existsSync(candidate)) continue;
+    const path = realpathSync(candidate), info = stat(path);
+    if (!info.isFile() || (process.platform !== 'win32' && !(info.mode & 0o111))) continue;
+    const pkg = resolve(dirname(path), '../package.json');
+    return { path, hash: digest(readFileSync(path)), package: stat(pkg)?.isFile() ? digest(readFileSync(pkg)) : null };
+  }
+  return null;
+}
+
+/** Private attestations bind successful checks to exact public inputs, environment and runtime/tool versions. */
+function verifiedBuild(origin, sourceFiles, env) {
+  if (stat(join(origin, manifestName))) return undefined;
+  const enabled = env.WEBSITE_BUILD_CACHE !== '0' && env.WEBSITE_DEPENDENCY_CACHE !== '0';
+  const environment = Object.entries(env).filter(([name]) => !['WEBSITE_BUILD_CACHE', 'WEBSITE_DEPENDENCY_CACHE'].includes(name)).sort();
+  const key = digest(JSON.stringify({
+    format: 1, sourceFiles, environment, npm: npmContext(env),
+    runtime: { versions: process.versions, platform: process.platform, arch: process.arch, os: release(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+    tools: ['make', env.NPM || 'npm', 'qpdf'].map(command => toolIdentity(command, env)),
+  }));
+  const parent = join(origin, '.website-cache');
+  if (!enabled) regular(parent, 'directory');
+  const root = enabled ? cacheDirectory(origin, 'verified') : join(parent, 'verified');
+  regular(root, 'directory');
+  return { enabled, root, entry: join(root, key + '.json') };
+}
+
+function previouslyVerified(cache, manifest) {
+  if (!cache?.enabled || manifest?.format !== 1 || !hashMap(manifest.sourceFiles) || !regular(cache.entry, 'file')) return false;
+  try { return JSON.parse(readFileSync(cache.entry, 'utf8')).manifest === digest(JSON.stringify(manifest)); }
+  catch { return false; }
+}
+
+function saveVerification(cache, manifest) {
+  if (!cache?.enabled) return;
+  const pending = mkdtempSync(join(cache.root, '.pending-'));
+  try {
+    const record = join(pending, 'verified.json');
+    writeFileSync(record, JSON.stringify({ manifest: digest(JSON.stringify(manifest)) }) + '\n');
+    renameSync(record, cache.entry);
+  } finally { rmSync(pending, { recursive: true, force: true }); }
+}
+
+/** Check and build fresh staged source; Make installs dependencies through npm's download cache. */
 export function buildStagedApp({ run, preview, origin, stagedSource, stage, env, label }) {
   const buildApp = preview ? origin : join(stage, 'build-app');
   if (!preview) cpSync(stagedSource, buildApp, { recursive: true });
-  const cache = preview ? undefined : dependencyCache(origin, stagedSource, env);
-  const cacheStarted = Date.now();
-  if (cache?.ready) {
-    copyDependencies(join(cache.entry, 'node_modules'), join(buildApp, 'node_modules'));
-    console.log('Reusing cached dependencies for ' + label + ' (' + ((Date.now() - cacheStarted) / 1000).toFixed(1) + 's to stage).');
-  }
   const started = Date.now();
   run('make', ['-C', buildApp, ...(preview ? ['build'] : ['check', 'build']), 'NODE=' + process.execPath], { stdio: 'inherit', env });
   const dist = join(buildApp, 'dist');
   if (!regular(join(dist, 'index.html'), 'file')) throw new Error('The ' + label + ' build did not produce dist/index.html.');
-  if (cache && !cache.ready && !stat(cache.entry) && regular(join(buildApp, 'node_modules/.package-lock.json'), 'file')) {
-    const pending = mkdtempSync(join(cache.root, '.pending-'));
-    try {
-      const cacheStarted = Date.now();
-      try { renameSync(join(buildApp, 'node_modules'), join(pending, 'node_modules')); }
-      catch (error) {
-        if (error.code !== 'EXDEV') throw error;
-        copyDependencies(join(buildApp, 'node_modules'), join(pending, 'node_modules'));
-      }
-      writeFileSync(join(pending, 'complete'), '1\n');
-      try { renameSync(pending, cache.entry); }
-      catch (error) { if (!['EEXIST', 'ENOTEMPTY'].includes(error.code)) throw error; }
-      console.log('Saved dependency cache for ' + label + ' (' + ((Date.now() - cacheStarted) / 1000).toFixed(1) + 's).');
-    } finally { rmSync(pending, { recursive: true, force: true }); }
-  }
   console.log(label + ' checks/build: ' + ((Date.now() - started) / 1000).toFixed(1) + 's.');
   return dist;
 }
@@ -395,7 +398,7 @@ export function buildStagedApp({ run, preview, origin, stagedSource, stage, env,
  * validate(target), snapshot(origin, stagedSource), version(stagedSource), environment(origin, stagedSource),
  * allowed(kind, name) for built files, and the optional check(dist) and report(stagedSite, { version, env }).
  */
-export function prepareManagedApp(spec, origin, target, run, { preview = false } = {}) {
+export function prepareManagedApp(spec, origin, target, run, { preview = false, reuseVerified = true } = {}) {
   const { app: name, label, site: siteName, source: sourceName } = spec;
   requireNode24(label + ' preparation');
   if (!regular(origin, 'directory')) throw new Error('Choose the ' + label + ' application source.');
@@ -409,6 +412,17 @@ export function prepareManagedApp(spec, origin, target, run, { preview = false }
     spec.snapshot(origin, stagedSource);
     const version = spec.version(stagedSource);
     const env = spec.environment(origin, stagedSource);
+    const sourceFiles = collect(stagedSource);
+    const cache = preview ? undefined : verifiedBuild(origin, sourceFiles, env);
+    const marker = join(target, sourceName, manifestName);
+    const previous = regular(marker, 'file') ? JSON.parse(readFileSync(marker, 'utf8')) : undefined;
+    if (reuseVerified && previouslyVerified(cache, previous) && matches(sourceFiles, previous.sourceFiles)) {
+      spec.validate(target);
+      console.log('Reusing verified ' + label + ' ' + version + ' (inputs and output hashes unchanged).');
+      return previous;
+    }
+    // A failed forced rerun must not leave an earlier success eligible for reuse.
+    if (cache && regular(cache.entry, 'file')) rmSync(cache.entry);
     const dist = buildStagedApp({ run, preview, origin, stagedSource, stage, env, label });
     spec.check?.(dist);
     mkdirSync(stagedSite);
@@ -420,6 +434,7 @@ export function prepareManagedApp(spec, origin, target, run, { preview = false }
     // Detect edits or links introduced while Make was running before replacing anything.
     spec.validate(target);
     replacePaths([[stagedSite, join(target, siteName)], [stagedSource, join(target, sourceName)]], stage, label);
+    saveVerification(cache, manifest);
     console.log('Prepared ' + label + ' website and source snapshot.');
     return manifest;
   });

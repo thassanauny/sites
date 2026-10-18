@@ -111,7 +111,8 @@ export async function syncOffline(device: SyncDevice, cloud: SyncTransport, unre
         return {
           ...next,
           memberByGroup: { ...next.memberByGroup, [group.id]: id },
-          pinnedIds: next.pinnedIds.includes(group.id) ? next.pinnedIds : [...next.pinnedIds, group.id],
+          // Cached joins already selected a member and pinned locally; keep any later unpin.
+          pinnedIds: store.memberByGroup[group.id] || next.pinnedIds.includes(group.id) ? next.pinnedIds : [...next.pinnedIds, group.id],
           pendingJoins: next.pendingJoins.filter(item => item.code !== request.code),
         }
       })
