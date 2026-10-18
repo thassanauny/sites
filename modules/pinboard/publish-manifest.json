@@ -37,7 +37,7 @@
     "scripts/catalog.mjs": "d9eea917e6c23e09d90f4f32a9a3d787e77e916be44f4f37c7bf35b072b33366",
     "scripts/check-shared-build.mjs": "5ef8c033d030448e16cb9b4951eeae1c34af808e2e890444b9c5c41c4e3efbdd",
     "scripts/prepare-shared.mjs": "e6f10f9be7f1088bd1235ea242dbd40c8c16a2e66186261f05756e0ed2939f44",
-    "scripts/snapshot-lib.mjs": "ebe7a69a5f867ec12fe3ddb6abbedf9363dd5f1dd3de647ea5720ea72b8495d0",
+    "scripts/snapshot-lib.mjs": "9e5ea6bebeed21a67c3cc7b0ffa136a5e860eac8ba2ee6b6dcca93aa865bfa28",
     "src/application/App.tsx": "ccab40919738c9cd8f9d16fe775140a6d6ad39ebc3be37b7171801e02f2b7f73",
     "src/application/accessibility.test.tsx": "dcf87b49733bd7918705ac9897919736d3eedeb70d6c94745f866348c0d6a596",
     "src/application/archiving.test.tsx": "9f6cec8549f1175a01ffd9dbcb7313d37dc74af6456abe9fe3d0b5aa2a04e87f",

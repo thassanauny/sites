@@ -94,6 +94,11 @@ const typeInto = (input: Element | null, value: string) =>
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
     input!.dispatchEvent(new Event('input', { bubbles: true }))
   })
+const selectValue = (select: HTMLSelectElement, value: string) =>
+  act(async () => {
+    select.value = value
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+  })
 const submit = (form: Element | null) =>
   act(async () => {
     form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
@@ -535,6 +540,33 @@ describe('creating a shared group', () => {
     expect(host.querySelector('[aria-label="Unpin Trip"]')).not.toBeNull()
     expect(host.querySelector('[aria-label="Open Group b"]')).not.toBeNull()
     expect(host.querySelector('[aria-label="Open Group a"]')).toBeNull()
+  })
+})
+
+describe('joining a shared group', () => {
+  it('pins the joined group and preserves other tabs’ pin changes', async () => {
+    const other = makeGroup('b')
+    const joined = makeGroup('c')
+    saveStore({ ...cached('b'), pinnedIds: ['b'] })
+    serverHas(other, joined)
+    cloud.join.mockResolvedValue({ group: joined, revision: 1 })
+    await mount()
+    await clickButton('Join a group')
+    await typeInto(host.querySelector('input[placeholder="Paste your group’s code"]'), joined.inviteCode)
+    await submit(host.querySelector('dialog form'))
+    expect(host.textContent).toContain('Who are you in this group?')
+
+    saveStore({ ...loadStore().store, pinnedIds: ['b'] })
+    await selectValue(host.querySelector('select')!, 'amy')
+    await submit(host.querySelector('dialog form'))
+
+    expect(loadStore().store.pinnedIds).toEqual(['b', 'c'])
+    expect(loadStore().store.memberByGroup.c).toBe('amy')
+    await act(async () => {
+      window.location.hash = '#/'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(host.querySelector('[aria-label="Unpin Group c"]')).not.toBeNull()
   })
 })
 

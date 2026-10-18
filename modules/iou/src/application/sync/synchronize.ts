@@ -108,7 +108,12 @@ export async function syncOffline(device: SyncDevice, cloud: SyncTransport, unre
             { ...group, members: [...group.members, { id, name: request.name }], updatedAt: new Date(Math.max(Date.parse(group.updatedAt), Date.parse(request.createdAt))).toISOString() },
             id,
           )
-        return { ...next, memberByGroup: { ...next.memberByGroup, [group.id]: id }, pendingJoins: next.pendingJoins.filter(item => item.code !== request.code) }
+        return {
+          ...next,
+          memberByGroup: { ...next.memberByGroup, [group.id]: id },
+          pinnedIds: next.pinnedIds.includes(group.id) ? next.pinnedIds : [...next.pinnedIds, group.id],
+          pendingJoins: next.pendingJoins.filter(item => item.code !== request.code),
+        }
       })
     } catch (error) {
       failure ??= error

@@ -285,6 +285,29 @@ describe('late invitation responses', () => {
   })
 })
 
+describe('completed queued joins', () => {
+  it('pins a group after an offline join request succeeds, preserving other pins', async () => {
+    const other = { ...group(), id: 'other', name: 'Other', inviteCode: 'o'.repeat(32) }
+    const joined = group()
+    const initial = queueJoin(
+      { ...emptyStore(), groups: [other], pinnedIds: ['other'], cloudRevisions: { other: 1 } },
+      {
+        code: joined.inviteCode,
+        name: 'Amy',
+        memberId: 'amy',
+        createdAt: time(1),
+      },
+    )
+    const f = fixture(initial, { group: joined, revision: 1 })
+
+    await syncOffline(f.device, f.cloud)
+
+    expect(f.store().pinnedIds).toEqual(['other', 'trip'])
+    expect(f.store().memberByGroup.trip).toBe('amy')
+    expect(f.store().pendingJoins).toEqual([])
+  })
+})
+
 describe('refreshing only what changed', () => {
   const named = (id: string, name = `Group ${id}`): Group => ({ ...group(), id, name, inviteCode: id.repeat(32).slice(0, 32) })
   const cached = (...groups: Group[]): AppStore => ({ ...emptyStore(), groups, cloudRevisions: Object.fromEntries(groups.map(item => [item.id, 1])) })

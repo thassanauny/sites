@@ -256,7 +256,11 @@ export default function App() {
         selectedId || latest.members.some(member => member.id === id)
           ? base
           : queueGroup(base, { ...latest, members: [...latest.members, { id, name: name.trim() }], updatedAt: editStamp(latest.updatedAt) })
-      const next = { ...added, memberByGroup: { ...added.memberByGroup, [joined.id]: id } }
+      const next = {
+        ...added,
+        memberByGroup: { ...added.memberByGroup, [joined.id]: id },
+        pinnedIds: base.pinnedIds.includes(joined.id) ? base.pinnedIds : [...base.pinnedIds, joined.id],
+      }
       return !navigator.onLine || syncError ? queueJoin(next, { code: joined.inviteCode, name, memberId: id, createdAt: new Date().toISOString() }) : next
     })
     void sync()

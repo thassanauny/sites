@@ -2,7 +2,8 @@
 // every public source snapshot ships a copy of this file beside its
 // helper as scripts/snapshot-lib.mjs, so it may only import Node.js built-ins.
 import { createHash } from 'node:crypto';
-import { constants, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseEnv } from 'node:util';
 import { homedir } from 'node:os';
@@ -315,7 +316,20 @@ export function replacePaths(pairs, stage, label) {
   }
 }
 
-const dependencyCopy = { recursive: true, verbatimSymlinks: true, mode: constants.COPYFILE_FICLONE };
+const dependencyCopy = { recursive: true, verbatimSymlinks: true };
+
+/** Clone dependency files on APFS so staging a large cache copies metadata, not file contents. */
+function copyDependencies(source, destination) {
+  if (process.platform === 'darwin') {
+    try {
+      execFileSync('/bin/cp', ['-cR', source, destination], { stdio: 'ignore' });
+      return;
+    } catch {
+      rmSync(destination, { recursive: true, force: true });
+    }
+  }
+  cpSync(source, destination, dependencyCopy);
+}
 
 /** Keep installations local to the source app; source snapshots and output never read this folder. */
 function dependencyCache(origin, stagedSource, env) {
@@ -347,9 +361,10 @@ export function buildStagedApp({ run, preview, origin, stagedSource, stage, env,
   const buildApp = preview ? origin : join(stage, 'build-app');
   if (!preview) cpSync(stagedSource, buildApp, { recursive: true });
   const cache = preview ? undefined : dependencyCache(origin, stagedSource, env);
+  const cacheStarted = Date.now();
   if (cache?.ready) {
-    cpSync(join(cache.entry, 'node_modules'), join(buildApp, 'node_modules'), dependencyCopy);
-    console.log('Reusing cached dependencies for ' + label + '.');
+    copyDependencies(join(cache.entry, 'node_modules'), join(buildApp, 'node_modules'));
+    console.log('Reusing cached dependencies for ' + label + ' (' + ((Date.now() - cacheStarted) / 1000).toFixed(1) + 's to stage).');
   }
   const started = Date.now();
   run('make', ['-C', buildApp, ...(preview ? ['build'] : ['check', 'build']), 'NODE=' + process.execPath], { stdio: 'inherit', env });
@@ -358,10 +373,16 @@ export function buildStagedApp({ run, preview, origin, stagedSource, stage, env,
   if (cache && !cache.ready && !stat(cache.entry) && regular(join(buildApp, 'node_modules/.package-lock.json'), 'file')) {
     const pending = mkdtempSync(join(cache.root, '.pending-'));
     try {
-      cpSync(join(buildApp, 'node_modules'), join(pending, 'node_modules'), dependencyCopy);
+      const cacheStarted = Date.now();
+      try { renameSync(join(buildApp, 'node_modules'), join(pending, 'node_modules')); }
+      catch (error) {
+        if (error.code !== 'EXDEV') throw error;
+        copyDependencies(join(buildApp, 'node_modules'), join(pending, 'node_modules'));
+      }
       writeFileSync(join(pending, 'complete'), '1\n');
       try { renameSync(pending, cache.entry); }
       catch (error) { if (!['EEXIST', 'ENOTEMPTY'].includes(error.code)) throw error; }
+      console.log('Saved dependency cache for ' + label + ' (' + ((Date.now() - cacheStarted) / 1000).toFixed(1) + 's).');
     } finally { rmSync(pending, { recursive: true, force: true }); }
   }
   console.log(label + ' checks/build: ' + ((Date.now() - started) / 1000).toFixed(1) + 's.');
