@@ -141,11 +141,15 @@ describe("shared board protocol", () => {
   });
   it("validates shared metadata and excludes viewport changes from shared content", () => {
     const board = createBoard();
+    board.iconStyle = "architecture";
+    board.colorIntensity = 37;
     expect(boardContent({ ...board, viewport: { x: 5, y: 10, zoom: 2 } })).toBe(
       boardContent(board),
     );
     const remote = row(board);
     expect(boardFromRow(remote).inviteCode).toBe(remote.invite_code);
+    expect(boardFromRow(remote).iconStyle).toBe("architecture");
+    expect(boardFromRow(remote).colorIntensity).toBe(37);
     expect(() => boardFromRow({ ...remote, invite_code: "bad" })).toThrow(
       "invalid board",
     );

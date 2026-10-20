@@ -25,7 +25,8 @@ describe('WCAG contrast of the shared colors', () => {
   });
 
   it('keeps the focus outline at 3:1 or better on every surface', () => {
-    const outline = /:focus-visible\s*\{[^}]*outline:\s*\d+px solid (#[0-9a-f]{6})/i.exec(css)![1];
+    const focus = /:focus-visible\s*\{[^}]*outline:\s*\d+px solid (#[0-9a-f]{6}|var\(--([\w-]+)\))/i.exec(css)!;
+    const outline = focus[2] ? token(focus[2]) : focus[1];
     for (const surface of surfaces) expect(contrast(outline, surface), surface).toBeGreaterThanOrEqual(3);
   });
 

@@ -39,8 +39,8 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 3px solid var(--green);
-  outline-offset: 3px;
+  outline: 1px solid var(--ea-focus);
+  outline-offset: 2px;
 }
 button {
   border: 0;
@@ -1334,7 +1334,7 @@ a {
 .field input:focus,
 .field textarea:focus,
 .field select:focus {
-  border-color: #a4bd92;
+  border-color: var(--ea-focus);
 }
 .optional {
   font-size: 9px;

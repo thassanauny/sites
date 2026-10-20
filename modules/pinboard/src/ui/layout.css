@@ -92,7 +92,7 @@
   transform: none;
 }
 .board-preview:focus-visible {
-  outline-offset: -3px;
+  outline-offset: -2px;
 }
 .preview-art {
   width: 100%;

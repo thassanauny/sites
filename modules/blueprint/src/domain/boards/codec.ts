@@ -1,6 +1,8 @@
 import type { Board, Diagram, DiagramNode, DiagramEdge } from "./types";
-import { componentKinds } from "./types";
+import { componentIconSets, componentKinds } from "./types";
 import { defaultEdgeOptions } from "./connectionStyle";
+import { colorDepth } from "./appearance";
+import { frameMinimum, isFrameKind, swimlaneLabels } from "./components";
 export function cleanDiagram(diagram: Diagram): Diagram {
   return {
     nodes: diagram.nodes.map(
@@ -11,7 +13,7 @@ export function cleanDiagram(diagram: Diagram): Diagram {
         resizing: _resizing,
         ...node
       }) =>
-        node.data.kind === "boundary"
+        isFrameKind(node.data.kind)
           ? {
               ...node,
               style: {
@@ -35,6 +37,8 @@ export function serializeBoard(board: Board): string {
         id: board.id,
         title: board.title,
         description: board.description,
+        ...(board.iconStyle ? { iconStyle: board.iconStyle } : {}),
+        ...(board.colorIntensity !== undefined ? { colorIntensity: board.colorIntensity } : {}),
         updatedAt: board.updatedAt,
         viewport: board.viewport,
         ...cleanDiagram(board),
@@ -49,6 +53,8 @@ export function boardContent(board: Board): string {
   return JSON.stringify({
     title: board.title,
     description: board.description,
+    ...(board.iconStyle ? { iconStyle: board.iconStyle } : {}),
+    ...(board.colorIntensity !== undefined ? { colorIntensity: board.colorIntensity } : {}),
     ...cleanDiagram(board),
   });
 }
@@ -96,16 +102,18 @@ export function parseBoard(value: string): Board {
         description: String(node.data.description ?? "").slice(0, 4000),
         technology: String(node.data.technology ?? "").slice(0, 120),
         tone: tones.has(node.data.tone) ? node.data.tone : "green",
+        ...(node.data.kind === "module" && typeof node.data.showIcon === "boolean" ? { showIcon: node.data.showIcon } : {}),
+        ...(node.data.kind === "swimlane" ? { lanes: swimlaneLabels(node.data.lanes) } : {}),
       },
-      ...(node.data.kind === "boundary"
+      ...(isFrameKind(node.data.kind)
         ? {
             style: {
               width: Math.max(
-                200,
+                frameMinimum(node.data).width,
                 Math.min(Number(node.style?.width) || 500, 3000),
               ),
               height: Math.max(
-                150,
+                frameMinimum(node.data).height,
                 Math.min(Number(node.style?.height) || 340, 3000),
               ),
             },
@@ -146,6 +154,14 @@ export function parseBoard(value: string): Board {
     id: crypto.randomUUID(),
     title: board.title.trim().slice(0, 120) || "Untitled board",
     description: String(board.description ?? "").slice(0, 4000),
+    ...(componentIconSets.some(({ id }) => id === board.iconStyle)
+      ? { iconStyle: board.iconStyle }
+      : {}),
+    ...(["soft", "deep"].includes(board.colorIntensity)
+      ? { colorIntensity: board.colorIntensity }
+      : typeof board.colorIntensity === "number" && Number.isFinite(board.colorIntensity)
+        ? { colorIntensity: colorDepth(board.colorIntensity) }
+        : {}),
     nodes,
     edges,
     updatedAt: new Date().toISOString(),

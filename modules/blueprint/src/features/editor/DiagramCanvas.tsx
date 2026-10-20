@@ -1,4 +1,6 @@
+import { useCallback, useMemo, useState } from "react";
 import type { WorkspaceController } from "../../application/useWorkspaceController";
+import { diagramAppearance } from "../../ui/diagramAppearance";
 import {
   ReactFlow,
   Background,
@@ -21,9 +23,10 @@ import {
   StickyNote,
   Undo2,
 } from "lucide-react";
-import { ArchitectureNode, EditingContext } from "./ArchitectureNode";
+import { ArchitectureNode } from "./ArchitectureNode";
+import { EditingContext } from "./EditingContext";
 import { componentKinds } from "../../domain/boards/types";
-import { componentMeta } from "../../domain/boards/components";
+import { componentMeta, isFrameKind } from "../../domain/boards/components";
 import { defaultEdgeOptions } from "../../domain/boards/connectionStyle";
 import type {
   ComponentData,
@@ -86,6 +89,62 @@ export function DiagramCanvas({
     onEdgesChange,
     onConnect,
   } = controller;
+  const appearance = useMemo(() => diagramAppearance(board.colorIntensity), [board.colorIntensity]);
+  const connection = appearance.connection;
+  const [componentOrders, setComponentOrders] = useState<Record<string, string[]>>({});
+  const componentLayers = useMemo(() => {
+    const ids = new Set(board.nodes.filter(node => !isFrameKind(node.data.kind)).map(node => node.id));
+    const previous = (componentOrders[board.id] ?? []).filter(id => ids.has(id));
+    const known = new Set(previous);
+    const order = [...previous, ...[...ids].filter(id => !known.has(id))];
+    return new Map(order.map((id, index) => [id, index + 1]));
+  }, [board.id, board.nodes, componentOrders]);
+  const bringComponentForward = useCallback((id: string) => {
+    if (!componentLayers.has(id) || componentLayers.get(id) === componentLayers.size) return;
+    setComponentOrders(current => ({
+      ...current,
+      [board.id]: [...componentLayers.keys()].filter(other => other !== id).concat(id),
+    }));
+  }, [board.id, componentLayers]);
+  // Keep the last interaction in front after deselection; frames stay behind.
+  const nodes = useMemo<DiagramNode[]>(() => board.nodes.map(node => isFrameKind(node.data.kind) ? {
+    ...node,
+    zIndex: -1,
+    dragHandle: ".boundary-hit-area, .boundary-label, .swimlane-row-label",
+    style: { ...node.style, pointerEvents: "none" },
+  } : {
+    ...node,
+    zIndex: componentLayers.get(node.id) ?? node.zIndex ?? 0,
+  }), [board.nodes, componentLayers]);
+  const edgeDefaults = useMemo(() => ({
+    ...defaultEdgeOptions,
+    style: { ...defaultEdgeOptions.style, stroke: connection.color, strokeWidth: connection.width },
+    markerEnd: typeof defaultEdgeOptions.markerEnd === "object"
+      ? { ...defaultEdgeOptions.markerEnd, color: connection.color }
+      : defaultEdgeOptions.markerEnd,
+    labelStyle: { ...defaultEdgeOptions.labelStyle, fill: connection.labelColor },
+  }), [connection]);
+  const edges = useMemo(() => board.edges.map(edge => ({
+    ...edge,
+    style: { ...edge.style, stroke: connection.color, strokeWidth: connection.width },
+    markerEnd: typeof edge.markerEnd === "object" ? { ...edge.markerEnd, color: connection.color } : edge.markerEnd,
+    markerStart: typeof edge.markerStart === "object" ? { ...edge.markerStart, color: connection.color } : edge.markerStart,
+    labelStyle: { ...edge.labelStyle, fill: connection.labelColor },
+  })), [board.edges, connection]);
+  const editing = useMemo(() => ({
+    editable: !readOnly,
+    updateAnnotation: (id: string, text: string, remember: boolean) => {
+      if (readOnly) return;
+      update(current => ({
+        ...current,
+        nodes: current.nodes.map(node => node.id === id && ["note", "text"].includes(node.data.kind)
+          ? { ...node, data: { ...node.data, ...(node.data.kind === "note"
+            ? { description: text.slice(0, 4000) }
+            : { label: text.slice(0, 120) }) } }
+          : node),
+      }), remember);
+    },
+  }), [readOnly, update]);
   return (
     <main
       id="main-content"
@@ -93,20 +152,30 @@ export function DiagramCanvas({
       className={`canvas-area tool-${isPanning ? "hand" : tool}`}
       ref={canvasRef}
     >
-      <EditingContext.Provider value={!readOnly}>
+      <EditingContext.Provider value={editing}>
         <ReactFlow<DiagramNode>
           key={board.id}
-          nodes={board.nodes}
-          edges={board.edges}
+          nodes={nodes}
+          elevateNodesOnSelect={false}
+          edges={edges}
           nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
+          onNodesChange={changes => {
+            for (const change of changes) {
+              if (change.type === "select" && change.selected) bringComponentForward(change.id);
+            }
+            onNodesChange(changes);
+          }}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeDragStart={() => workspace.checkpoint()}
+          onNodeDragStart={(_, node) => {
+            bringComponentForward(node.id);
+            workspace.checkpoint();
+          }}
           onNodeClick={(_, node) => {
+            bringComponentForward(node.id);
             if (
               tool === "connect" &&
-              !["note", "text", "boundary"].includes(node.data.kind)
+              !["note", "text"].includes(node.data.kind) && !isFrameKind(node.data.kind)
             ) {
               if (!connectFrom.current) {
                 connectFrom.current = node.id;
@@ -123,7 +192,10 @@ export function DiagramCanvas({
               }
             }
           }}
-          onNodeDoubleClick={() => setShowInspector(true)}
+          onNodeDoubleClick={event => {
+            if (event.target instanceof Element && event.target.closest('.note-description, .text-annotation')) return;
+            setShowInspector(true);
+          }}
           onEdgeDoubleClick={() => setShowInspector(true)}
           onPaneClick={() => {
             connectFrom.current = null;
@@ -150,7 +222,8 @@ export function DiagramCanvas({
             event.dataTransfer.dropEffect = "move";
           }}
           connectionMode={ConnectionMode.Loose}
-          defaultEdgeOptions={defaultEdgeOptions}
+          defaultEdgeOptions={edgeDefaults}
+          connectionLineStyle={{ stroke: connection.color, strokeWidth: connection.width }}
           nodesDraggable={!readOnly && !isPanning && tool !== "connect"}
           nodesConnectable={!readOnly && !isPanning}
           selectionOnDrag={!isPanning}

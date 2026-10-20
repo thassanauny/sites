@@ -1,0 +1,49 @@
+.architecture-node.workflow {
+  justify-content: center;
+  text-align: center;
+  background: var(--diagram-note-fill);
+  border: var(--diagram-border-width) solid var(--diagram-note-border);
+  box-shadow: none;
+}
+.architecture-node.workflow.is-selected {
+  border-color: var(--ea-focus);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ea-focus) 25%, transparent);
+}
+.architecture-node.workflow.module {
+  justify-content: flex-start;
+  text-align: left;
+}
+.architecture-node.workflow.step { border-radius: 3px; }
+.architecture-node.workflow.terminal { min-height: 56px; border-radius: 40px; padding: 14px 20px; }
+.architecture-node.workflow.state { width: 160px; min-height: 54px; padding: 12px 16px; border-radius: 9px; gap: 8px; }
+.workflow-state-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--diagram-annotation); flex: none; }
+.architecture-node.workflow.subflow { padding-inline: 26px; border-radius: 3px; }
+.architecture-node.workflow.subflow::before,
+.architecture-node.workflow.subflow::after { content: ""; position: absolute; top: 0; bottom: 0; width: 1px; background: var(--diagram-note-border); }
+.architecture-node.workflow.subflow::before { left: 10px; }
+.architecture-node.workflow.subflow::after { right: 10px; }
+.architecture-node.workflow.decision { width: 204px; height: var(--workflow-decision-height, 160px); min-height: 160px; padding: 0 48px; }
+.architecture-node.workflow.input-output { padding-inline: 32px; }
+.architecture-node.workflow:is(.decision, .input-output) { background: transparent !important; border: 0 !important; box-shadow: none; }
+.workflow-shape { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.workflow-shape polygon { fill: var(--diagram-note-fill); stroke: var(--diagram-note-border); stroke-width: var(--diagram-border-width); }
+.workflow.is-selected .workflow-shape polygon { stroke: var(--ea-focus); }
+.workflow .node-copy { position: relative; }
+.app-shell .architecture-node.swimlane {
+  width: 100%; height: 100%; min-height: 150px;
+  padding: 9px 14px; align-items: flex-start;
+  background: var(--diagram-boundary-fill);
+  border: var(--diagram-boundary-width) solid var(--diagram-boundary-border);
+  box-shadow: none; pointer-events: none;
+}
+.swimlane-rows { position: absolute; inset: 36px 0 0; display: flex; flex-direction: column; border-top: 1px solid var(--diagram-boundary-border); }
+.swimlane-row { flex: 1; min-height: 0; display: flex; }
+.swimlane-row + .swimlane-row { border-top: 1px solid var(--diagram-boundary-border); }
+.swimlane-row-label {
+  display: flex; align-items: center; padding: 12px;
+  width: 124px; flex-shrink: 0; border-right: 1px solid var(--diagram-boundary-border);
+  background: var(--diagram-boundary-fill); color: var(--ea-ink);
+  font-size: 13px; line-height: 1.5; overflow-wrap: anywhere;
+  pointer-events: auto; cursor: grab;
+}
+.architecture-node.swimlane .react-flow__resize-control.handle { pointer-events: auto; z-index: 1; width: 8px; height: 8px; }

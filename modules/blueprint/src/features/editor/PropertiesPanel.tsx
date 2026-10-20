@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { useOnViewportChange } from "@xyflow/react";
 import type { WorkspaceController } from "../../application/useWorkspaceController";
 import {
   Check,
@@ -9,8 +10,8 @@ import {
   X,
 } from "lucide-react";
 import { ComponentIcon } from "../../ui/ComponentIcon";
-import { componentMeta } from "../../domain/boards/components";
-import type { Tone } from "../../domain/boards/types";
+import { componentMeta, isFlowKind, isFrameKind, swimlaneLabels } from "../../domain/boards/components";
+import { componentKinds, type ComponentKind, type Tone } from "../../domain/boards/types";
 const tones: Tone[] = ["green", "blue", "purple", "orange", "rose", "slate"];
 export function PropertiesPanel({
   controller,
@@ -40,7 +41,9 @@ export function PropertiesPanel({
     updateNode,
   } = controller;
   const popup = useRef<HTMLElement>(null);
-  const titleId = useId();
+  const reposition = useRef(() => {});
+  useOnViewportChange({ onChange: () => reposition.current() });
+  const selectionKey = selectedNodes.map(node => node.id).join(",") + ":" + (selectedEdge?.id ?? "");
   const close = useCallback(() => {
     const active = document.activeElement;
     if (active instanceof HTMLElement && popup.current?.contains(active)) active.blur();
@@ -49,12 +52,45 @@ export function PropertiesPanel({
   useEffect(() => {
     const element = popup.current!;
     const opener = document.activeElement;
+    const header = document.querySelector('.topbar')!;
+    const canvas = document.querySelector('#main-content')!;
     const position = () => {
-      const header = document.querySelector('.topbar')!.getBoundingClientRect();
-      element.style.setProperty('--properties-top', `${header.bottom + 12}px`);
+      const gap = 12;
+      const topLimit = header.getBoundingClientRect().bottom + gap;
+      const maxHeight = Math.max(120, window.innerHeight - topLimit - gap);
+      element.style.setProperty('--properties-max-height', `${maxHeight}px`);
+      const { width, height } = element.getBoundingClientRect();
+      const rightLimit = window.innerWidth - width - gap;
+      const leftLimit = Math.min(canvas.getBoundingClientRect().left + gap, rightLimit);
+      const anchors = [...document.querySelectorAll('.react-flow__node.selected, .react-flow__edge.selected')].map(anchor => anchor.getBoundingClientRect());
+      const anchor = anchors.length ? {
+        left: Math.min(...anchors.map(bounds => bounds.left)),
+        right: Math.max(...anchors.map(bounds => bounds.right)),
+        top: Math.min(...anchors.map(bounds => bounds.top)),
+        bottom: Math.max(...anchors.map(bounds => bounds.bottom)),
+      } : canvas.getBoundingClientRect();
+      let left = anchor.right + gap;
+      let top = anchor.top;
+      if (left > rightLimit) left = anchor.left - width - gap;
+      if (left < leftLimit) {
+        left = anchor.left;
+        top = anchor.bottom + gap;
+        if (top + height > window.innerHeight - gap) top = anchor.top - height - gap;
+      }
+      left = Math.max(leftLimit, Math.min(left, rightLimit));
+      top = Math.max(topLimit, Math.min(top, window.innerHeight - height - gap));
+      element.style.setProperty('--properties-left', `${left}px`);
+      element.style.setProperty('--properties-top', `${top}px`);
     };
-    position();
+    let frame = 0;
+    const schedulePosition = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(position);
+    };
+    reposition.current = schedulePosition;
     element.showPopover();
+    position();
+    schedulePosition();
     (element.querySelector<HTMLElement>('input, textarea') ?? element.querySelector<HTMLElement>('button'))?.focus({ preventScroll: true });
     const outside = (event: PointerEvent) => {
       if (event.target instanceof Node && !element.contains(event.target)) close();
@@ -68,62 +104,86 @@ export function PropertiesPanel({
     };
     document.addEventListener('pointerdown', outside, true);
     document.addEventListener('keydown', escape, true);
-    window.addEventListener('resize', position);
-    const resize = new ResizeObserver(position);
-    resize.observe(document.querySelector('.topbar')!);
+    window.addEventListener('resize', schedulePosition);
+    const resize = new ResizeObserver(schedulePosition);
+    resize.observe(header);
+    resize.observe(canvas);
+    resize.observe(element);
     return () => {
       const restoreFocus = element.contains(document.activeElement) || document.activeElement === document.body;
       document.removeEventListener('pointerdown', outside, true);
       document.removeEventListener('keydown', escape, true);
-      window.removeEventListener('resize', position);
+      window.removeEventListener('resize', schedulePosition);
+      cancelAnimationFrame(frame);
+      reposition.current = () => {};
       resize.disconnect();
       element.hidePopover();
       if (restoreFocus && opener instanceof HTMLElement && opener.isConnected) opener.focus({ preventScroll: true });
     };
-  }, [close]);
+  }, [close, selectionKey]);
   return (
-    <aside ref={popup} popover="manual" className="properties-popup" role="dialog" aria-labelledby={titleId}>
+    <aside ref={popup} popover="manual" className="properties-popup" role="dialog" aria-label="Properties">
       <div className="properties-popup-heading">
-        <h2 id={titleId}>Properties</h2>
+        <div className={`selected-component tone-${selectedNode?.data.tone ?? (selectedEdge ? "slate" : "green")}`}>
+          <span className="node-icon">
+            {selectedNode ? <ComponentIcon kind={selectedNode.data.kind} size={20} />
+              : selectedEdge ? <MoveUpRight size={20} aria-hidden="true" />
+              : <Layers3 size={20} aria-hidden="true" />}
+          </span>
+          <div>
+            <h2>Properties</h2>
+            {selectedNode && !["note", "text"].includes(selectedNode.data.kind) && !isFrameKind(selectedNode.data.kind)
+              ? <select className="component-type-select" aria-label="Component type" value={selectedNode.data.kind} disabled={readOnly} onChange={event => updateNode({ kind: event.target.value as ComponentKind })}>
+                  {["System components", "Workflows"].map(category => <optgroup label={category} key={category}>
+                    {componentKinds.filter(kind => componentMeta[kind].category === category && !isFrameKind(kind)).map(kind => <option key={kind} value={kind}>{componentMeta[kind].label}</option>)}
+                  </optgroup>)}
+                </select>
+              : <span>{selectedNode ? componentMeta[selectedNode.data.kind].label
+                  : selectedEdge ? "Connection" : `${selectedNodes.length} components`}</span>}
+          </div>
+        </div>
         <button className="icon-button" aria-label="Close properties" onClick={close}><X size={17} /></button>
       </div>
       <div className="properties-popup-content">
         {selectedNode ? (
           <>
-            <div
-              className={`selected-component tone-${selectedNode.data.tone}`}
-            >
-              <span className="node-icon">
-                <ComponentIcon kind={selectedNode.data.kind} size={23} />
-              </span>
-              <div>
-                <strong>{componentMeta[selectedNode.data.kind].label}</strong>
-                <span>Component properties</span>
-              </div>
-            </div>
-            <label className="field">
-              Name
+            {selectedNode.data.kind === "text" ? <label className="field">
+              Text
+              <textarea
+                key={`${selectedNode.id}-label-${selectedNode.data.label}`}
+                readOnly={readOnly}
+                defaultValue={selectedNode.data.label}
+                placeholder="Write text…"
+                rows={3}
+                maxLength={120}
+                onBlur={event => {
+                  if (event.target.value !== selectedNode.data.label) updateNode({ label: event.target.value });
+                }}
+              />
+            </label> : <label className="field">
+              {selectedNode.data.kind === "note" ? "Name (optional)" : "Name"}
               <input
                 key={`${selectedNode.id}-label-${selectedNode.data.label}`}
                 readOnly={readOnly}
                 defaultValue={selectedNode.data.label}
+                placeholder={selectedNode.data.kind === "note" ? "Add a name" : undefined}
                 onBlur={(event) => {
-                  if (event.target.value !== selectedNode.data.label)
-                    updateNode({
-                      label: event.target.value || "Untitled",
-                    });
+                  const label = selectedNode.data.kind === "note"
+                    ? event.target.value.trim()
+                    : event.target.value || "Untitled";
+                  if (label !== selectedNode.data.label) updateNode({ label });
                 }}
                 maxLength={120}
               />
-            </label>
-            {!["note", "text", "boundary"].includes(selectedNode.data.kind) && (
+            </label>}
+            {!["note", "text"].includes(selectedNode.data.kind) && !isFrameKind(selectedNode.data.kind) && (
               <label className="field">
-                Technology
+                {isFlowKind(selectedNode.data.kind) ? "Subtitle (optional)" : "Technology"}
                 <input
                   key={`${selectedNode.id}-tech-${selectedNode.data.technology}`}
                   readOnly={readOnly}
                   defaultValue={selectedNode.data.technology}
-                  placeholder="e.g. PostgreSQL"
+                  placeholder={isFlowKind(selectedNode.data.kind) ? "Add a subtitle" : "e.g. PostgreSQL"}
                   onBlur={(event) => {
                     if (event.target.value !== selectedNode.data.technology)
                       updateNode({ technology: event.target.value });
@@ -132,8 +192,21 @@ export function PropertiesPanel({
                 />
               </label>
             )}
-            <label className="field">
-              {selectedNode.data.kind === "note" ? "Note" : "Description"}
+            {selectedNode.data.kind === "module" && <label className="checkbox-field">
+              <input type="checkbox" disabled={readOnly} checked={selectedNode.data.showIcon !== false} onChange={event => updateNode({ showIcon: event.target.checked })} />
+              Show icon
+            </label>}
+            {selectedNode.data.kind === "swimlane" && <label className="field">
+              Lanes (one per line, up to 8)
+              <textarea key={`${selectedNode.id}-lanes-${selectedNode.data.lanes?.join("\n")}`} readOnly={readOnly}
+                defaultValue={swimlaneLabels(selectedNode.data.lanes).join("\n")} rows={4} maxLength={487}
+                onBlur={event => {
+                  const lanes = swimlaneLabels(event.target.value.split("\n"));
+                  if (JSON.stringify(lanes) !== JSON.stringify(selectedNode.data.lanes)) updateNode({ lanes });
+                }} />
+            </label>}
+            {selectedNode.data.kind !== "note" && <label className="field">
+              Description
               <textarea
                 key={`${selectedNode.id}-desc-${selectedNode.data.description}`}
                 readOnly={readOnly}
@@ -143,11 +216,11 @@ export function PropertiesPanel({
                   if (event.target.value !== selectedNode.data.description)
                     updateNode({ description: event.target.value });
                 }}
-                rows={5}
+                rows={3}
                 maxLength={4000}
               />
-            </label>
-            <div className="field">
+            </label>}
+            <div className="field property-color-field">
               Color
               <div className="color-options">
                 {tones.map((tone) => (
@@ -164,6 +237,7 @@ export function PropertiesPanel({
               </div>
             </div>
             <div className="inspector-divider" />
+            <div className="properties-popup-actions">
             <button
               className="inspector-action"
               disabled={readOnly}
@@ -174,24 +248,17 @@ export function PropertiesPanel({
             </button>
             <button
               className="inspector-action danger"
+              aria-label="Delete component"
               disabled={readOnly}
               onClick={deleteSelection}
             >
               <Trash2 size={15} />
-              Delete component<kbd>⌫</kbd>
+              Delete<kbd>⌫</kbd>
             </button>
+            </div>
           </>
         ) : selectedEdge ? (
           <>
-            <div className="selected-component tone-slate">
-              <span className="node-icon">
-                <MoveUpRight size={23} />
-              </span>
-              <div>
-                <strong>Connection</strong>
-                <span>Show how things flow</span>
-              </div>
-            </div>
             <label className="field">
               Label
               <input
@@ -250,31 +317,26 @@ export function PropertiesPanel({
           </>
         ) : selectedNodes.length > 1 ? (
           <>
-            <div className="selected-component tone-green">
-              <span className="node-icon">
-                <Layers3 size={23} />
-              </span>
-              <div>
-                <strong>{selectedNodes.length} components</strong>
-                <span>Selected together</span>
-              </div>
-            </div>
+            <div className="properties-popup-actions">
             <button
               className="inspector-action"
+              aria-label="Duplicate selection"
               disabled={readOnly}
               onClick={duplicate}
             >
               <Copy size={15} />
-              Duplicate selection
+              Duplicate
             </button>
             <button
               className="inspector-action danger"
+              aria-label="Delete selection"
               disabled={readOnly}
               onClick={deleteSelection}
             >
               <Trash2 size={15} />
-              Delete selection
+              Delete
             </button>
+            </div>
           </>
         ) : null}
       </div>

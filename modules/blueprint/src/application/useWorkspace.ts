@@ -4,6 +4,12 @@ import type { Board, Diagram } from "../domain/boards/types";
 import { cleanDiagram } from "../domain/boards/codec";
 import { createBoard } from "../domain/boards/templates";
 import { workspaceStorage } from "../infrastructure/storage/workspace";
+
+type HistoryEntry = Diagram & Pick<Board, "iconStyle" | "colorIntensity">;
+function historyEntry(board: Board): HistoryEntry {
+  return { ...cleanDiagram(board), iconStyle: board.iconStyle, colorIntensity: board.colorIntensity };
+}
+
 export function useWorkspace(userId?: string) {
   const storage = useMemo(() => workspaceStorage(userId), [userId]);
   const [removedIds, setRemovedIds] = useState(() => storage.removed());
@@ -23,8 +29,8 @@ export function useWorkspace(userId?: string) {
     "saved",
   );
   const [historyVersion, setHistoryVersion] = useState(0);
-  const past = useRef<Diagram[]>([]);
-  const future = useRef<Diagram[]>([]);
+  const past = useRef<HistoryEntry[]>([]);
+  const future = useRef<HistoryEntry[]>([]);
   const [emptyBoard] = useState(() => createBoard("blank"));
   const board = workspace.boards.find(
     (item) => item.id === workspace.activeId,
@@ -40,6 +46,16 @@ export function useWorkspace(userId?: string) {
       ...cleanDiagram(item),
     })),
   });
+
+  const saveNow = useCallback(() => {
+    try {
+      storage.save(serialized);
+      setLocalStatus("saved");
+    } catch {
+      setLocalStatus("error");
+      throw new Error("Could not save on this device. Keep this board open and try again.");
+    }
+  }, [serialized, storage]);
 
   useEffect(() => {
     setLocalStatus("saving");
@@ -69,7 +85,7 @@ export function useWorkspace(userId?: string) {
   const checkpoint = useCallback(() => {
     past.current = [
       ...past.current.slice(-59),
-      structuredClone(cleanDiagram(boardRef.current)),
+      structuredClone(historyEntry(boardRef.current)),
     ];
     future.current = [];
     setHistoryVersion((v) => v + 1);
@@ -100,7 +116,7 @@ export function useWorkspace(userId?: string) {
       const destination = direction === "undo" ? future : past;
       const diagram = source.current.pop();
       if (!diagram) return;
-      destination.current.push(structuredClone(cleanDiagram(boardRef.current)));
+      destination.current.push(structuredClone(historyEntry(boardRef.current)));
       setHistoryVersion((v) => v + 1);
       update((current) => ({ ...current, ...diagram }), false);
     },
@@ -216,6 +232,7 @@ export function useWorkspace(userId?: string) {
     canUndo: historyVersion >= 0 && past.current.length > 0,
     canRedo: historyVersion >= 0 && future.current.length > 0,
     localStatus,
+    saveNow,
     mergeCloudBoards,
     markCloudSaved,
     openCloudBoard,

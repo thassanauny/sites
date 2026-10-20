@@ -69,7 +69,7 @@ export function ComponentPalette({
               />
               <kbd>/</kbd>
             </label>
-            {["Compute & networking", "Data & messaging", "Annotations"].map(
+            {["System components", "Workflows", "Annotations"].map(
               (category) => {
                 const kinds = componentKinds.filter(
                   (kind) =>
@@ -129,7 +129,7 @@ export function ComponentPalette({
               <h2>A head start, on us.</h2>
               <p>Pick a pattern. Make it your own.</p>
             </div>
-            {<TemplateCards onChoose={newBoard} />}
+            <div className="sidebar-template-cards"><TemplateCards onChoose={newBoard} /></div>
           </div>
         )}
       </div>

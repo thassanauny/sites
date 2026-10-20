@@ -19,7 +19,7 @@ a { color: inherit; }
 [hidden] { display: none !important; }
 svg { width: 19px; height: 19px; flex: 0 0 auto; }
 button, a { touch-action: manipulation; }
-:focus-visible { outline: 3px solid var(--green); outline-offset: 4px; }
+:focus-visible { outline: 1px solid var(--green); outline-offset: 2px; }
 .shell { max-width: 1120px; margin: auto; padding: 0 44px; min-height: 100dvh; display: flex; flex-direction: column; }
 .site-header { display: flex; align-items: center; gap: 24px; padding: 31px 0 28px; border-bottom: 1px solid var(--border); }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-size: 29px; font-weight: 720; letter-spacing: -1.5px; }

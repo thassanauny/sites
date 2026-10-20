@@ -90,7 +90,7 @@ test("the logo opens a persistent home screen and reopens boards without editing
   await page.keyboard.press("Escape");
   await page.getByTitle("Add Service", { exact: true }).click();
   await expect(page.locator(".architecture-node")).toHaveCount(10);
-  await page.getByRole("button", { name: "Close properties", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Properties", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Open your boards" }).click();
   await expect(page.getByRole("main", { name: "All boards" })).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -125,6 +125,8 @@ test("edits, saves, restores, and undoes an architecture", async ({ page }) => {
   await expect(page.locator(".architecture-node")).toHaveCount(9);
   await page.getByTitle("Add Service", { exact: true }).click();
   await expect(page.locator(".architecture-node")).toHaveCount(10);
+  await expect(page.getByRole("dialog", { name: "Properties", exact: true })).toHaveCount(0);
+  await page.locator(".react-flow__node.selected").dblclick();
   await page.getByLabel("Name", { exact: true }).fill("Booking service");
   await page.getByLabel("Technology", { exact: true }).click();
   await expect(
@@ -160,7 +162,7 @@ test("connects nodes, edits labels, and deletes selected connections", async ({
   await newEdge.locator(".react-flow__edge-interaction").click({ force: true });
   await newEdge.locator(".react-flow__edge-interaction").dblclick({ force: true });
   await page.getByLabel("Label", { exact: true }).fill("Cache lookup");
-  await page.getByText("Show how things flow").click();
+  await page.getByRole("heading", { name: "Properties", exact: true }).click();
   await expect(newEdge).toContainText("Cache lookup");
   await page
     .getByRole("button", { name: "Delete connection", exact: true })
@@ -168,6 +170,8 @@ test("connects nodes, edits labels, and deletes selected connections", async ({
   await expect(page.locator(".react-flow__edge")).toHaveCount(8);
   await expect(page.locator(".properties-popup")).toHaveCount(0);
   await page.keyboard.press("n");
+  await expect(page.getByRole("dialog", { name: "Properties", exact: true })).toHaveCount(0);
+  await page.locator(".react-flow__node.selected .architecture-node.note").dblclick({ position: { x: 8, y: 8 } });
   await expect(page.getByRole("dialog", { name: "Properties", exact: true })).toBeVisible();
 });
 
@@ -242,20 +246,83 @@ for (const width of [320, 390, 599, 600]) {
 }
 
 
-test("component properties stay available without a board-details popup", async ({ page }) => {
+test("adding from the palette, by dragging, toolbar and keyboard keeps Properties closed", async ({ page }) => {
+  await page.goto("./#/board/" + invite);
+  const popup = page.getByRole("dialog", { name: "Properties", exact: true });
+  await page.getByTitle("Add Service", { exact: true }).click();
+  await expect(page.locator('.architecture-node')).toHaveCount(10);
+  await expect(popup).toHaveCount(0);
+  await page.locator('.react-flow__node.selected').dblclick();
+  await expect(popup).toBeVisible();
+  await page.getByTitle("Add Database", { exact: true }).click();
+  await expect(page.locator('.architecture-node')).toHaveCount(11);
+  await expect(popup).toHaveCount(0);
+  await page.getByTitle("Add Cache", { exact: true }).dragTo(page.locator('#main-content'), { targetPosition: { x: 110, y: 110 } });
+  await expect(page.locator('.architecture-node')).toHaveCount(12);
+  await expect(popup).toHaveCount(0);
+  await page.getByRole("button", { name: "Add sticky note", exact: true }).click();
+  await expect(page.locator('.architecture-node')).toHaveCount(13);
+  await expect(popup).toHaveCount(0);
+  await page.keyboard.press("t");
+  await expect(page.locator('.architecture-node')).toHaveCount(14);
+  await expect(popup).toHaveCount(0);
+  await expect(page.locator('.react-flow__node.selected .text-annotation')).toHaveValue("Text");
+  await page.keyboard.press("n");
+  await expect(page.locator('.architecture-node')).toHaveCount(15);
+  await expect(popup).toHaveCount(0);
+  await expect(page.locator('.react-flow__node.selected .architecture-node.note')).toHaveCount(1);
+});
+
+test("component properties open on double-click beside the component", async ({ page }) => {
   await page.goto("./#/board/" + invite);
   await expect(page.locator("#main-content")).toBeVisible();
   const before = await page.locator("#main-content").boundingBox();
   await page.getByTitle("Add Service", { exact: true }).click();
   const popup = page.getByRole("dialog", { name: "Properties", exact: true });
+  await expect(popup).toHaveCount(0);
+  await page.locator(".react-flow__node.selected").dblclick();
   await expect(popup).toBeVisible();
   await expect(popup.getByLabel("Name", { exact: true })).toBeFocused();
   await expect(popup.getByLabel("Board name", { exact: true })).toHaveCount(0);
+  const compactBounds = (await popup.boundingBox())!;
+  expect(compactBounds.width).toBeLessThanOrEqual(280);
+  expect(compactBounds.height).toBeLessThanOrEqual(400);
+  const selected = page.locator('.react-flow__node.selected');
+  await expect.poll(async () => {
+    const node = (await selected.boundingBox())!;
+    const panel = (await popup.boundingBox())!;
+    const dx = Math.max(node.x - panel.x - panel.width, panel.x - node.x - node.width, 0);
+    const dy = Math.max(node.y - panel.y - panel.height, panel.y - node.y - node.height, 0);
+    return Math.hypot(dx, dy);
+  }).toBeLessThanOrEqual(16);
   expect((await page.locator("#main-content").boundingBox())!.width).toBe(before!.width);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await expect.poll(async () => {
+    const bounds = (await popup.boundingBox())!;
+    const header = (await page.locator('.topbar').boundingBox())!;
+    return bounds.x >= 0 && bounds.x + bounds.width <= 360 && bounds.y >= header.y + header.height && bounds.y + bounds.height <= 800;
+  }).toBe(true);
   await popup.getByLabel("Name", { exact: true }).fill("My service");
   await page.keyboard.press("Escape");
   await expect(popup).toHaveCount(0);
   await expect(page.locator(".architecture-node").filter({ hasText: "My service" })).toHaveCount(1);
+});
+
+test("sidebar template cards keep equal sizes across desktop and narrow screens", async ({ page }) => {
+  for (const width of [360, 768, 1440]) {
+    await page.setViewportSize({ width, height: 960 });
+    await page.goto("./#/board/" + invite);
+    await page.getByRole("button", { name: "Templates", exact: true }).click();
+    const sizes = await page.locator(".sidebar-template-cards .template-card").evaluateAll(cards => cards.map(card => {
+      const bounds = card.getBoundingClientRect();
+      return { width: bounds.width, height: bounds.height };
+    }));
+    expect(sizes).toHaveLength(3);
+    for (const size of sizes) {
+      expect(size.width).toBeCloseTo(sizes[0].width, 0);
+      expect(size.height).toBeCloseTo(sizes[0].height, 0);
+    }
+  }
 });
 
 test("compact board settings edits details and commits the focused field on Escape", async ({ page }) => {

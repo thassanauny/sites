@@ -23,7 +23,7 @@
 .device-row:hover { border-color: #b8d0bd; box-shadow: 0 5px 18px #24482b08; }
 .device-row::after { content: ''; position: absolute; left: 0; right: 0; bottom: 60px; border-top: 1px solid var(--ea-line); pointer-events: none; }
 .snippet-open { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: start; gap: 14px; min-height: 210px; height: 100%; padding: 22px 20px 82px; border-radius: inherit; }
-.snippet-open:focus-visible { outline-offset: -3px; }
+.snippet-open:focus-visible { outline-offset: -2px; }
 .snippet-open:hover:not([aria-disabled="true"]) { background: transparent; }
 .snippet-mark { width: 40px; height: 40px; border-radius: 12px; background: var(--ea-soft); }
 .snippet-details { display: flex; flex-direction: column; gap: 12px; }

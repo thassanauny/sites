@@ -1,9 +1,14 @@
-import { useState } from "react";
-import { Download, Laptop, RefreshCw, LogOut, Copy } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { Download, Laptop, RefreshCw, LogOut, Copy, X } from "lucide-react";
 import { Modal } from "../../ui/Modal";
+import { ComponentIcon } from "../../ui/ComponentIcon";
 import type { useAuth } from "../../infrastructure/auth/useAuth";
 import type { useCloudBoards } from "../../application/useCloudBoards";
-import type { Board } from "../../domain/boards/types";
+import { componentIconSets, componentKinds, type Board } from "../../domain/boards/types";
+import { componentMeta } from "../../domain/boards/components";
+import { boardContent } from "../../domain/boards/codec";
+import { colorDepth } from "../../domain/boards/appearance";
+import { diagramAppearance } from "../../ui/diagramAppearance";
 
 export function BoardSettingsDialog({
   auth,
@@ -14,6 +19,7 @@ export function BoardSettingsDialog({
   onClose,
   onRemove,
   onDetailsChange,
+  onSave,
   readOnly = false,
 }: {
   auth: ReturnType<typeof useAuth>;
@@ -23,7 +29,8 @@ export function BoardSettingsDialog({
   isExporting: boolean;
   onClose: () => void;
   onRemove?: () => Promise<void>;
-  onDetailsChange?: (patch: Partial<Pick<Board, "title" | "description">>) => void;
+  onDetailsChange?: (patch: Partial<Pick<Board, "title" | "description" | "iconStyle" | "colorIntensity">>, remember?: boolean) => void;
+  onSave?: () => void;
   readOnly?: boolean;
 }) {
   const [confirmForce, setConfirmForce] = useState(false);
@@ -32,6 +39,36 @@ export function BoardSettingsDialog({
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const saveStarted = useRef(false);
+  const iconPreviewId = useId();
+  const intensityId = useId();
+  const intensityGesture = useRef(false);
+  const depth = colorDepth(board.colorIntensity);
+  const connectionPreview = diagramAppearance(board.colorIntensity).connection;
+  const selectedIconSet = componentIconSets.find(({ id }) => id === board.iconStyle) ?? componentIconSets[0];
+  useEffect(() => {
+    if (!saving) { saveStarted.current = false; return; }
+    if (!saveStarted.current) {
+      saveStarted.current = true;
+      try { onSave?.(); }
+      catch (error) {
+        setSaveError(error instanceof Error ? error.message : "Could not save changes. Try again.");
+        setSaving(false);
+        return;
+      }
+    }
+    if (cloud.boardConflict || cloud.status === "error") {
+      setSaveError(cloud.boardConflict
+        ? "Your changes are kept on this device. Resolve the cloud conflict before saving online."
+        : cloud.error || "Could not save online. Your changes are kept on this device.");
+      setSaving(false);
+    } else if (!auth.user || !navigator.onLine || board.cloudSavedContent === boardContent(board)) {
+      setSaving(false);
+      onClose();
+    }
+  }, [saving, onSave, board, cloud.boardConflict, cloud.status, cloud.error, auth.user, onClose]);
   const close = () => {
     if (removing || forcing) return;
     const active = document.activeElement;
@@ -64,14 +101,14 @@ export function BoardSettingsDialog({
       <div className="blueprint-settings-grid">
       {onDetailsChange && <section className="blueprint-settings-section board-details-settings">
         <h3>Board details</h3>
-        <label className="field">Board name<input key={`${board.id}-title-${board.title}`} defaultValue={board.title} readOnly={readOnly} maxLength={120} onBlur={event => {
+        <label className="field">Board name<input key={`${board.id}-title-${board.title}`} defaultValue={board.title} readOnly={readOnly || saving} maxLength={120} onBlur={event => {
           const title = event.target.value.trim() || 'Untitled architecture';
           if (title !== board.title) onDetailsChange({ title });
         }} /></label>
-        <label className="field">Description<textarea key={`${board.id}-description-${board.description}`} defaultValue={board.description} readOnly={readOnly} maxLength={4000} rows={4} placeholder="A few details go a long way…" onBlur={event => {
+        <label className="field">Description<textarea key={`${board.id}-description-${board.description}`} defaultValue={board.description} readOnly={readOnly || saving} maxLength={4000} rows={4} placeholder="A few details go a long way…" onBlur={event => {
           if (event.target.value !== board.description) onDetailsChange({ description: event.target.value });
         }} /></label>
-        <div className="settings-board-counts"><span>{board.nodes.filter(node => !['note','text','boundary'].includes(node.data.kind)).length} components</span><span>{board.edges.length} connections</span></div>
+        <div className="settings-board-counts"><span>{board.nodes.filter(node => !['note','text','boundary','swimlane'].includes(node.data.kind)).length} components</span><span>{board.edges.length} connections</span></div>
       </section>}
       <div className="blueprint-settings-side">
       <section className="blueprint-settings-section"><h3>Board actions</h3>
@@ -129,6 +166,85 @@ export function BoardSettingsDialog({
       </section>
 
       </div>
+      {onDetailsChange && <section className="blueprint-settings-section board-appearance-settings" role="group" aria-label="Default icon set">
+        <h3>Default icon set</h3>
+        <div className="icon-style-options">
+          {componentIconSets.map(({ id: iconStyle, label }) => (
+            <button
+              type="button"
+              key={iconStyle}
+              disabled={readOnly || saving}
+              aria-pressed={selectedIconSet.id === iconStyle}
+              popoverTarget={iconPreviewId}
+              popoverTargetAction="show"
+              onClick={() => {
+                if (selectedIconSet.id !== iconStyle)
+                  onDetailsChange({ iconStyle });
+              }}
+            >
+              <span className="icon-style-preview">
+                {(["client", "service", "database"] as const).map((kind) => (
+                  <ComponentIcon key={kind} kind={kind} iconStyle={iconStyle} size={23} />
+                ))}
+              </span>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+        <p>Select a set to see all icons. Applies to all components on this board.</p>
+        <div id={iconPreviewId} popover="auto" className="icon-set-preview-popover" role="region" aria-label={`${selectedIconSet.label} icon preview`}>
+          <div className="icon-set-preview-header">
+            <div><h4>{selectedIconSet.label}</h4><p>All {componentKinds.length} component icons · {depth}% intensity</p></div>
+            <button type="button" className="icon-button" aria-label="Close icon preview" popoverTarget={iconPreviewId} popoverTargetAction="hide"><X size={17} /></button>
+          </div>
+          <ul className="icon-set-preview-grid" aria-label="Selected icon set preview">
+            {componentKinds.map(kind => (
+              <li key={kind} className={`tone-${componentMeta[kind].tone}`}>
+                <span className="node-icon"><ComponentIcon kind={kind} iconStyle={selectedIconSet.id} size={28} /></span>
+                <span>{componentMeta[kind].label}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="icon-set-preview-hint">Click outside or press Esc to close.</p>
+        </div>
+      </section>}
+      {onDetailsChange && <section className="blueprint-settings-section board-color-settings" role="group" aria-label="Color intensity">
+        <div className="color-intensity-heading">
+          <h3><label htmlFor={intensityId}>Color intensity</label></h3>
+          <output htmlFor={intensityId}>{depth}%</output>
+        </div>
+        <input id={intensityId} type="range" min={0} max={100} step={1} value={depth}
+          aria-valuetext={`${depth}%${depth === 0 ? " · Soft" : depth === 100 ? " · Deep" : ""}`}
+          disabled={readOnly || saving}
+          onPointerDown={() => { intensityGesture.current = false; }}
+          onPointerUp={() => { intensityGesture.current = false; }}
+          onPointerCancel={() => { intensityGesture.current = false; }}
+          onKeyUp={() => { intensityGesture.current = false; }}
+          onBlur={() => { intensityGesture.current = false; }}
+          onChange={event => {
+            const next = Number(event.target.value);
+            if (next !== depth) {
+              onDetailsChange({ colorIntensity: next }, !intensityGesture.current);
+              intensityGesture.current = true;
+            }
+          }} />
+        <div className="color-intensity-scale" aria-hidden="true"><span>Soft</span><span>Deep</span></div>
+        <div className="color-intensity-preview" role="img" aria-label={`Diagram preview at ${depth}% color intensity`}>
+          {(["service", "queue", "database"] as const).map((kind, index) => (
+            <div className="color-preview-step" key={kind}>
+              {index > 0 && <svg className="color-preview-connection" viewBox="0 0 36 20" aria-hidden="true">
+                <path d="M1 10H29" fill="none" stroke={connectionPreview.color} strokeWidth={connectionPreview.width} />
+                <path d="m26 5 7 5-7 5Z" fill={connectionPreview.color} />
+              </svg>}
+              <span className={`color-intensity-chip tone-${componentMeta[kind].tone}`}>
+                <span className="node-icon"><ComponentIcon kind={kind} size={20} /></span>
+                <span>{componentMeta[kind].label}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+        <p>Live preview · Applies to components, borders and connections on this board.</p>
+      </section>}
       {board.revision > 0 && <section className="settings-device-help" aria-label="Access on another device">
         <h3><Laptop size={15} /> Access on another device</h3>
         <p>Use <strong>Join a board</strong> with your invitation code on another device. Anyone with the invitation can edit. Keep it for recovery.</p>
@@ -142,7 +258,19 @@ export function BoardSettingsDialog({
         </button>
       </section>}
       </div>
-      <div className="blueprint-settings-footer"><span className="settings-save-hint">{cloud.boardConflict ? "Your local changes are kept on this device." : readOnly ? "Reconnect to edit board details." : cloud.status === "saving" ? "Saving changes…" : "Changes save automatically."}</span><button className="button secondary" onClick={close}>Close</button></div>
+      {saveError && <p className="form-message error" role="alert">{saveError}</p>}
+      <div className="blueprint-settings-footer">
+        <span className="settings-save-hint">{cloud.boardConflict ? "Your local changes are kept on this device." : readOnly ? "Reconnect to edit board details." : saving || cloud.status === "saving" ? "Saving changes…" : "Changes save automatically."}</span>
+        <div className="settings-footer-actions">
+          <button className="button secondary" onClick={close}>Close</button>
+          {onSave && <button className="button primary" disabled={readOnly || saving || removing || forcing} onClick={() => {
+            const active = document.activeElement;
+            if (active instanceof HTMLElement) active.blur();
+            setSaveError("");
+            setSaving(true);
+          }}>{saving ? "Saving…" : "Save changes"}</button>}
+        </div>
+      </div>
       </>}
     </Modal>
   );

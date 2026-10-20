@@ -66,8 +66,8 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 3px solid #8670aa;
-  outline-offset: 3px;
+  outline: 1px solid var(--ea-focus);
+  outline-offset: 2px;
 }
 a {
   color: var(--jade);
@@ -608,7 +608,7 @@ p {
   font-size: 14px;
 }
 .search-field:focus-within {
-  outline: 2px solid #8670aa;
+  outline: 1px solid var(--ea-focus);
   outline-offset: 2px;
 }
 .search-field input:focus-visible {
@@ -1979,8 +1979,8 @@ p {
   font-family: Georgia, "Times New Roman", serif;
 }
 .amount-input:focus-within {
-  outline: 3px solid #8670aa;
-  outline-offset: 3px;
+  outline: 1px solid var(--ea-focus);
+  outline-offset: 2px;
 }
 .amount-input input:focus-visible {
   outline: 0;
@@ -2351,8 +2351,8 @@ p {
   transform: translateX(18px);
 }
 .travel-toggle input:focus-visible + span {
-  outline: 3px solid #8670aa;
-  outline-offset: 3px;
+  outline: 1px solid var(--ea-focus);
+  outline-offset: 2px;
 }
 .travel-toggle input:disabled + span {
   opacity: 0.5;

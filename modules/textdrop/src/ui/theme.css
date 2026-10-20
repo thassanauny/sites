@@ -11,7 +11,7 @@
   --ea-lavender: #e8e5f4;
   --ea-peach: #faead6;
   --ea-danger: #983c37;
-  --ea-focus: #8670aa;
+  --ea-focus: var(--ea-jade);
   --ea-font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --ea-font-heading: Georgia, "Times New Roman", serif;
   --paper: var(--ea-paper);
@@ -38,8 +38,8 @@ h1, .brand { font-family: var(--ea-font-heading); }
 .brand { color: var(--ea-jade); }
 .brand-dot, .brand-period { color: #af8668; }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
-  outline: 3px solid var(--ea-focus);
-  outline-offset: 3px;
+  outline: 1px solid var(--ea-focus);
+  outline-offset: 2px;
 }
 .button {
   min-height: 48px;

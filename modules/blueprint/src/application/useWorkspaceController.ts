@@ -14,7 +14,7 @@ import { boardCodeFromHash } from "../domain/sharing/invitations";
 import { useAuth } from "../infrastructure/auth/useAuth";
 import { useCloudBoards } from "./useCloudBoards";
 import { messageFor } from "../infrastructure/cloud/boards";
-import { makeNode } from "../domain/boards/components";
+import { makeNode, frameMinimum } from "../domain/boards/components";
 import { defaultEdgeOptions } from "../domain/boards/connectionStyle";
 import { boardContent, fileName } from "../domain/boards/codec";
 import type {
@@ -158,7 +158,7 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
         edges: current.edges.map((edge) => ({ ...edge, selected: false })),
       }));
       setTool("select");
-      setShowInspector(true);
+      setShowInspector(false);
     },
     [flow, update, readOnly],
   );
@@ -315,11 +315,15 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
     if (readOnly || !selectedNode) return;
     update((current) => ({
       ...current,
-      nodes: current.nodes.map((node) =>
-        node.id === selectedNode.id
-          ? { ...node, data: { ...node.data, ...changes } }
-          : node,
-      ),
+      nodes: current.nodes.map((node) => {
+        if (node.id !== selectedNode.id) return node;
+        const data = { ...node.data, ...changes };
+        if (data.kind !== "module") delete data.showIcon;
+        if (data.kind !== "swimlane") delete data.lanes;
+        const height = Math.max(node.height ?? (Number(node.style?.height) || 0), frameMinimum(data).height);
+        return { ...node, data, ...(data.kind === "swimlane" && changes.lanes
+          ? { height, style: { ...node.style, height } } : {}) };
+      }),
     }));
   };
 

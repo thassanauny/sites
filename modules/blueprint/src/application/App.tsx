@@ -6,6 +6,9 @@ import { BoardSettingsDialog } from "../features/sharing/BoardSettingsDialog";
 import { useAuth } from "../infrastructure/auth/useAuth";
 import { APP_VERSION } from "../ui/version";
 import { Logo } from "../ui/Logo";
+import { IconStyleContext } from "../ui/IconStyleContext";
+import { diagramAppearance } from "../ui/diagramAppearance";
+import { colorDepth } from "../domain/boards/appearance";
 import { useWorkspaceController } from "./useWorkspaceController";
 import { TemplateCards } from "../features/boards/TemplateCards";
 import { WorkspaceHeader } from "../features/editor/WorkspaceHeader";
@@ -28,7 +31,7 @@ const shortcutRows = [
 
 export default function App() {
   const auth = useAuth();
-  if (auth.checking)
+  if (auth.checking && !auth.user)
     return (
       <div className="app-loading">
         <Logo />
@@ -68,7 +71,8 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
     newBoard,
   } = controller;
   return (
-    <div className="app-shell">
+    <IconStyleContext.Provider value={board.iconStyle ?? "duotone"}>
+    <div className="app-shell" data-color-intensity={colorDepth(board.colorIntensity)} style={diagramAppearance(board.colorIntensity).variables}>
       <button
         type="button"
         className="skip-link"
@@ -191,7 +195,8 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
           board={board}
           cloud={cloud}
           readOnly={readOnly}
-          onDetailsChange={home ? undefined : patch => { if (!readOnly) workspace.update(current => ({ ...current, ...patch })); }}
+          onDetailsChange={home ? undefined : (patch, remember = true) => { if (!readOnly) workspace.update(current => ({ ...current, ...patch }), remember); }}
+          onSave={home ? undefined : workspace.saveNow}
           onRemove={home ? undefined : async () => {
             if (cloud.status === "saving") throw new Error("Wait for saving to finish, then try again.");
             await workspace.removeFromDevice(board.id);
@@ -208,5 +213,6 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
         <span className="app-version">blueprint · {APP_VERSION}</span>
       </footer>
     </div>
+    </IconStyleContext.Provider>
   );
 }

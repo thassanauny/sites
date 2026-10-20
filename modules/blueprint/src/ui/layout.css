@@ -359,24 +359,49 @@
 
 .properties-popup {
   position: fixed;
-  inset: var(--properties-top, 88px) 16px auto auto;
+  inset: var(--properties-top, 88px) auto auto var(--properties-left, 16px);
   margin: 0;
-  width: min(340px, calc(100vw - 32px));
-  max-height: calc(100dvh - var(--properties-top, 88px) - 16px);
+  width: min(280px, calc(100vw - 32px));
+  max-height: var(--properties-max-height, calc(100dvh - 104px));
   overflow: auto;
-  padding: 18px;
+  padding: 12px;
   border: 1px solid var(--ea-line);
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--ea-surface);
   color: var(--ea-ink);
   box-shadow: 0 12px 36px #203b3326, 0 2px 8px #203b330a;
 }
-.properties-popup-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.properties-popup-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .properties-popup-heading h2 { margin: 0; font: 600 14px/1.4 var(--ea-font-body); }
 .properties-popup-heading .icon-button { width: 28px; height: 28px; color: var(--ea-muted); }
-.properties-popup-content .field { margin-bottom: 14px; }
-.properties-popup-content .selected-component { margin-bottom: 18px; }
-.properties-popup-content .board-stats { margin-top: 16px; }
+.properties-popup-heading .selected-component { min-width: 0; gap: 8px; margin: 0; }
+.properties-popup-heading .selected-component > div { gap: 2px; }
+.properties-popup-heading .selected-component > div > span { font-size: 11px; color: var(--ea-muted); }
+.properties-popup-heading .component-type-select { max-width: 164px; min-height: 24px; padding: 2px 18px 2px 0; border: 0; background-color: transparent; color: var(--ea-muted); font-size: 11px; }
+.properties-popup-heading .node-icon { width: 30px; height: 32px; border-radius: 6px; }
+.properties-popup-content .field { gap: 5px; margin-bottom: 10px; font-size: 11px; color: var(--ea-muted); }
+.properties-popup-content .field :is(input, textarea) { min-height: 32px; padding: 6px 8px; font-size: 12px; line-height: 1.45; }
+.properties-popup-content .field textarea { min-height: 64px; }
+.properties-popup-content .property-color-field { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+.properties-popup-content .color-options { gap: 5px; margin-top: 0; }
+.properties-popup-content .swatch { width: 24px; height: 24px; }
+.properties-popup-content .inspector-divider { margin: 10px 0; }
+.properties-popup-content .checkbox-field { margin: 12px 0; font-size: 11px; }
+.properties-popup-actions { display: flex; gap: 6px; }
+.properties-popup-content .inspector-action { min-width: 0; min-height: 32px; gap: 6px; padding: 6px; font-size: 11px; }
+.properties-popup-actions > .inspector-action { flex: 1; }
+@media (max-width: 600px) {
+  .properties-popup-content .field :is(input, textarea) { font-size: 16px; }
+}
+@media (pointer: coarse) {
+  .properties-popup-heading .component-type-select { min-height: 44px; font-size: 16px; }
+  .properties-popup-heading .icon-button { width: 44px; height: 44px; }
+  .properties-popup-content .field input,
+  .properties-popup-content .inspector-action { min-height: 44px; }
+  .properties-popup-content .property-color-field { flex-direction: column; align-items: flex-start; }
+  .properties-popup-content .color-options { flex-wrap: wrap; }
+  .properties-popup-content .swatch { width: 44px; height: 44px; }
+}
 
 .modal.board-settings-popup { width: min(440px, calc(100vw - 32px)); padding: 22px; border-radius: 16px; }
 .board-settings-popup .modal-header { margin-bottom: 18px; }
@@ -445,8 +470,9 @@
 
 .board-settings-popup > .settings-device-help { margin-top: 18px; padding-top: 12px; }
 .board-settings-popup > .settings-device-help p { margin-top: 6px; }
-.settings-save-hint { margin-right: auto; max-width: 75%; font-size: 10px; color: var(--ea-muted); line-height: 1.5; }
-.board-settings-popup > .blueprint-settings-footer { align-items: center; gap: 12px; margin-top: 14px; }
+.settings-save-hint { margin-right: auto; flex: 1 1 150px; font-size: 10px; color: var(--ea-muted); line-height: 1.5; }
+.board-settings-popup > .blueprint-settings-footer { align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+.settings-footer-actions { display: flex; gap: 8px; margin-left: auto; }
 
 /* Keep the two action columns balanced and device removal at the bottom right. */
 .modal.board-settings-popup { width: min(760px, calc(100vw - 32px)); padding: 22px; }
