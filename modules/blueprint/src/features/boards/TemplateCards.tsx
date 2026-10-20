@@ -10,7 +10,7 @@ export function TemplateCards({
 }) {
   return (
     <>
-      {templates.map((template, index) => (
+      {templates.map((template) => (
         <button
           className="template-card"
           disabled={disabled}
@@ -18,10 +18,10 @@ export function TemplateCards({
           onClick={() => onChoose(template.id)}
         >
           <div
-            className={`template-preview preview-${index}`}
+            className={`template-preview preview-${template.id}`}
             aria-hidden="true"
           >
-            {index === 2 ? (
+            {template.id === "blank" ? (
               <Plus size={26} />
             ) : (
               <>
@@ -30,7 +30,7 @@ export function TemplateCards({
                 <span />
                 <i />
                 <span />
-                {index === 1 && <b />}
+                {template.id === "event-driven" && <b />}
               </>
             )}
           </div>

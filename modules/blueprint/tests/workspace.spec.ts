@@ -317,7 +317,7 @@ test("sidebar template cards keep equal sizes across desktop and narrow screens"
       const bounds = card.getBoundingClientRect();
       return { width: bounds.width, height: bounds.height };
     }));
-    expect(sizes).toHaveLength(3);
+    expect(sizes).toHaveLength(4);
     for (const size of sizes) {
       expect(size.width).toBeCloseTo(sizes[0].width, 0);
       expect(size.height).toBeCloseTo(sizes[0].height, 0);

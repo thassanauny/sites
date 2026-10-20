@@ -39,7 +39,7 @@ export function storeLagNotice(app, releaseFile) {
   const { version } = releaseForApp(app, undefined, releaseFile);
   if (recorded.chrome.version === version) return undefined;
   return `Notice: the Drafts website now advertises ${version}, but releases/drafts.json records Chrome Web Store release ${recorded.chrome.version}. `
-    + `Confirm that ${version} is live in the store before running Publish websites, then record it in releases/drafts.json.`;
+    + `The website follows package.json; store uploads are separate and do not block website deployment. Update releases/drafts.json only after verifying a store release.`;
 }
 
 function renderRelease(html, release) {

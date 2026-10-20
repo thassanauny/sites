@@ -2,7 +2,7 @@ import { makeNode } from "./components";
 import { defaultEdgeOptions } from "./connectionStyle";
 import type { Board, ComponentKind, DiagramEdge } from "./types";
 
-export type TemplateId = "web-app" | "event-driven" | "blank";
+export type TemplateId = "web-app" | "event-driven" | "workflow" | "blank";
 export const templates = [
   {
     id: "web-app" as const,
@@ -16,6 +16,13 @@ export const templates = [
     title: "Event-driven system",
     description: "Decouple services with events and workers.",
     tag: "Async by design",
+    count: 7,
+  },
+  {
+    id: "workflow" as const,
+    title: "Approval workflow",
+    description: "Map a request from submission to review and completion.",
+    tag: "From start to finish",
     count: 7,
   },
   {
@@ -35,7 +42,9 @@ export function createBoard(template: TemplateId = "web-app"): Board {
         ? "Untitled architecture"
         : template === "event-driven"
           ? "Event-driven architecture"
-          : "Untitled board",
+          : template === "workflow"
+            ? "Approval workflow"
+            : "Untitled board",
     description:
       template === "web-app"
         ? "A scalable foundation for your next big idea. Map the flow, explore the trade-offs, and make it yours."
@@ -124,6 +133,21 @@ export function createBoard(template: TemplateId = "web-app"): Board {
     connect("api", "queue", "Publish event", "bottom", "top", true);
     connect("queue", "worker", "Consume", "right", "left", true);
     connect("worker", "database", "Persist", "right", "right");
+  } else if (template === "workflow") {
+    add("start", "terminal", 0, 180, "Start");
+    add("submit", "input-output", 260, 180, "Submit request", "Request details");
+    add("review", "step", 520, 180, "Review request", "Check details and eligibility");
+    add("decision", "decision", 800, 180, "Approved?");
+    add("complete", "step", 1080, 180, "Fulfill request", "Record the outcome");
+    add("end", "terminal", 1340, 180, "Complete");
+    add("revise", "step", 520, 420, "Revise request", "Address reviewer feedback");
+    connect("start", "submit", "Begin");
+    connect("submit", "review", "Submitted");
+    connect("review", "decision", "Reviewed");
+    connect("decision", "complete", "Yes");
+    connect("complete", "end", "Done");
+    connect("decision", "revise", "Needs changes", "bottom", "right");
+    connect("revise", "submit", "Resubmit", "left", "bottom");
   } else {
     add("client", "client", 0, 160, "Client application");
     add("gateway", "gateway", 260, 160, "API gateway");

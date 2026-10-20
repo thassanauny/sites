@@ -107,6 +107,16 @@ describe("portable board files", () => {
     expect(imported.nodes[0].type).toBe("architecture");
     expect(imported.nodes[0].style).toBeUndefined();
   });
+  it("creates an editable approval workflow with both decision paths and a revision loop", () => {
+    const board = parseBoard(serializeBoard(createBoard("workflow")));
+    expect(board.title).toBe("Approval workflow");
+    expect(board.nodes).toHaveLength(7);
+    expect(board.nodes.find(node => node.id === "decision")?.data.kind).toBe("decision");
+    expect(board.edges.filter(edge => edge.source === "decision").map(edge => edge.label)).toEqual(["Yes", "Needs changes"]);
+    expect(board.edges.some(edge => edge.source === "revise" && edge.target === "submit")).toBe(true);
+    const ids = new Set(board.nodes.map(node => node.id));
+    expect(board.edges.every(edge => ids.has(edge.source) && ids.has(edge.target))).toBe(true);
+  });
   it("starts a truly empty board when the blank template is selected", () => {
     expect(createBoard("blank").nodes).toEqual([]);
     expect(createBoard("blank").edges).toEqual([]);
