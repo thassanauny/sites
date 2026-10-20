@@ -45,7 +45,12 @@ export function diagramAppearance(intensity?: ColorIntensity) {
     const backgroundLuminance = luminance(badge);
     const whiteContrast = 1.05 / (backgroundLuminance + 0.05);
     const darkContrast = (backgroundLuminance + 0.05) / (luminance(darkInk) + 0.05);
+    const workflowFill = mix(palette.note, palette.deep, fraction);
+    const workflowWhiteContrast = 1.05 / (luminance(workflowFill) + 0.05);
+    const workflowDarkContrast = (luminance(workflowFill) + 0.05) / (luminance("#183a2c") + 0.05);
     const values = {
+      "workflow-fill": workflowFill,
+      "workflow-ink": workflowWhiteContrast > workflowDarkContrast ? "#ffffff" : "#183a2c",
       fill: mix("#ffffff", palette.fill, fraction),
       border: mix("#dfe7e1", palette.deep, fraction),
       badge,

@@ -45,6 +45,7 @@ export function useCloudBoards(
   const active = useRef(true);
   const initialized = useRef(false);
   const inFlight = useRef(false);
+  const immediateSave = useRef(false);
   const syncGeneration = useRef(0);
   const conflicts = useRef(new Map<string, string>());
   const failures = useRef(
@@ -133,6 +134,7 @@ export function useCloudBoards(
     if (workspace.localStatus !== 'saved') return;
     if (inFlight.current) return;
     if (!pendingBoard) {
+      immediateSave.current = false;
       const conflict = conflicts.current.values().next().value;
       const failure = failures.current.values().next().value;
       setStatus(conflict ? "conflict" : failure ? "error" : "saved");
@@ -145,6 +147,7 @@ export function useCloudBoards(
     const timer = setTimeout(async () => {
       if (inFlight.current) return;
       inFlight.current = true;
+      immediateSave.current = false;
       try {
         const saved = await saveCloudBoard(client, pendingBoard);
         if (active.current) {
@@ -169,7 +172,7 @@ export function useCloudBoards(
         inFlight.current = false;
         if (active.current) setSaveTick((v) => v + 1);
       }
-    }, 700);
+    }, immediateSave.current ? 0 : 700);
     return () => clearTimeout(timer);
   }, [
     user?.id,
@@ -249,6 +252,7 @@ export function useCloudBoards(
   };
   return {
     status,
+    flushNow: () => { immediateSave.current = true; setSaveTick(value => value + 1); },
     lastSync,
     error,
     ready,

@@ -1,4 +1,5 @@
 .DEFAULT_GOAL := build
+BROWSER_WORKERS ?= 2
 NODE ?= node
 NPM ?= npm
 # Capture overrides before assigning defaults, including exported environment values.
@@ -17,7 +18,7 @@ help:
 	  'Port override: append PORT=9000 to run, dev, or preview.' \
 	  'Default ports advance when busy; explicit PORT stays fixed. Use the printed URL.' \
 	  'make test       Run UI/client/config behavior and embedded Postgres tests' \
-	  'make test-browser  Browser behavior tests; downloads Chromium if missing' \
+	  'make test-browser  Browser behavior tests; two workers (BROWSER_WORKERS=1 for lowest CPU); downloads Chromium if missing' \
 	  'make typecheck  Check TypeScript' \
 	  'make check      Run all applicable checks' \
 	  'Supabase settings: see AGENTS.md for the shared defaults and their precedence.'
@@ -56,7 +57,7 @@ test: setup
 
 test-browser: setup
 	"$(NPM)" exec playwright -- install chromium
-	"$(NPM)" run test:e2e
+	"$(NPM)" run test:e2e -- --workers="$(BROWSER_WORKERS)"
 
 typecheck: setup
 	"$(NPM)" exec tsc -- -b

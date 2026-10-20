@@ -8,12 +8,14 @@ async function openProperties(page: Page) {
 }
 
 async function expectIconPreview(page: Page, iconStyle: ComponentIconStyle) {
+  const toggle = page.getByRole("button", { name: /^(Preview all icons|Hide icon preview)$/ });
+  if (await toggle.getAttribute("aria-expanded") === "false") await toggle.click();
   const label = componentIconSets.find(({ id }) => id === iconStyle)!.label;
   const popup = page.getByRole("region", { name: `${label} icon preview`, exact: true });
   await expect(popup).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await expect(page.getByRole("dialog", { name: "Board settings", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: label, exact: true })).toBeFocused();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   const preview = popup.getByRole("list", { name: "Selected icon set preview", exact: true });
   await expect(preview.getByRole("listitem")).toHaveText(componentKinds.map(kind => componentMeta[kind].label));
   const icons = preview.locator(`svg[data-icon-style="${iconStyle}"]`);
@@ -134,24 +136,32 @@ test("swimlane rows edit and resize while interior components remain clickable",
   await expect(card).toHaveClass(/selected/);
 });
 
-test("Save changes commits the focused field and waits for the cloud acknowledgement", async ({ page }) => {
+test("Save changes bypasses autosave delays and waits for the cloud acknowledgement", async ({ page }) => {
   const cloud = await mockCloud(page);
   await signIn(page);
   await page.goto("./#/board/" + invite);
   await openProperties(page);
   const settings = page.getByRole("dialog", { name: "Board settings", exact: true });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  let requestStarted = false;
   let release!: () => void;
   const acknowledged = new Promise<void>(resolve => { release = resolve; });
   await page.route("**/rest/v1/blueprint_boards?*", async route => {
-    if (route.request().method() === "PATCH") await acknowledged;
+    if (route.request().method() === "PATCH") { requestStarted = true; await acknowledged; }
     await route.fallback();
   });
   try {
     await settings.getByLabel("Board name", { exact: true }).fill("Saved settings");
     await settings.getByRole("button", { name: "Classic infrastructure", exact: true }).click();
-    await closeIconPreview(page);
+    await expect(page.getByRole("region", { name: / icon preview$/ })).toHaveCount(0);
     await settings.getByRole("textbox", { name: "Description", exact: true }).fill("Saved while this field is focused.");
     await settings.getByRole("button", { name: "Save changes", exact: true }).click();
+    let elapsed = 0;
+    await expect.poll(async () => {
+      if (elapsed < 100) { elapsed++; await page.clock.runFor(1); }
+      return requestStarted;
+    }).toBe(true);
     await expect(settings.getByRole("button", { name: "Saving…", exact: true })).toBeDisabled();
     await expect(settings).toBeVisible();
     expect(cloud.rows[0].title).toBe("Saved production system");
@@ -481,25 +491,27 @@ test("the board icon set updates all components and the sidebar, with undo, sync
   await openProperties(page);
   const settings = page.getByRole("dialog", { name: "Board settings", exact: true });
   const styles = settings.getByRole("group", { name: "Default icon set", exact: true });
-  await expect(styles.getByRole("button")).toHaveText(["Soft duotone", "Classic infrastructure", "Architecture symbols", "Technical outline"]);
+  await expect(styles.locator(".icon-style-options").getByRole("button")).toHaveText(["Soft duotone", "Classic infrastructure", "Architecture symbols", "Technical outline"]);
   const duotone = styles.getByRole("button", { name: "Soft duotone", exact: true });
   const architecture = styles.getByRole("button", { name: "Architecture symbols", exact: true });
   await expect(duotone).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("list", { name: "Selected icon set preview", exact: true })).toHaveCount(0);
   await duotone.click();
+  await expect(page.getByRole("region", { name: / icon preview$/ })).toHaveCount(0);
   await expectIconPreview(page, "duotone");
   await page.keyboard.press("Escape");
   await expect(settings).toBeVisible();
-  await expect(duotone).toBeFocused();
+  await expect(page.getByRole("button", { name: "Preview all icons", exact: true })).toBeFocused();
   await duotone.click();
   await expectIconPreview(page, "duotone");
   await architecture.click();
   await expectIconPreview(page, "architecture");
   await closeIconPreview(page);
   await expect(architecture).toHaveAttribute("aria-pressed", "true");
+  await settings.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(settings).toHaveCount(0);
   await expect(page.locator('.architecture-node svg[data-icon-style="architecture"]')).toHaveCount(9);
   await expect(page.locator('.component-tile svg[data-icon-style="architecture"]')).toHaveCount(componentKinds.length);
-  await settings.getByRole("button", { name: "Close", exact: true }).click();
   await page.locator('.react-flow__node[data-id="api"]').dblclick();
   const properties = page.getByRole("dialog", { name: "Properties", exact: true });
   await expect(properties.getByRole("button", { name: "Architecture symbols", exact: true })).toHaveCount(0);
@@ -525,90 +537,51 @@ test("the board icon set updates all components and the sidebar, with undo, sync
   await duotone.click();
   await expectIconPreview(page, "duotone");
   await closeIconPreview(page);
+  await settings.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(settings).toHaveCount(0);
   await expect(page.locator('.architecture-node svg[data-icon-style="duotone"]')).toHaveCount(10);
   await expect.poll(() => cloud.rows[0].document.iconStyle).toBe("duotone");
 });
 
-test("color slider previews borders and connections, groups undo and persists an intermediate depth", async ({ page }) => {
+test("settings preview stays local until Save and Close discards the draft", async ({ page }) => {
   const cloud = await mockCloud(page);
   await signIn(page);
   await page.goto("./#/board/" + invite);
+  await page.getByTitle('Add Step / action', { exact: true }).click();
+  const workflow = page.locator('.architecture-node.workflow.step').first();
+  await expect(workflow).toHaveCSS('background-color', 'rgb(237, 243, 251)');
   const shell = page.locator(".app-shell");
-  const service = page.locator('.react-flow__node[data-id="api"] .architecture-node');
-  const edge = page.locator('.react-flow__edge-path').first();
-  await expect(shell).toHaveAttribute("data-color-intensity", "0");
-  await expect(service).toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expect(edge).toHaveCSS("stroke", "rgb(140, 155, 150)");
+  const paletteIcon = page.getByTitle("Add Service", { exact: true }).locator(".component-tile-icon svg");
+  await expect(paletteIcon).toHaveAttribute("width", "25.2");
+  await expect(paletteIcon).toHaveCSS("color", "rgb(56, 130, 102)");
   await openProperties(page);
   const settings = page.getByRole("dialog", { name: "Board settings", exact: true });
   const slider = settings.getByRole("slider", { name: "Color intensity", exact: true });
-  await expect(slider).toHaveValue("0");
   await slider.press("End");
-  await expect(slider).toHaveValue("100");
-  await expect(service).toHaveCSS("background-color", "rgb(222, 238, 228)");
-  await expect(service).toHaveCSS("border-color", "rgb(29, 107, 80)");
-  await expect(service.locator(".node-icon")).toHaveCSS("background-color", "rgb(29, 107, 80)");
-  await expect(service.locator(".node-icon svg")).toHaveCSS("color", "rgb(255, 255, 255)");
-  await expect(edge).toHaveCSS("stroke", "rgb(44, 88, 72)");
-  await expect(edge).toHaveCSS("stroke-width", "2.5px");
-  const arrowColor = () => edge.evaluate(path => {
-    const marker = path.getAttribute("marker-end")!.match(/#(.+)\)/)![1].replaceAll('"', '').replaceAll("'", '');
-    const arrow = document.getElementById(marker)?.querySelector("polyline");
-    return arrow ? getComputedStyle(arrow).fill : null;
-  });
-  await expect.poll(arrowColor).toBe("rgb(44, 88, 72)");
-  await expect(service.locator(".node-copy strong")).toHaveText("API service");
-  await settings.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await settings.getByLabel("Board name", { exact: true }).fill("Unsaved settings");
   await expect(shell).toHaveAttribute("data-color-intensity", "0");
-  await expect(service).toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expect(edge).toHaveCSS("stroke", "rgb(140, 155, 150)");
-  await page.getByRole("button", { name: "Redo", exact: true }).click();
-  await expect(shell).toHaveAttribute("data-color-intensity", "100");
-
-  await openProperties(page);
-  const track = (await slider.boundingBox())!;
-  const centerY = track.y + track.height / 2;
-  await page.mouse.move(track.x + track.width - 8, centerY);
-  await page.mouse.down();
-  await page.mouse.move(track.x + 8 + (track.width - 16) * 0.37, centerY, { steps: 12 });
-  await page.mouse.up();
-  const depth = Number(await slider.inputValue());
-  expect(depth).toBeGreaterThan(25);
-  expect(depth).toBeLessThan(50);
-  const intermediateFill = await service.evaluate(node => getComputedStyle(node).backgroundColor);
-  expect(intermediateFill).not.toBe("rgb(255, 255, 255)");
-  expect(intermediateFill).not.toBe("rgb(222, 238, 228)");
-  const preview = settings.getByRole("img", { name: `Diagram preview at ${depth}% color intensity` });
-  await expect(preview.locator('.tone-green')).toHaveCSS("background-color", intermediateFill);
-  await expect(service).toHaveCSS("border-color", await preview.locator('.tone-green').evaluate(node => getComputedStyle(node).borderColor));
-  const lineColor = await edge.evaluate(path => getComputedStyle(path).stroke);
-  await expect(preview.locator('.color-preview-connection path').first()).toHaveCSS("stroke", lineColor);
-  await expect.poll(arrowColor).toBe(lineColor);
+  expect(cloud.rows[0].title).toBe("Saved production system");
+  expect(cloud.rows[0].document.colorIntensity ?? 0).toBe(0);
+  await expect(settings.getByRole("img", { name: "Diagram preview at 100% color intensity" }).locator(".tone-green")).toHaveCSS("background-color", "rgb(222, 238, 228)");
   await settings.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(shell).toHaveAttribute("data-color-intensity", "100");
-  await page.getByRole("button", { name: "Redo", exact: true }).click();
-  await expect(shell).toHaveAttribute("data-color-intensity", String(depth));
-  await page.getByTitle("Add Service", { exact: true }).click();
-  await expect(page.locator(".architecture-node")).toHaveCount(10);
-  await expect(page.locator('.react-flow__node.selected .architecture-node')).toHaveCSS("background-color", intermediateFill);
-  await expect(page.getByRole("dialog", { name: "Properties", exact: true })).toHaveCount(0);
-  await expect.poll(() => cloud.rows[0].document.colorIntensity).toBe(depth);
-  await expect.poll(() => cloud.rows[0].document.nodes.length).toBe(10);
-  expect(cloud.rows[0].document.edges[0].style.stroke).toBe("#8c9b96");
-  await page.reload();
-  await expect(shell).toHaveAttribute("data-color-intensity", String(depth));
-  await expect(service).toHaveCSS("background-color", intermediateFill);
-  await expect(edge).toHaveCSS("stroke", lineColor);
   await openProperties(page);
-  await expect(slider).toHaveValue(String(depth));
-  await slider.press("Home");
+  await expect(slider).toHaveValue("0");
+  await expect(settings.getByLabel("Board name", { exact: true })).toHaveValue("Saved production system");
+  await slider.press("End");
   await settings.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(settings).toHaveCount(0);
-  expect(cloud.rows[0].document.colorIntensity).toBe(0);
-  await expect(service).toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expect(edge).toHaveCSS("stroke", "rgb(140, 155, 150)");
+  await expect(shell).toHaveAttribute("data-color-intensity", "100");
+  await expect(paletteIcon).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(paletteIcon.locator("..")).toHaveCSS("background-color", "rgb(29, 107, 80)");
+  await expect(workflow).toHaveCSS("background-color", "rgb(49, 95, 145)");
+  await expect(workflow.locator(".node-copy strong")).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect.poll(() => cloud.rows[0].document.colorIntensity).toBe(100);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(shell).toHaveAttribute("data-color-intensity", "0");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(shell).toHaveAttribute("data-color-intensity", "100");
+  await page.reload();
+  await expect(shell).toHaveAttribute("data-color-intensity", "100");
 });
 
 test("selected animated connections follow intensity for their lines and arrowheads", async ({ page }) => {
@@ -633,11 +606,14 @@ test("selected animated connections follow intensity for their lines and arrowhe
     await slider.press("Home");
     if (depth === 50) for (let step = 0; step < 5; step++) await slider.press("PageUp");
     if (depth === 100) await slider.press("End");
+    await settings.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(settings).toHaveCount(0);
     await expect(edge).toHaveClass(/selected/);
     await expect(path).toHaveCSS("stroke", color);
     await expect(path).toHaveCSS("stroke-width", width);
     await expect.poll(arrowColor).toBe(color);
     await expect(path).toHaveCSS("animation-name", "dashdraw");
+    await openProperties(page);
   }
   await settings.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(settings).toHaveCount(0);
@@ -752,13 +728,13 @@ test("boundary colors tint the background, border and label and persist with int
   await page.keyboard.press("Escape");
   await openProperties(page);
   await page.getByRole("slider", { name: "Color intensity", exact: true }).press("End");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Board settings", exact: true })).toHaveCount(0);
   const deepFill = await boundary.evaluate(element => getComputedStyle(element).backgroundColor);
   expect(deepFill).not.toBe(fills.at(-1));
   expect(Number(deepFill.match(/, ([\d.]+)\)$/)![1])).toBeLessThan(0.07);
   await expect(boundary).toHaveCSS("border-color", "rgb(70, 95, 91)");
   await expect(boundary.locator('.boundary-label')).toHaveCSS("color", "rgb(70, 95, 91)");
-  await page.getByRole("button", { name: "Save changes", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Board settings", exact: true })).toHaveCount(0);
   expect(cloud.rows[0].document.nodes.find((node: { id: string }) => node.id === boundaryId).data.tone).toBe("slate");
   await page.reload();
   await expect(boundary).toHaveCSS("background-color", deepFill);
@@ -774,8 +750,9 @@ test("new boards use duotone independently of another board's icon set", async (
   await expectIconPreview(page, "architecture");
   await closeIconPreview(page);
   await page.getByRole("slider", { name: "Color intensity", exact: true }).press("End");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect.poll(() => cloud.rows[0].document.iconStyle).toBe("architecture");
-  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Board settings", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Open your boards" }).click();
   await page.getByRole("button", { name: "Create a board", exact: true }).click();
   await page.getByRole("button", { name: /A clean slate/ }).click();
@@ -804,6 +781,11 @@ for (const { id, label } of componentIconSets) {
       if (depth === 50) for (let step = 0; step < 5; step++) await slider.press("PageUp");
       if (depth === 100) await slider.press("End");
       await expect(slider).toHaveValue(String(depth));
+      await settings.getByRole("button", { name: label, exact: true }).click();
+      await expect(page.getByRole("region", { name: / icon preview$/ })).toHaveCount(0);
+      await settings.getByRole("button", { name: "Save changes", exact: true }).click();
+      await expect(settings).toHaveCount(0);
+      await openProperties(page);
       await settings.getByRole("button", { name: label, exact: true }).click();
       await expectIconPreview(page, id);
       const popup = page.getByRole("region", { name: `${label} icon preview`, exact: true });
@@ -861,6 +843,8 @@ for (const { id, label } of componentIconSets.filter(({ id }) => id !== "duotone
     await expectIconPreview(page, id);
     await closeIconPreview(page);
     await expect(choice).toHaveAttribute("aria-pressed", "true");
+    await settings.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(settings).toHaveCount(0);
     await expect(page.locator(`.architecture-node svg[data-icon-style="${id}"]`)).toHaveCount(9);
     const palette = page.locator(`.component-tile svg[data-icon-style="${id}"]`);
     await expect(palette).toHaveCount(componentKinds.length);
@@ -871,7 +855,6 @@ for (const { id, label } of componentIconSets.filter(({ id }) => id !== "duotone
     if (id === "technical") {
       await expect(palette.first().locator('[fill-opacity]').first()).toHaveCSS("fill-opacity", "0");
     }
-    await settings.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByTitle("Add Service", { exact: true }).click();
     await expect(page.locator(`.architecture-node svg[data-icon-style="${id}"]`)).toHaveCount(10);
     await expect.poll(() => cloud.rows[0].document.iconStyle).toBe(id);
@@ -902,7 +885,7 @@ test("the board icon set choices fit and work in narrow Settings", async ({ page
     expect(tiles.every(({ left, right }) => left >= 0 && right <= 320)).toBe(true);
     await closeIconPreview(page);
     await expect(choice).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator(`.architecture-node svg[data-icon-style="${id}"]`)).toHaveCount(9);
+    await expect(page.locator('.architecture-node svg[data-icon-style="duotone"]')).toHaveCount(9);
     const bounds = await choice.boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);

@@ -47,9 +47,11 @@ export function useWorkspace(userId?: string) {
     })),
   });
 
+  const savedSerialized = useRef<string | undefined>(undefined);
   const saveNow = useCallback(() => {
     try {
       storage.save(serialized);
+      savedSerialized.current = serialized;
       setLocalStatus("saved");
     } catch {
       setLocalStatus("error");
@@ -58,10 +60,12 @@ export function useWorkspace(userId?: string) {
   }, [serialized, storage]);
 
   useEffect(() => {
+    if (savedSerialized.current === serialized) { setLocalStatus("saved"); return; }
     setLocalStatus("saving");
     const timer = setTimeout(() => {
       try {
         storage.save(serialized);
+        savedSerialized.current = serialized;
         setLocalStatus("saved");
       } catch {
         setLocalStatus("error");

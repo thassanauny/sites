@@ -89,7 +89,7 @@ test("the logo opens a persistent home screen and reopens boards without editing
   await page
     .getByLabel("Board name", { exact: true })
     .fill("Payments architecture");
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await page.getByTitle("Add Service", { exact: true }).click();
   await expect(page.locator(".architecture-node")).toHaveCount(10);
   await expect(page.getByRole("dialog", { name: "Properties", exact: true })).toHaveCount(0);
@@ -230,7 +230,7 @@ for (const width of [320, 390, 599, 600]) {
     await expect(page.getByRole("dialog", { name: "Board settings", exact: true })).toBeVisible();
     const longName = "A shared architecture with a long name ".repeat(3).trim();
     await page.getByLabel("Board name", { exact: true }).fill(longName);
-    await page.getByLabel("Board name", { exact: true }).press("Tab");
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(page.locator(".header-board-title")).toHaveText(longName);
     await page.keyboard.press("Escape");
     await expect(
@@ -278,6 +278,7 @@ test("adding from the palette, by dragging, toolbar and keyboard keeps Propertie
 test("component properties open on double-click beside the component", async ({ page }) => {
   await page.goto("./#/board/" + invite);
   await expect(page.locator("#main-content")).toBeVisible();
+  await expect(page.locator(".react-flow")).toBeVisible();
   const before = await page.locator("#main-content").boundingBox();
   await page.getByTitle("Add Service", { exact: true }).click();
   const popup = page.getByRole("dialog", { name: "Properties", exact: true });
@@ -337,7 +338,7 @@ test("compact board settings edits details and commits the focused field on Esca
   await expect(settings.getByRole('button', { name: 'Open invitation', exact: true })).toHaveCount(0);
   await settings.getByLabel('Board name', { exact: true }).fill('Compact architecture');
   await settings.getByRole('textbox', { name: 'Description', exact: true }).fill('A clearer board.');
-  await page.keyboard.press('Escape');
+  await settings.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(settings).toHaveCount(0);
   await expect(page.locator('.header-board-title')).toHaveText('Compact architecture');
   await page.getByRole('button', { name: 'Board settings', exact: true }).click();

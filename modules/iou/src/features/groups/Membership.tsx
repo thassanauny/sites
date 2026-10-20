@@ -136,7 +136,7 @@ export function JoinForm({
 
 export function InviteContent({ group, published, onCopy }: { group: Group; published: boolean; onCopy: (message: string) => void }) {
   const [error, setError] = useState('')
-  const link = `${window.location.origin}${window.location.pathname}#/join/${group.inviteCode}`
+  const link = `${window.location.origin}${window.location.pathname}#/group/${group.inviteCode}`
   const copy = async (text: string, message: string) => {
     try {
       await navigator.clipboard.writeText(text)

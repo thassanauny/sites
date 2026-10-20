@@ -100,7 +100,7 @@ export function ComponentPalette({
                             title={`Add ${componentMeta[kind].label}`}
                           >
                             <span className="component-tile-icon">
-                              <ComponentIcon kind={kind} size={21} />
+                              <ComponentIcon kind={kind} size={25.2} />
                             </span>
                             <span>{componentMeta[kind].label}</span>
                             <Plus className="tile-plus" size={12} />

@@ -43,11 +43,16 @@ export function BoardSettingsDialog({
   const [saveError, setSaveError] = useState("");
   const saveStarted = useRef(false);
   const iconPreviewId = useId();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const previewToggle = useRef<HTMLButtonElement>(null);
+  const closePreview = () => { setPreviewOpen(false); previewToggle.current?.focus({ preventScroll: true }); };
   const intensityId = useId();
-  const intensityGesture = useRef(false);
-  const depth = colorDepth(board.colorIntensity);
-  const connectionPreview = diagramAppearance(board.colorIntensity).connection;
-  const selectedIconSet = componentIconSets.find(({ id }) => id === board.iconStyle) ?? componentIconSets[0];
+  const [draft, setDraft] = useState({ title: board.title, description: board.description, iconStyle: board.iconStyle, colorIntensity: board.colorIntensity });
+  const initialDraft = useRef(draft);
+  const patchDraft = (patch: Partial<typeof draft>) => setDraft(current => ({ ...current, ...patch }));
+  const depth = colorDepth(draft.colorIntensity);
+  const connectionPreview = diagramAppearance(draft.colorIntensity).connection;
+  const selectedIconSet = componentIconSets.find(({ id }) => id === draft.iconStyle) ?? componentIconSets[0];
   useEffect(() => {
     if (!saving) { saveStarted.current = false; return; }
     if (!saveStarted.current) {
@@ -101,13 +106,8 @@ export function BoardSettingsDialog({
       <div className="blueprint-settings-grid">
       {onDetailsChange && <section className="blueprint-settings-section board-details-settings">
         <h3>Board details</h3>
-        <label className="field">Board name<input key={`${board.id}-title-${board.title}`} defaultValue={board.title} readOnly={readOnly || saving} maxLength={120} onBlur={event => {
-          const title = event.target.value.trim() || 'Untitled architecture';
-          if (title !== board.title) onDetailsChange({ title });
-        }} /></label>
-        <label className="field">Description<textarea key={`${board.id}-description-${board.description}`} defaultValue={board.description} readOnly={readOnly || saving} maxLength={4000} rows={4} placeholder="A few details go a long way…" onBlur={event => {
-          if (event.target.value !== board.description) onDetailsChange({ description: event.target.value });
-        }} /></label>
+        <label className="field">Board name<input value={draft.title} readOnly={readOnly || saving} maxLength={120} onChange={event => patchDraft({ title: event.target.value })} /></label>
+        <label className="field">Description<textarea value={draft.description} readOnly={readOnly || saving} maxLength={4000} rows={2} placeholder="A few details go a long way…" onChange={event => patchDraft({ description: event.target.value })} /></label>
         <div className="settings-board-counts"><span>{board.nodes.filter(node => !['note','text','boundary','swimlane'].includes(node.data.kind)).length} components</span><span>{board.edges.length} connections</span></div>
       </section>}
       <div className="blueprint-settings-side">
@@ -166,7 +166,9 @@ export function BoardSettingsDialog({
       </section>
 
       </div>
-      {onDetailsChange && <section className="blueprint-settings-section board-appearance-settings" role="group" aria-label="Default icon set">
+      {onDetailsChange && <section className="blueprint-settings-section board-appearance-settings" role="group" aria-label="Default icon set" style={diagramAppearance(draft.colorIntensity).variables} onKeyDown={event => {
+        if (event.key === "Escape" && previewOpen) { event.preventDefault(); event.stopPropagation(); closePreview(); }
+      }}>
         <h3>Default icon set</h3>
         <div className="icon-style-options">
           {componentIconSets.map(({ id: iconStyle, label }) => (
@@ -175,11 +177,9 @@ export function BoardSettingsDialog({
               key={iconStyle}
               disabled={readOnly || saving}
               aria-pressed={selectedIconSet.id === iconStyle}
-              popoverTarget={iconPreviewId}
-              popoverTargetAction="show"
               onClick={() => {
                 if (selectedIconSet.id !== iconStyle)
-                  onDetailsChange({ iconStyle });
+                  patchDraft({ iconStyle });
               }}
             >
               <span className="icon-style-preview">
@@ -191,11 +191,11 @@ export function BoardSettingsDialog({
             </button>
           ))}
         </div>
-        <p>Select a set to see all icons. Applies to all components on this board.</p>
-        <div id={iconPreviewId} popover="auto" className="icon-set-preview-popover" role="region" aria-label={`${selectedIconSet.label} icon preview`}>
+        <div className="icon-preview-controls"><p>Applies to all components on this board.</p><button ref={previewToggle} type="button" className="button secondary" aria-expanded={previewOpen} aria-controls={iconPreviewId} onClick={() => setPreviewOpen(open => !open)}>{previewOpen ? "Hide icon preview" : "Preview all icons"}</button></div>
+        {previewOpen && <div id={iconPreviewId} className="icon-set-preview-inline" role="region" aria-label={`${selectedIconSet.label} icon preview`}>
           <div className="icon-set-preview-header">
             <div><h4>{selectedIconSet.label}</h4><p>All {componentKinds.length} component icons · {depth}% intensity</p></div>
-            <button type="button" className="icon-button" aria-label="Close icon preview" popoverTarget={iconPreviewId} popoverTargetAction="hide"><X size={17} /></button>
+            <button type="button" className="icon-button" aria-label="Close icon preview" onClick={closePreview}><X size={17} /></button>
           </div>
           <ul className="icon-set-preview-grid" aria-label="Selected icon set preview">
             {componentKinds.map(kind => (
@@ -205,10 +205,9 @@ export function BoardSettingsDialog({
               </li>
             ))}
           </ul>
-          <p className="icon-set-preview-hint">Click outside or press Esc to close.</p>
-        </div>
+        </div>}
       </section>}
-      {onDetailsChange && <section className="blueprint-settings-section board-color-settings" role="group" aria-label="Color intensity">
+      {onDetailsChange && <section className="blueprint-settings-section board-color-settings" role="group" aria-label="Color intensity" style={diagramAppearance(draft.colorIntensity).variables}>
         <div className="color-intensity-heading">
           <h3><label htmlFor={intensityId}>Color intensity</label></h3>
           <output htmlFor={intensityId}>{depth}%</output>
@@ -216,18 +215,7 @@ export function BoardSettingsDialog({
         <input id={intensityId} type="range" min={0} max={100} step={1} value={depth}
           aria-valuetext={`${depth}%${depth === 0 ? " · Soft" : depth === 100 ? " · Deep" : ""}`}
           disabled={readOnly || saving}
-          onPointerDown={() => { intensityGesture.current = false; }}
-          onPointerUp={() => { intensityGesture.current = false; }}
-          onPointerCancel={() => { intensityGesture.current = false; }}
-          onKeyUp={() => { intensityGesture.current = false; }}
-          onBlur={() => { intensityGesture.current = false; }}
-          onChange={event => {
-            const next = Number(event.target.value);
-            if (next !== depth) {
-              onDetailsChange({ colorIntensity: next }, !intensityGesture.current);
-              intensityGesture.current = true;
-            }
-          }} />
+          onChange={event => patchDraft({ colorIntensity: Number(event.target.value) })} />
         <div className="color-intensity-scale" aria-hidden="true"><span>Soft</span><span>Deep</span></div>
         <div className="color-intensity-preview" role="img" aria-label={`Diagram preview at ${depth}% color intensity`}>
           {(["service", "queue", "database"] as const).map((kind, index) => (
@@ -237,7 +225,7 @@ export function BoardSettingsDialog({
                 <path d="m26 5 7 5-7 5Z" fill={connectionPreview.color} />
               </svg>}
               <span className={`color-intensity-chip tone-${componentMeta[kind].tone}`}>
-                <span className="node-icon"><ComponentIcon kind={kind} size={20} /></span>
+                <span className="node-icon"><ComponentIcon kind={kind} iconStyle={selectedIconSet.id} size={20} /></span>
                 <span>{componentMeta[kind].label}</span>
               </span>
             </div>
@@ -260,13 +248,19 @@ export function BoardSettingsDialog({
       </div>
       {saveError && <p className="form-message error" role="alert">{saveError}</p>}
       <div className="blueprint-settings-footer">
-        <span className="settings-save-hint">{cloud.boardConflict ? "Your local changes are kept on this device." : readOnly ? "Reconnect to edit board details." : saving || cloud.status === "saving" ? "Saving changes…" : "Changes save automatically."}</span>
+        <span className="settings-save-hint">{cloud.boardConflict ? "Your local changes are kept on this device." : readOnly ? "Reconnect to edit board details." : saving || cloud.status === "saving" ? "Saving changes…" : ""}</span>
         <div className="settings-footer-actions">
           <button className="button secondary" onClick={close}>Close</button>
           {onSave && <button className="button primary" disabled={readOnly || saving || removing || forcing} onClick={() => {
             const active = document.activeElement;
             if (active instanceof HTMLElement) active.blur();
             setSaveError("");
+            const patch: Partial<typeof draft> = {};
+            if (draft.title !== initialDraft.current.title) patch.title = draft.title.trim() || "Untitled architecture";
+            if (draft.description !== initialDraft.current.description) patch.description = draft.description;
+            if (draft.iconStyle !== initialDraft.current.iconStyle) patch.iconStyle = draft.iconStyle;
+            if (draft.colorIntensity !== initialDraft.current.colorIntensity) patch.colorIntensity = draft.colorIntensity;
+            if (Object.keys(patch).length) onDetailsChange?.(patch);
             setSaving(true);
           }}>{saving ? "Saving…" : "Save changes"}</button>}
         </div>

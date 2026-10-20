@@ -79,6 +79,17 @@ const typeName = (value: string) =>
   })
 
 describe('invitation navigation and late results', () => {
+  it('prefills an unknown group link without joining and returns Home on cancellation', async () => {
+    window.history.replaceState(null, '', `#/group/${codeA}`)
+    await mount()
+    expect(host.querySelector<HTMLInputElement>('form input')!.value).toBe(codeA)
+    expect(mocks.join).not.toHaveBeenCalled()
+    const close = host.querySelector<HTMLButtonElement>('button[aria-label="Close dialog"]')!
+    await act(async () => close.click())
+    expect(window.location.hash).toBe('#/')
+    expect(host.querySelector('dialog')).toBeNull()
+    expect(loadStore().store.groups).toEqual([])
+  })
   it('resets the input and loaded group when invitation A changes to B', async () => {
     await mount()
     expect(host.querySelector<HTMLInputElement>('form input')!.value).toBe(codeA)

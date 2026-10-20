@@ -456,7 +456,7 @@ describe('routes and launch', () => {
     expect(host.querySelector('h1')?.textContent).toBe('Split it. Settle it.')
   })
 
-  it('reloads a group page from the cached groups and says when a code is unknown', async () => {
+  it('opens cached group links directly and prompts before joining an unknown group link', async () => {
     saveStore(cached('a'))
     window.history.replaceState(null, '', `#/group/${'a'.repeat(32)}`)
     await mount()
@@ -466,7 +466,9 @@ describe('routes and launch', () => {
       window.location.hash = `/group/${'f'.repeat(32)}`
       window.dispatchEvent(new HashChangeEvent('hashchange'))
     })
-    expect(host.textContent).toContain('We couldn’t find that group.')
+    expect(host.querySelector('dialog')).not.toBeNull()
+    expect((host.querySelector('input[placeholder="Paste your group’s code"]') as HTMLInputElement)?.value).toBe('f'.repeat(32))
+    expect(cloud.join).not.toHaveBeenCalled()
   })
 })
 

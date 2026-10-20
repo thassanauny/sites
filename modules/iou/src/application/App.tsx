@@ -114,6 +114,15 @@ export default function App() {
     const timer = window.setTimeout(() => setToast(null), toast.duration ?? 4500)
     return () => window.clearTimeout(timer)
   }, [toast])
+  const missingGroupCode = !group ? page.groupCode : undefined
+  const checkedGroupRoute = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (checkedGroupRoute.current === page.groupCode) return
+    checkedGroupRoute.current = page.groupCode
+    if (page.groupCode && !session.view().store.groups.some(item => item.inviteCode === page.groupCode)) {
+      setModal({ type: 'join', code: page.groupCode })
+    }
+  }, [page.groupCode, session])
   const documentTitle = group ? `${group.name} · iou` : page.groups ? 'Groups · iou' : page.transactions ? 'Transactions · iou' : 'iou · Split it. Settle it.'
   useEffect(() => {
     document.title = documentTitle
@@ -121,7 +130,7 @@ export default function App() {
 
   const closeModal = () => {
     setModal(null)
-    if (page.joinCode) navigate()
+    if (page.joinCode || missingGroupCode) navigate()
   }
   const runAction = useCallback(async (action: () => Promise<void> | void) => {
     try {
@@ -169,6 +178,7 @@ export default function App() {
     const next = queueGroup(session.latest(), draft, draft.members[0].id)
     session.commit({ ...next, pinnedIds: next.pinnedIds.includes(draft.id) ? next.pinnedIds : [...next.pinnedIds, draft.id] })
     closeModal()
+    checkedGroupRoute.current = draft.inviteCode
     navigate(draft.inviteCode)
     notify('Group saved on this device. Its invitation will be ready after syncing.')
     void sync()
