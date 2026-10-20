@@ -15,6 +15,8 @@ import { WorkspaceHeader } from "../features/editor/WorkspaceHeader";
 import { ComponentPalette } from "../features/editor/ComponentPalette";
 import { DiagramCanvas } from "../features/editor/DiagramCanvas";
 import { PropertiesPanel } from "../features/editor/PropertiesPanel";
+import { useEffect } from "react";
+
 const shortcutRows = [
   ["Select tool", "V"],
   ["Pan tool", "H / Space"],
@@ -70,6 +72,12 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
     openBoard,
     newBoard,
   } = controller;
+  const documentTitle = !home && !invalidRoute && !routeError
+    ? `${board.title} · Blueprint`
+    : "Blueprint · a little space for big systems";
+  useEffect(() => {
+    document.title = documentTitle;
+  }, [documentTitle]);
   return (
     <IconStyleContext.Provider value={board.iconStyle ?? "duotone"}>
     <div className="app-shell" data-color-intensity={colorDepth(board.colorIntensity)} style={diagramAppearance(board.colorIntensity).variables}>

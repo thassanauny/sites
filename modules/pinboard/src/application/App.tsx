@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Check, LoaderCircle, Settings2, WifiOff, X } from 'lucide-react';
 import { BoardDialog } from '../features/boards/BoardDialog';
 import { BoardView } from '../features/boards/BoardView';
@@ -52,6 +53,12 @@ export default function App() {
     reorderCard,
     save,
   } = useWorkspace();
+  const boardTitle = board?.title;
+  useEffect(() => {
+    document.title = boardTitle
+      ? `${boardTitle} · Pinboard`
+      : 'Pinboard · a place for your projects';
+  }, [boardTitle]);
   const { filters, setFilters, clearFilters, orderedCards, columnCards, filteredCount } =
     useBoardFilters(board, navigations);
   // Compared by value, so the board is rendered again at midnight to mark newly overdue cards.

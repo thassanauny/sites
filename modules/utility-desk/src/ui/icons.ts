@@ -1,5 +1,6 @@
 // App-owned outline icons selected for these utilities.
 const shapes: Record<string, string> = {
+  privacy: '<path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/>',
   home: '<path d="M3 10 12 3l9 7 M5 9v12h5v-7h4v7h5V9"/>',
   'media-converter': '<rect x="2" y="3" width="13" height="11" rx="2"/><path d="m6 6 5 2.5-5 2.5Z M19 9v10m0-10 3-1v9"/><circle cx="17" cy="19" r="2"/><circle cx="20" cy="17" r="2"/>',
   'document-converter': '<path d="M6 2.5h9l4 4V21H6Z M15 2.5v4h4"/><path d="M9 11h7m-2-2 2 2-2 2 M16 17H9m2-2-2 2 2 2"/>',

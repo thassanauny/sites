@@ -16,6 +16,7 @@ test("the base URL shows all boards before and after opening an existing board",
 }) => {
   await page.goto("./");
   await expect(page.getByRole("main", { name: "All boards" })).toBeVisible();
+  await expect(page).toHaveTitle("Blueprint · a little space for big systems");
   await expect(page.locator(".board-card")).toHaveCount(1);
   await expect(page.locator(".board-card-footer button")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create a board", exact: true })).toBeVisible();
@@ -24,6 +25,7 @@ test("the base URL shows all boards before and after opening an existing board",
   await page
     .getByRole("button", { name: "Open Untitled architecture", exact: true })
     .click();
+  await expect(page).toHaveTitle("Untitled architecture · Blueprint");
   await expect(page.locator(".architecture-node")).toHaveCount(9);
   await page.reload();
   await expect(page.locator(".architecture-node")).toHaveCount(9);
@@ -52,7 +54,7 @@ test("settings have a name, restore keyboard focus, and skip navigation keeps th
   page,
 }) => {
   await page.goto("./#/board/" + invite);
-  await expect(page).toHaveTitle("Blueprint — a little space for big systems");
+  await expect(page).toHaveTitle("Untitled architecture · Blueprint");
   await expect(page.locator(".brand-button")).toContainText("blueprint.");
   const opener = page.getByRole("button", {
     name: "Board settings",

@@ -11,7 +11,6 @@ export function shell(app: HTMLElement) {
   const nav = h(
     'nav',
     { id: 'utility-navigation', 'aria-label': 'Utilities' },
-    h('a', { href: '#/' }, h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, icon('home')), h('span', {}, 'Home', h('small', {}, 'Browse all utilities'))),
     ...GROUPS.map(([cat, ids], index) => {
       const headingId = `nav-group-${index}`;
       return h(
@@ -52,9 +51,7 @@ export function shell(app: HTMLElement) {
         h('span', { 'aria-hidden': 'true' }, '☰'),
       ),
     ),
-    h('div', { class: 'workspace-label' }, 'IN YOUR BROWSER'),
     nav,
-    h('div', { class: 'sidebar-note' }, h('span', { class: 'eyebrow' }, 'PRIVATE BY DESIGN'), h('strong', {}, 'Nothing leaves this tab.'), h('p', {}, 'Preview your settings, review the output, then start when you’re ready.')),
   );
   nav.addEventListener('click', () => {
     aside.classList.remove('nav-open');
@@ -65,9 +62,9 @@ export function shell(app: HTMLElement) {
     h(
       'div',
       { class: 'workspace' },
-      h('header', { class: 'topbar' }, h('span', {}, h('a', { href: '#/' }, 'Home'), h('span', { class: 'breadcrumb-separator' }, '/'), h('strong', { id: 'breadcrumb' }, 'Home')), topbarActions),
+      h('header', { class: 'topbar' }, h('div', { class: 'privacy-note' }, h('span', { class: 'privacy-icon', 'aria-hidden': 'true' }, icon('privacy')), h('div', { class: 'privacy-copy' }, h('span', { class: 'eyebrow' }, 'PRIVATE BY DESIGN'), h('strong', {}, 'Nothing leaves this tab.'))), topbarActions),
       h('main', { id: 'main', tabindex: -1 }),
-      h('footer', {}, h('span', {}, 'Made for everyday tasks. Runs in your browser.'), h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, `Utility Desk · ${version}`)),
+      h('footer', {}, h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, `Utility Desk · ${version}`)),
     ),
   );
 }

@@ -229,7 +229,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     if (page) {
       const name = page.name || rememberedSnippets.find(snippet => snippet.code === page.code)?.name || 'Untitled snippet';
       setText(ui.pageName, name);
-      if (document.title !== `${name} — TextDrop`) document.title = `${name} — TextDrop`;
+      if (document.title !== `${name} · TextDrop`) document.title = `${name} · TextDrop`;
       if (editor.value !== draft) editor.value = draft;
       editor.disabled = !online && !cloud.offlineCapable;
       const { lines, tooLarge } = measure(draft);
@@ -253,7 +253,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
       announceSave(status);
       ui.saveStatus.classList.toggle('unsaved', dirty || Boolean(error) || !online);
     } else {
-      if (document.title !== 'TextDrop — share text') document.title = 'TextDrop — share text';
+      if (document.title !== 'TextDrop · share text') document.title = 'TextDrop · share text';
       announceSave('');
     }
     const notice =

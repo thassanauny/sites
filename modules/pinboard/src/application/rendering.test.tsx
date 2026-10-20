@@ -2,7 +2,17 @@
 // @vitest-environment-options {"url":"http://localhost/"}
 import { describe, expect, it, vi } from 'vitest';
 import { cloud } from './cloudMock';
-import { advance, board, card, installHarness, mount, refresh, search, uuid } from './testSupport';
+import {
+  advance,
+  board,
+  card,
+  click,
+  installHarness,
+  mount,
+  refresh,
+  search,
+  uuid,
+} from './testSupport';
 import type { Board } from '../domain/boards/types';
 
 vi.mock('../infrastructure/cloud/boards', async () => (await import('./cloudMock')).cloudModule);
@@ -28,6 +38,16 @@ function cardRenders() {
 }
 
 describe('Pinboard UI: rendering work', () => {
+  it('keeps the tab title aligned with the open board and clears it on Home', async () => {
+    await mount([populated]);
+    expect(document.title).toBe('Weekend plans · Pinboard');
+    cloud.loadBoardList.mockResolvedValue([{ ...populated, title: 'Renamed board', revision: 2 }]);
+    await refresh();
+    expect(document.title).toBe('Renamed board · Pinboard');
+    await click('Open workspace');
+    expect(document.title).toBe('Pinboard · a place for your projects');
+  });
+
   it('renders no card again when a refresh brings the same boards', async () => {
     const renders = cardRenders();
     await mount([populated]);

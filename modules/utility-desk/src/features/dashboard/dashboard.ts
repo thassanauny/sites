@@ -61,10 +61,9 @@ export function dashboard(root: HTMLElement) {
       filter();
       query.focus();
     }),
-    count,
   );
   root.append(
-    h('div', { class: 'page-heading' }, h('div', {}, h('span', { class: 'eyebrow' }, 'YOUR EVERYDAY TOOLKIT'), h('h1', { id: 'page-title', tabindex: -1 }, 'What would you like to do?'))),
+    h('div', { class: 'utility-heading' }, h('h1', { id: 'page-title', tabindex: -1 }, 'All utilities'), count),
     search,
     h('nav', { class: 'utility-sections', 'aria-label': 'All utilities' }, ...groups.map((group) => group.section)),
     empty,

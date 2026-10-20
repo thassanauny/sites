@@ -31,7 +31,7 @@ describe('shared snippet names', () => {
     vi.mocked(cloud.joinPage).mockResolvedValueOnce({ ...first, name: 'Team notes', version: 2 });
     await start(`#/p/${first.code}`);
     expect(element('page-name').textContent).toBe('Team notes');
-    expect(document.title).toBe('Team notes — TextDrop');
+    expect(document.title).toBe('Team notes · TextDrop');
     expect(history.list()[0]?.name).toBe('Team notes');
     expect(localStorage.getItem(`${DEVICE_SNIPPETS_KEY}:name:${first.code}`)).toContain('Team notes');
     expect(cloud.renamePage).not.toHaveBeenCalled();

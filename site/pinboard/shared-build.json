@@ -1,7 +1,7 @@
 {
   "format": 1,
   "app": "pinboard",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "base": "./",
   "cloudConfigured": true,
   "publicConfig": {
@@ -11,8 +11,8 @@
   },
   "scripts": {
     "registerSW.js": "e12c8db54e3cc247034427f2b661b305a78fea7e7cdec1eac179fecec3da0fc7",
-    "sw.js": "6526423798105de5bf86319b0ac4c0d3f8ea0036e1b30a3e50508f722f87f864",
+    "sw.js": "bc6ed1b3fbf0a376002a7ddb9c9a411e69a77b85c19deb7d956e6e90bc04dd31",
     "workbox-9c191d2f.js": "04b086f1b2f4215ee4b659a7bc9c76162894abdb43fa876247bc7c0bd6fd1c37",
-    "assets/index-Bqw2_cm6.js": "55a2d77ca6bd490a6f265af9266c87f1cedd93b782a62ed100b5a3789b370f3e"
+    "assets/index-oXIU8mOO.js": "1967f29e0ac95578721c88c285bc475dad897b5f46a7341e348356cf657e231f"
   }
 }

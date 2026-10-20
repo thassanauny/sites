@@ -38,7 +38,8 @@ describe('grouped utility navigation', () => {
         expect(document.getElementById(section.getAttribute('aria-labelledby')!)?.tagName).toBe('H2');
       });
     }
-    expect(document.querySelector('.sidebar a[aria-current="page"]')?.getAttribute('href')).toBe('#/');
+    expect(document.querySelector('#utility-navigation a[href="#/"]')).toBeNull();
+    expect(document.querySelector('.sidebar .brand')?.getAttribute('href')).toBe('#/');
   });
 
   it('finds PDF tools by their section name and hides empty sections', () => {
@@ -75,16 +76,13 @@ describe('routes outside the tool list', () => {
     await vi.waitFor(() => expect(document.title).toBe(title));
   };
 
-  it('names an unknown route in the title and breadcrumb and marks no navigation link current', async () => {
+  it('names an unknown route in the title and marks no navigation link current', async () => {
     await route('#/nope', 'Page not found · Utility Desk');
-    expect(document.getElementById('breadcrumb')?.textContent).toBe('Page not found');
     expect(document.querySelector('#main h1')?.textContent).toBe('Page not found');
     expect(document.querySelector('.sidebar a[aria-current]')).toBeNull();
     await route('#/split-pdf', 'Split PDF · Utility Desk');
-    expect(document.getElementById('breadcrumb')?.textContent).toBe('Split PDF');
     expect(document.querySelector('.sidebar a[aria-current="page"]')?.getAttribute('href')).toBe('#/split-pdf');
     await route('#/', 'Utility Desk');
-    expect(document.getElementById('breadcrumb')?.textContent).toBe('All utilities');
   });
 
   it('shows the package version in the footer', () => {

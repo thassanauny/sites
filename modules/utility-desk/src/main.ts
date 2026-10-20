@@ -23,19 +23,15 @@ async function render() {
     if (id !== 'notfound' && a.getAttribute('href') === hrefFor(id)) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
-  const breadcrumb = document.getElementById('breadcrumb')!;
   if (id === 'dashboard') {
     dashboard(root);
     document.title = 'Utility Desk';
-    breadcrumb.textContent = 'All utilities';
   } else if (id === 'notfound') {
     document.title = 'Page not found · Utility Desk';
-    breadcrumb.textContent = 'Page not found';
     root.append(pageHeader('Page not found', 'That route does not exist.'), h('a', { href: '#/', class: 'btn btn-primary' }, 'Back to dashboard'));
   } else {
     const def = TOOLS.find((t) => t.id === id)!;
     document.title = `${def.title} · Utility Desk`;
-    breadcrumb.textContent = def.title;
     root.append(h('p', { class: 'muted' }, 'Loading…'));
     try {
       const m = await def.load();

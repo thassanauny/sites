@@ -262,12 +262,12 @@ describe('TextDrop dialogs', () => {
     expect(element<HTMLInputElement>('snippet-name-input').value).toBe('My notes');
     expect(element<HTMLTextAreaElement>('editor').value).toBe('Keep this unsaved text');
     expect(element('page-name').textContent).toBe('Untitled snippet');
-    expect(document.title).toBe('Untitled snippet — TextDrop');
+    expect(document.title).toBe('Untitled snippet · TextDrop');
     writes.mockRestore();
     element('rename-confirm').click();
     await flush();
     expect(element('page-name').textContent).toBe('My notes');
-    expect(document.title).toBe('My notes — TextDrop');
+    expect(document.title).toBe('My notes · TextDrop');
     expect(document.activeElement).toBe(element('settings'));
     expect(cloud.savePage).not.toHaveBeenCalled();
     expect(element<HTMLTextAreaElement>('editor').value).toBe('Keep this unsaved text');
