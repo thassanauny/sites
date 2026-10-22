@@ -40,6 +40,8 @@ export default function App() {
     dismissError,
     setNotice,
     create,
+    saveCopy,
+    forcePending,
     join,
     recoverDraft,
     removeDeviceBoard,
@@ -199,16 +201,6 @@ export default function App() {
         )}
       </main>
       <footer className="app-footer">
-        {board && (
-          <button
-            type="button"
-            className="text-button"
-            disabled={busy || Boolean(modal)}
-            onClick={() => setModal({ type: 'pending', board })}
-          >
-            Review device edits
-          </button>
-        )}
         <span className="footer-sync">
           {lastSync ? (
             <>
@@ -225,6 +217,18 @@ export default function App() {
             'Waiting for first sync.'
           )}
         </span>
+        {board && (
+          <span className="footer-board-change">
+            Last board change:{' '}
+            <time dateTime={board.updated_at}>
+              {new Date(board.updated_at).toLocaleString('en-US', {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+                hour12: true,
+              })}
+            </time>
+          </span>
+        )}
         <span className="app-version">pinboard · {version}</span>
       </footer>
       {notice && (
@@ -261,6 +265,8 @@ export default function App() {
           onClose={() => closeModal(modal)}
           onSave={save}
           onCreate={create}
+          onCopy={saveCopy}
+          onForce={forcePending}
           onJoin={join}
           onRecover={recoverDraft}
           onRemove={removeDeviceBoard}

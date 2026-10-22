@@ -390,9 +390,9 @@ describe('Pinboard UI: synchronization and connectivity', () => {
     });
     expect(status()).toBe('Connected');
     expect(syncLabel()).toMatch(/^Synced \d{1,2}:\d{2}/);
-    expect(document.querySelector('.sidebar-footer time')?.getAttribute('datetime')).toBe(
-      board.updated_at,
-    );
+    expect(
+      document.querySelector('.app-footer .footer-board-change time')?.getAttribute('datetime'),
+    ).toBe(board.updated_at);
 
     await click('Settings');
     await fill('Board name', 'Renamed');

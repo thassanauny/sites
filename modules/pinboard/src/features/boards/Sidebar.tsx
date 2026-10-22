@@ -115,20 +115,6 @@ export function Sidebar({
             </div>
           </section>
         )}
-        <div className="sidebar-footer">
-          {currentBoard && (
-            <span className="footer-board-change">
-              Last board change:{' '}
-              <time dateTime={currentBoard.updated_at}>
-                {new Date(currentBoard.updated_at).toLocaleString('en-US', {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                  hour12: true,
-                })}
-              </time>
-            </span>
-          )}
-        </div>
       </div>
     </aside>
   );

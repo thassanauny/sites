@@ -217,6 +217,7 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
       )}
       <footer className="app-footer">
         <span className="footer-sync">{cloud.lastSync ? <>Synced <time dateTime={cloud.lastSync.toISOString()}>{cloud.lastSync.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</time></> : 'Waiting for first sync.'}</span>
+        {!home && <span className="footer-board-change">Last board change: <time dateTime={board.updatedAt}>{new Date(board.updatedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', hour12: true })}</time></span>}
         <span className="app-version">blueprint · {APP_VERSION}</span>
       </footer>
     </div>

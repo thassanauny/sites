@@ -64,7 +64,7 @@ export function shell(app: HTMLElement) {
       { class: 'workspace' },
       h('header', { class: 'topbar' }, h('div', { class: 'privacy-note' }, h('span', { class: 'privacy-icon', 'aria-hidden': 'true' }, icon('privacy')), h('div', { class: 'privacy-copy' }, h('span', { class: 'eyebrow' }, 'PRIVATE BY DESIGN'), h('strong', {}, 'Nothing leaves this tab.'))), topbarActions),
       h('main', { id: 'main', tabindex: -1 }),
-      h('footer', {}, h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, `Utility Desk · ${version}`)),
     ),
+    h('footer', { class: 'app-footer' }, h('a', { href: `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md` }, 'Open-source notices'), h('span', {}, `Utility Desk · ${version}`)),
   );
 }

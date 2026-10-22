@@ -254,6 +254,14 @@ create table if not exists public.pinboard_cards (
 );
 create index if not exists pinboard_cards_position_idx on public.pinboard_cards(board_id, column_id, position, id);
 create index if not exists pinboard_cards_order_idx on public.pinboard_cards(board_id, ordinal);
+-- A count whose generated expression was removed has no default or NOT NULL.
+-- Reassert the current row-storage invariant under the transaction's DDL lock.
+alter table public.pinboard_boards alter column active_card_count set default 0;
+update public.pinboard_boards b set active_card_count=(
+  select count(*) from public.pinboard_cards c where c.board_id=b.id
+    and not coalesce((c.data->>'archived')::boolean,false)
+) where b.active_card_count is null;
+alter table public.pinboard_boards alter column active_card_count set not null;
 -- The completed JSON backfill audit is no longer needed by the current schema.
 drop table if exists private.pinboard_row_storage_audit;
 
@@ -335,6 +343,80 @@ begin
 end;
 $$;
 
+-- Explicit recovery actions replace a validated snapshot atomically; ordinary edits remain row operations.
+create or replace function private.pinboard_replace_snapshot(p_board_id uuid,p_board jsonb)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare b public.pinboard_boards%rowtype; fields jsonb:=nullif(p_board->'card_fields','null'::jsonb);
+  item record; removed_cards text[]; removed_columns text[]; bytes bigint;
+begin
+  select * into b from public.pinboard_boards where id=p_board_id for update;
+  if not found then raise exception 'PINBOARD_ACCESS_DENIED' using errcode='42501'; end if;
+  if jsonb_typeof(p_board) is distinct from 'object'
+    or not (p_board ?& array['title','description','columns','cards'])
+    or not private.pinboard_allowed_keys(p_board,array['title','description','columns','cards','card_fields'])
+    or not private.pinboard_valid_text(p_board->'title',160)
+    or not private.pinboard_valid_text(p_board->'description',10000,false)
+    or not private.pinboard_valid_state(p_board->'columns',p_board->'cards')
+    or (fields is not null and not private.pinboard_valid_card_fields(fields))
+    then raise exception 'PINBOARD_INVALID_BOARD' using errcode='22023'; end if;
+  if exists(select 1 from jsonb_array_elements(p_board->'cards') c
+    where (fields?'assignees' and c->>'assignee'<>'' and not(fields->'assignees' @> jsonb_build_array(c->'assignee')))
+      or exists(select 1 from jsonb_object_keys(coalesce(c->'customFields','{}'::jsonb)) f(id)
+        where not exists(select 1 from jsonb_array_elements(coalesce(fields->'custom','[]'::jsonb)) d where d->>'id'=f.id)))
+    then raise exception 'PINBOARD_INVALID_BOARD' using errcode='22023'; end if;
+  bytes:=octet_length((p_board->'columns')::text)+octet_length((p_board->'cards')::text)+octet_length(coalesce(fields,'null'::jsonb)::text);
+  if bytes>2000000 then raise exception 'PINBOARD_BOARD_TOO_LARGE' using errcode='P0001'; end if;
+  if b.revision=9007199254740991 then raise exception 'PINBOARD_BOARD_LIMIT' using errcode='P0001'; end if;
+  removed_cards:=array(select id from unnest(b.deleted_card_ids) id
+    where not exists(select 1 from jsonb_array_elements(p_board->'cards') c where c->>'id'=id));
+  removed_columns:=array(select id from unnest(b.deleted_column_ids) id
+    where not exists(select 1 from jsonb_array_elements(p_board->'columns') c where c->>'id'=id));
+  for item in select id from public.pinboard_cards c where board_id=b.id
+    and not exists(select 1 from jsonb_array_elements(p_board->'cards') n where n->>'id'=c.id::text) order by ordinal loop
+    removed_cards:=(array_append(removed_cards,item.id::text))[greatest(1,cardinality(removed_cards)+1-999):];
+  end loop;
+  for item in select id from public.pinboard_columns c where board_id=b.id
+    and not exists(select 1 from jsonb_array_elements(p_board->'columns') n where n->>'id'=c.id) order by ordinal loop
+    removed_columns:=(array_append(removed_columns,item.id))[greatest(1,cardinality(removed_columns)+1-199):];
+  end loop;
+  delete from public.pinboard_cards where board_id=b.id;
+  delete from public.pinboard_columns where board_id=b.id;
+  insert into public.pinboard_columns(board_id,data,ordinal)
+    select b.id,value,ordinality from jsonb_array_elements(p_board->'columns') with ordinality;
+  insert into public.pinboard_cards(board_id,data,ordinal)
+    select b.id,value,ordinality from jsonb_array_elements(p_board->'cards') with ordinality;
+  update public.pinboard_boards set title=p_board->>'title',description=p_board->>'description',card_fields=fields,
+    card_count=jsonb_array_length(p_board->'cards'),column_count=jsonb_array_length(p_board->'columns'),
+    active_card_count=(select count(*) from jsonb_array_elements(p_board->'cards') c where not coalesce((c->>'archived')::boolean,false)),
+    content_bytes=bytes,next_card_ordinal=jsonb_array_length(p_board->'cards')+1,
+    deleted_card_ids=removed_cards,deleted_column_ids=removed_columns,
+    revision=revision+1,updated_at=clock_timestamp() where id=b.id returning * into b;
+  return private.pinboard_board_json(b);
+end;
+$$;
+revoke all on function private.pinboard_replace_snapshot(uuid,jsonb) from public,anon,authenticated;
+
+create or replace function private.pinboard_copy_board(p_id uuid,p_board jsonb)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare caller uuid:=auth.uid(); existed boolean;
+begin
+  if caller is null then raise exception 'PINBOARD_AUTH_REQUIRED' using errcode='42501'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(caller::text,9184));
+  select exists(select 1 from public.pinboard_boards where id=p_id) into existed;
+  -- Creation checks ownership, quotas and lost-response retries under this same lock.
+  if existed then return private.pinboard_create_board(p_id,p_board->>'title',p_board->>'description'); end if;
+  perform private.pinboard_create_board(p_id,p_board->>'title',p_board->>'description');
+  delete from public.pinboard_columns where board_id=p_id;
+  return private.pinboard_replace_snapshot(p_id,p_board);
+end;
+$$;
+create or replace function public.pinboard_copy_board(p_id uuid,p_board jsonb)
+returns jsonb language sql security invoker set search_path='' as $$
+  select private.pinboard_copy_board(p_id,p_board);
+$$;
+revoke all on function private.pinboard_copy_board(uuid,jsonb),public.pinboard_copy_board(uuid,jsonb) from public,anon,authenticated;
+grant execute on function private.pinboard_copy_board(uuid,jsonb),public.pinboard_copy_board(uuid,jsonb) to authenticated;
+
 create or replace function private.pinboard_apply_operation(p_board_id uuid,p_operation jsonb)
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare
@@ -352,6 +434,11 @@ begin
   if not found then raise exception 'PINBOARD_ACCESS_DENIED' using errcode='42501'; end if;
   if jsonb_typeof(p_operation) is distinct from 'object' or jsonb_typeof(p_operation->'type') is distinct from 'string'
     then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+  if kind='replace_board' then
+    if not private.pinboard_has_keys(p_operation,array['type','board'])
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    return private.pinboard_replace_snapshot(b.id,p_operation->'board');
+  end if;
   fields:=b.card_fields; new_title:=b.title; new_description:=b.description;
   card_total:=b.card_count; column_total:=b.column_count; active_total:=b.active_card_count;
   bytes:=b.content_bytes; next_ordinal:=b.next_card_ordinal;
@@ -650,6 +737,14 @@ revoke all on function private.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint
   public.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint) from public, anon, authenticated;
 grant execute on function private.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint),
   public.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint) to authenticated;
+
+create or replace function public.pinboard_force_board_once(p_board_id uuid,p_operation_id uuid,p_board jsonb,p_base_revision bigint)
+returns jsonb language sql security invoker set search_path='' as $$
+  select private.pinboard_mutate_board_once(p_board_id,p_operation_id,
+    jsonb_build_object('type','replace_board','board',p_board),p_base_revision);
+$$;
+revoke all on function public.pinboard_force_board_once(uuid,uuid,jsonb,bigint) from public,anon,authenticated;
+grant execute on function public.pinboard_force_board_once(uuid,uuid,jsonb,bigint) to authenticated;
 
 revoke all on function private.pinboard_has_keys(jsonb,text[]), private.pinboard_allowed_keys(jsonb,text[]),
   private.pinboard_valid_text(jsonb,integer,boolean), private.pinboard_valid_uuid(jsonb),

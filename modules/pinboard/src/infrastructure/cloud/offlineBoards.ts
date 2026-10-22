@@ -6,6 +6,7 @@ import {
   validateBoardDetails,
   validateOperation,
   validateUuid,
+  readBoard,
 } from '../../domain/boards/board';
 import { AUTH_STORAGE_KEY, validatePinboardSession } from '../auth/session';
 import { OfflineDatabase } from '../storage/offlineDatabase';
@@ -16,8 +17,15 @@ export interface Entry {
   board?: Board;
   pending: { id: string; operation: Operation; baseRevision: number }[];
   backups?: { id: string; board: Board; createdAt: string }[];
-  /** A local editor save rejected before queueing; its durable backup is never uploaded. */
+  /** A rejected editor save; restoring its backup requires an explicit recovery action. */
   unappliedBackupId?: string;
+  force?: {
+    id: string;
+    board: Board;
+    baseRevision: number;
+    pendingIds: string[];
+    unappliedBackupId?: string;
+  };
 }
 export interface PendingBoardReview {
   owner: string;
@@ -28,6 +36,7 @@ export interface PendingBoardReview {
   online: boolean;
   unappliedBackupId?: string;
   retryError?: string;
+  forcePending?: boolean;
 }
 interface Remote {
   /** Establish a first anonymous session before capturing ownership of data requests. */
@@ -35,6 +44,8 @@ interface Remote {
   loadBoardList(known?: readonly BoardSummary[]): Promise<BoardSummary[]>;
   loadBoard(id: string): Promise<Board>;
   createBoard(id: string, title: string, description: string): Promise<Board>;
+  copyBoard(id: string, source: Board): Promise<Board>;
+  forceBoard(id: string, token: string, source: Board, baseRevision: number): Promise<Board>;
   joinBoard(code: string): Promise<Board>;
   mutateBoard(
     id: string,
@@ -43,10 +54,11 @@ interface Remote {
     baseRevision?: number,
   ): Promise<Board>;
 }
-interface OfflineBoards extends Omit<Remote, 'mutateBoard'> {
+interface OfflineBoards extends Omit<Remote, 'mutateBoard' | 'forceBoard'> {
   mutateBoard(id: string, operation: Operation, recovery?: Board): Promise<Board>;
   reviewPendingBoard(id: string): Promise<PendingBoardReview>;
   resolvePendingBoard(review: PendingBoardReview, action: 'retry' | 'discard'): Promise<Board>;
+  forcePendingBoard(review: PendingBoardReview): Promise<Board>;
 }
 /** Setup/authentication failures affect every board and must stop the upload pass. */
 export class BoardSyncUnavailableError extends Error {}
@@ -62,8 +74,9 @@ const transient = (error: unknown) =>
   /network|connection|connect|fetch|offline|timed? ?out|took too long|abort/i.test(
     error instanceof Error ? error.message : '',
   );
+const hasPending = (entry?: Entry) => Boolean(entry?.pending.length || entry?.force);
 const unappliedMessage =
-  'That card was removed. Your draft is backed up on this device. Open Review device edits to download it or use the shared board.';
+  'That card was removed. Your draft is backed up on this device. Open Settings → Compare board versions to recover it or use the shared board.';
 function missingCard(board: Board, operation: Operation): boolean {
   return (
     (operation.type === 'update_card' || operation.type === 'move_card') &&
@@ -72,7 +85,7 @@ function missingCard(board: Board, operation: Operation): boolean {
 }
 function reviewRetryError(entry: Entry, shared: Board): string | undefined {
   const removed =
-    'A card in this draft was removed. Download the draft or choose Use shared board; retrying cannot restore deleted cards.';
+    'A card in this draft was removed. Normal retry cannot restore it. Force sync can restore the reviewed device version, or choose Use shared board.';
   if (entry.unappliedBackupId) return removed;
   const cards = new Set(shared.cards.map((card) => card.id));
   let unconfirmedCreate = false;
@@ -126,10 +139,12 @@ function editorSnapshot(source: Board, recovery: Board | undefined, operation: O
 }
 const project = (entry: Entry): Board | undefined => {
   try {
-    const board = entry.pending.reduce<Board | undefined>(
-      (board, change) => board && applyOfflineOperation(board, change.operation),
-      entry.board,
-    );
+    const board = entry.pending
+      .filter((change) => !entry.force?.pendingIds.includes(change.id))
+      .reduce<Board | undefined>(
+        (board, change) => board && applyOfflineOperation(board, change.operation),
+        entry.force ? { ...entry.force.board, localPending: true } : entry.board,
+      );
     return board && entry.unappliedBackupId ? { ...board, localError: unappliedMessage } : board;
   } catch (error) {
     if (!entry.draft) throw error;
@@ -142,7 +157,11 @@ const project = (entry: Entry): Board | undefined => {
 };
 function reviewDraft(entry: Entry, shared?: Board): Board | undefined {
   const local =
-    (shared && reviewRetryError(entry, shared) ? entry.draft : undefined) ?? project(entry);
+    (entry.force
+      ? project(entry)
+      : shared && reviewRetryError(entry, shared)
+        ? entry.draft
+        : undefined) ?? project(entry);
   const recovery = recoveryBoard(entry);
   if (!local || !recovery) return local;
   // Carry only missing recovery cards over the current projection, so newer
@@ -198,7 +217,7 @@ export function withOfflineBoards(
           pending: current?.pending ?? [],
           draft: current?.draft,
         },
-        queued: Boolean(current?.pending.length),
+        queued: hasPending(current),
       }),
       identity,
     );
@@ -220,26 +239,41 @@ export function withOfflineBoards(
           boardErrors.delete(entry.summary.id);
           try {
             let current = await database.read(entry.summary.id);
-            while (current?.pending.length && navigator.onLine) {
+            while (current && hasPending(current) && navigator.onLine) {
               if ((await database.owner()) !== identity) return;
-              const sent = current.pending[0]!;
-              const saved = await remote.mutateBoard(
-                entry.summary.id,
-                sent.operation,
-                sent.id,
-                sent.baseRevision,
-              );
+              const force = current.force;
+              const sent = force ?? current.pending[0]!;
+              const saved = force
+                ? await remote.forceBoard(
+                    entry.summary.id,
+                    force.id,
+                    force.board,
+                    force.baseRevision,
+                  )
+                : await remote.mutateBoard(
+                    entry.summary.id,
+                    current.pending[0]!.operation,
+                    sent.id,
+                    sent.baseRevision,
+                  );
               if ((await database.owner()) !== identity) return;
               current = await database.change(
                 saved.id,
                 (value) => {
-                  const pending = (value?.pending ?? []).filter((change) => change.id !== sent.id);
+                  const pending = (value?.pending ?? []).filter((change) =>
+                    force ? !force.pendingIds.includes(change.id) : change.id !== sent.id,
+                  );
                   return {
                     value: {
                       ...value,
                       board: saved,
                       summary: summarizeBoard(saved),
                       pending,
+                      force: force ? undefined : value?.force,
+                      unappliedBackupId:
+                        force && value?.unappliedBackupId === force.unappliedBackupId
+                          ? undefined
+                          : value?.unappliedBackupId,
                       draft: pending.length ? value?.draft : undefined,
                     },
                     queued: pending.length > 0,
@@ -283,7 +317,63 @@ export function withOfflineBoards(
         online: Boolean(shared),
         unappliedBackupId: entry.unappliedBackupId,
         retryError: reviewRetryError(entry, shared ?? entry.board),
+        forcePending: Boolean(entry.force),
       };
+    },
+    forcePendingBoard: async (review) => {
+      if (!navigator.onLine || !review.online)
+        throw new Error('Reconnect and refresh the comparison before force syncing.');
+      if (!navigator.locks)
+        throw new Error('Force sync needs browser Web Locks. Your draft is kept.');
+      const snapshot = readBoard(review.local);
+      await navigator.locks.request(`pinboard-offline-sync:${review.owner}`, async () => {
+        await sameOwner(review.owner);
+        await database.change(
+          snapshot.id,
+          (current) => {
+            if (
+              !current?.board ||
+              current.force ||
+              current.pending.length !== review.pendingIds.length ||
+              current.pending.some((change, index) => change.id !== review.pendingIds[index]) ||
+              current.unappliedBackupId !== review.unappliedBackupId
+            )
+              throw new Error('Device edits changed. Refresh the comparison before force syncing.');
+            const token = crypto.randomUUID();
+            return {
+              value: {
+                ...current,
+                force: {
+                  id: token,
+                  board: snapshot,
+                  baseRevision: review.shared.revision,
+                  pendingIds: [...review.pendingIds],
+                  unappliedBackupId: review.unappliedBackupId,
+                },
+                backups: [
+                  ...(current.backups ?? []),
+                  {
+                    id: token,
+                    board: structuredClone(snapshot),
+                    createdAt: new Date().toISOString(),
+                  },
+                ],
+              },
+              queued: true,
+            };
+          },
+          review.owner,
+        );
+      });
+      await sync();
+      await sameOwner(review.owner);
+      const entry = await database.read(snapshot.id);
+      await sameOwner(review.owner);
+      const error = boardErrors.get(snapshot.id);
+      if (error) throw error;
+      if (!entry || entry.force)
+        throw new Error('Force sync is still pending. Your draft is kept.');
+      return project(entry)!;
     },
     resolvePendingBoard: async (review, action) => {
       if (!navigator.onLine || !review.online)
@@ -310,9 +400,13 @@ export function withOfflineBoards(
               throw new Error(
                 'Pending edits changed in another tab. Refresh this review before choosing.',
               );
-            if (!current.pending.length && !current.unappliedBackupId)
+            if (!current.pending.length && !current.unappliedBackupId && !current.force)
               throw new Error('These edits already synced. Refresh this review.');
             const retryError = reviewRetryError(current, shared);
+            if (action === 'retry' && current.force)
+              throw new Error(
+                'A confirmed force sync is still pending. Wait for syncing or save a new board.',
+              );
             if (action === 'retry' && retryError) throw new Error(retryError);
             const local = reviewDraft(current, shared)!;
             const pending =
@@ -329,6 +423,7 @@ export function withOfflineBoards(
                 board: shared,
                 summary: summarizeBoard(shared),
                 pending,
+                force: undefined,
                 draft: pending.length ? local : undefined,
                 unappliedBackupId: undefined,
                 backups: [
@@ -396,7 +491,7 @@ export function withOfflineBoards(
               summary.id,
               (entry) => ({
                 value: { ...entry, summary, pending: entry?.pending ?? [] },
-                queued: Boolean(entry?.pending.length),
+                queued: hasPending(entry),
               }),
               identity,
             );
@@ -404,7 +499,7 @@ export function withOfflineBoards(
             summaries.map(async (summary) => {
               const entry = await database.read(summary.id);
               await sameOwner(identity);
-              const board = entry?.pending.length ? project(entry) : undefined;
+              const board = entry && hasPending(entry) ? project(entry) : undefined;
               const result = board ? summarizeBoard(board) : summary;
               const error = boardErrors.get(summary.id);
               return error ? { ...result, localError: error.message } : result;
@@ -460,6 +555,42 @@ export function withOfflineBoards(
       const identity = await begin();
       return remember(await remote.createBoard(id, title, description), identity);
     },
+    copyBoard: async (id, source) => {
+      validateUuid(id, 'Board ID');
+      const identity = await begin();
+      if (!identity || !navigator.onLine)
+        throw new Error('Reconnect before saving a new board. Your original draft is kept.');
+      const entry = await database.change(
+        source.id,
+        (current) => {
+          if (!current?.board)
+            throw new Error('The saved board is unavailable. Your draft is kept.');
+          if (current.backups?.some((backup) => backup.id === id))
+            return { value: current, queued: hasPending(current) };
+          const local = reviewDraft(current)!;
+          const snapshot = readBoard({
+            ...local,
+            title: source.title,
+            description: source.description,
+            card_fields: source.card_fields,
+          });
+          return {
+            value: {
+              ...current,
+              backups: [
+                ...(current.backups ?? []),
+                { id, board: snapshot, createdAt: new Date().toISOString() },
+              ],
+            },
+            queued: hasPending(current),
+          };
+        },
+        identity,
+      );
+      await sameOwner(identity);
+      const snapshot = entry.backups!.find((backup) => backup.id === id)!.board;
+      return remember(await remote.copyBoard(id, snapshot), identity);
+    },
     joinBoard: async (code) => {
       normalizeInviteCode(code);
       const identity = await begin();
@@ -504,7 +635,7 @@ export function withOfflineBoards(
                 backups: same ? current.backups : [...(current.backups ?? []), backup],
                 unappliedBackupId: same ? current.unappliedBackupId : backup.id,
               },
-              queued: current.pending.length > 0,
+              queued: hasPending(current),
             };
           }
           const draft = editorSnapshot(

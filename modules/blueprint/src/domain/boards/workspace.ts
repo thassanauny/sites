@@ -4,7 +4,7 @@ import { mergeBoardContent, mergeCloudBoard, sameBoardContent } from "./merge";
 
 export type WorkspaceData = { boards: Board[]; activeId: string };
 
-/** Merge another tab's durable snapshot; overlapping edits require explicit recovery. */
+/** Merge another tab's durable snapshot; competing moves use its persisted position. */
 export function mergeDeviceWorkspace(base: WorkspaceData, local: WorkspaceData, latest: WorkspaceData): WorkspaceData | undefined {
   const original = new Map(base.boards.map(board => [board.id, board]));
   const theirs = new Map(latest.boards.map(board => [board.id, board]));
@@ -32,7 +32,7 @@ export function mergeDeviceWorkspace(base: WorkspaceData, local: WorkspaceData, 
   return { boards, activeId: boards.some(board => board.id === local.activeId) ? local.activeId : boards[0]?.id || "" };
 }
 
-/** Remote refreshes replace clean documents and retain every unsaved edit and local viewport. */
+/** Remote refreshes merge drafts, resolve competing moves and retain local viewports. */
 export function mergeWorkspace(
   previous: WorkspaceData,
   remoteBoards: Board[],

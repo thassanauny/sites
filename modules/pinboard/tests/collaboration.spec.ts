@@ -51,6 +51,10 @@ async function edit(page: Page) {
     .click();
   await expect(page.getByRole('dialog', { name: 'Card details' })).toBeVisible();
 }
+async function openReview(page: Page) {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Compare board versions', exact: true }).click();
+}
 async function saved(page: Page) {
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
@@ -317,17 +321,22 @@ for (const order of ['queued first', 'cached deletion first'] as const)
       await a.getByRole('button', { name: 'Keep draft', exact: true }).click();
       await expect(a.getByLabel('Card title', { exact: true })).toHaveValue(title);
       await a.reload();
-      await a.getByRole('button', { name: 'Review device edits', exact: true }).click();
-      await expect(a.getByLabel('Saved on this device', { exact: true })).toContainText(title);
-      await expect(a.getByLabel('Latest shared board', { exact: true })).not.toContainText(
-        'Keep this deleted-card draft',
-      );
+      await openReview(a);
+      await expect(a.locator('.comparison-local').filter({ hasText: title })).toHaveCount(1);
+      await expect(
+        a.locator('.comparison-shared').filter({ hasText: 'Keep this deleted-card draft' }),
+      ).toHaveCount(0);
       await expect(
         a.getByRole('button', { name: 'Retry reviewed edits', exact: true }),
       ).toHaveCount(0);
       if (order === 'cached deletion first')
         await expect(a.getByRole('dialog')).toContainText('could not be queued');
-      await checkDownload('Download local draft');
+      await expect(
+        a.getByRole('button', { name: 'Download local draft', exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        a.getByRole('button', { name: 'Force sync my changes', exact: true }),
+      ).toBeEnabled();
       expect(await a.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await a.screenshot({ path: testInfo.outputPath('deleted-card-review.png') });
       await b.getByRole('button', { name: 'Edit Second task', exact: true }).click();
@@ -358,10 +367,16 @@ for (const order of ['queued first', 'cached deletion first'] as const)
         'Other board remains editable',
       ]);
       await a.goto(`/#board/${cloud.original.invite_code}`);
-      await a.getByRole('button', { name: 'Review device edits', exact: true }).click();
-      await expect(a.getByLabel('Latest shared board', { exact: true })).toContainText(
-        'Shared work after review opened',
-      );
+      await openReview(a);
+      if (order === 'cached deletion first')
+        expect(
+          (await cached(a, users.creator, cloud.boardId)).board?.cards.find(
+            (card) => card.title === 'Second task',
+          )?.description,
+        ).toBe('Shared work after review opened');
+      await expect(
+        a.locator('.comparison-shared').filter({ hasText: 'Shared work after review opened' }),
+      ).toHaveCount(order === 'queued first' ? 1 : 0);
       await a.getByRole('button', { name: 'Use shared board', exact: true }).click();
       await saved(a);
       const restored = await cached(a, users.creator, cloud.boardId);
@@ -373,7 +388,7 @@ for (const order of ['queued first', 'cached deletion first'] as const)
       );
       expect((await cloud.board()).cards.some((card) => card.id === cardId)).toBe(false);
       await a.reload();
-      await a.getByRole('button', { name: 'Review device edits', exact: true }).click();
+      await openReview(a);
       await checkDownload('Download backup 1');
     });
   }
@@ -394,10 +409,11 @@ test('an expired retry needs explicit review and a changed review cannot overwri
   expect(
     (await cached(a, users.creator, cloud.boardId)).pending.map((change) => change.id),
   ).toEqual(originalQueue.pending.map((change) => change.id));
-  await a.getByRole('button', { name: 'Review device edits', exact: true }).click();
-  await expect(a.getByLabel('Saved on this device', { exact: true })).toContainText(
-    'Reviewed offline title',
-  );
+  await a.getByRole('button', { name: 'Settings', exact: true }).click();
+  await a.getByRole('button', { name: 'Compare board versions', exact: true }).click();
+  await expect(
+    a.locator('.comparison-local').filter({ hasText: 'Reviewed offline title' }),
+  ).toHaveCount(1);
   await edit(b);
   await b.getByLabel('Description').fill('Changed after review opened');
   await b.getByRole('button', { name: 'Save', exact: true }).click();
@@ -406,9 +422,9 @@ test('an expired retry needs explicit review and a changed review cannot overwri
   await expect(a.getByRole('dialog').getByRole('alert')).toContainText('The shared board changed');
   expect((await cached(a, users.creator, cloud.boardId)).backups ?? []).toEqual([]);
   await a.getByRole('button', { name: 'Refresh review', exact: true }).click();
-  await expect(a.getByLabel('Latest shared board', { exact: true })).toContainText(
-    'Changed after review opened',
-  );
+  await expect(
+    a.locator('.comparison-shared').filter({ hasText: 'Changed after review opened' }),
+  ).toHaveCount(1);
   await a.getByRole('button', { name: 'Retry reviewed edits', exact: true }).click();
   await saved(a);
   const stored = await cached(a, users.creator, cloud.boardId);
@@ -474,3 +490,131 @@ test('denied board access keeps its queue while another board saves, and explici
     expect.arrayContaining([users.creator, users.collaborator]),
   );
 });
+
+test('saving a board copy keeps the original and pending edits, and a lost reply retries the same copy', async ({
+  cloud,
+  pair: { a, b },
+}) => {
+  const original = await cloud.board();
+  const reply = cloud.hold(users.creator, 'response', 1, true);
+  await a.getByRole('button', { name: 'Settings', exact: true }).click();
+  await a.getByLabel('Board name', { exact: true }).fill('My recovered project');
+  await a.getByRole('button', { name: 'Save my changes as a new board', exact: true }).click();
+  await expect.poll(() => reply.arrived).toBe(1);
+  const backup = (await cached(a, users.creator, cloud.boardId)).backups!.at(-1)!;
+  expect(backup.board.title).toBe('My recovered project (copy)');
+  reply.release();
+  await expect(a.getByRole('dialog').getByRole('alert')).toBeVisible();
+  await expect(a.getByLabel('Board name', { exact: true })).toHaveValue('My recovered project');
+  await a.getByRole('button', { name: 'Save my changes as a new board', exact: true }).click();
+  await saved(a);
+  const copied = await cloud.board(backup.id);
+  expect(copied.id).not.toBe(original.id);
+  expect(copied.invite_code).not.toBe(original.invite_code);
+  expect(copied.cards).toEqual(original.cards);
+  expect(copied.columns).toEqual(original.columns);
+  expect(await cloud.board()).toEqual(original);
+  await expect(tile(b)).toContainText('First task');
+  await a.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  await expect(
+    a.getByRole('button', { name: 'Open My recovered project (copy)', exact: true }),
+  ).toHaveCount(1);
+  expect((await cached(a, users.creator, cloud.boardId)).pending).toEqual([]);
+});
+
+test('force sync restores a reviewed deleted-card draft only after confirmation and retains its backup', async ({
+  cloud,
+  pair: { a, b },
+}, testInfo) => {
+  await a.context().setOffline(true);
+  await edit(a);
+  await a.getByLabel('Card title', { exact: true }).fill('Explicitly restored task');
+  await a.getByRole('button', { name: 'Save', exact: true }).click();
+  await saved(a);
+  await edit(b);
+  await b.getByRole('button', { name: 'Delete', exact: true }).click();
+  await b.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+  await saved(b);
+  await a.context().setOffline(false);
+  await expect(a.getByRole('alert')).toContainText('removed');
+  await openReview(a);
+  await expect(
+    a.locator('.comparison-local').filter({ hasText: 'Explicitly restored task' }),
+  ).toHaveCount(1);
+  await expect(a.locator('.comparison-shared')).toContainText('Not on the shared board');
+  await expect(a.getByRole('button', { name: 'Download local draft', exact: true })).toHaveCount(0);
+  await a.screenshot({ path: testInfo.outputPath('changed-fields.png') });
+  await a.getByRole('button', { name: 'Force sync my changes', exact: true }).click();
+  expect((await cloud.board()).cards.some((card) => card.id === cardId)).toBe(false);
+  await a.getByRole('button', { name: 'Cancel force sync', exact: true }).click();
+  expect(cloud.writes.some((write) => write.operation.type === 'replace_board')).toBe(false);
+  await a.getByRole('button', { name: 'Force sync my changes', exact: true }).click();
+  await a.getByRole('button', { name: 'Replace shared board', exact: true }).click();
+  await saved(a);
+  await expect(tile(b)).toContainText('Explicitly restored task');
+  const entry = await cached(a, users.creator, cloud.boardId);
+  expect(entry.force).toBeUndefined();
+  expect(entry.pending).toEqual([]);
+  expect(entry.backups?.at(-1)?.board.cards.find((card) => card.id === cardId)?.title).toBe(
+    'Explicitly restored task',
+  );
+  expect(cloud.writes.filter((write) => write.operation.type === 'replace_board')).toHaveLength(1);
+});
+
+for (const width of [1440, 684, 390]) {
+  test(`settings contains device review and preserves the footer and unsaved details at ${width}px`, async ({
+    pair: { a },
+  }, testInfo) => {
+    await a.setViewportSize({ width, height: 960 });
+    const footer = a.locator('.app-footer');
+    await expect(footer.getByRole('button')).toHaveCount(0);
+    const sync = await footer.locator('.footer-sync').boundingBox();
+    const change = await footer.locator('.footer-board-change').boundingBox();
+    const version = await footer.locator('.app-version').boundingBox();
+    expect(sync).not.toBeNull();
+    expect(change).not.toBeNull();
+    expect(version).not.toBeNull();
+    const main = (await a.locator('.main').boundingBox())!;
+    expect(change!.x + change!.width / 2).toBeCloseTo(main.x + main.width / 2, 0);
+    if (width > 520) {
+      expect(change!.y + change!.height / 2).toBeCloseTo(sync!.y + sync!.height / 2, 0);
+      expect(sync!.x + sync!.width).toBeLessThanOrEqual(change!.x);
+      expect(change!.x + change!.width).toBeLessThanOrEqual(version!.x);
+    } else {
+      expect(change!.y).toBeGreaterThanOrEqual(
+        Math.max(sync!.y + sync!.height, version!.y + version!.height),
+      );
+    }
+    await expect(a.locator('.sidebar .footer-board-change')).toHaveCount(0);
+    expect(Math.abs(sync!.y - version!.y)).toBeLessThanOrEqual(1);
+    expect(sync!.x + sync!.width).toBeLessThan(version!.x);
+    expect(version!.x + version!.width).toBeLessThanOrEqual(width);
+    await a.screenshot({ path: testInfo.outputPath('board-footer.png') });
+    const settings = a.getByRole('button', { name: 'Settings', exact: true });
+    await settings.click();
+    await a.getByLabel('Board name', { exact: true }).fill('Unsaved settings draft');
+    const recovery = a.getByRole('region', { name: 'Sync and recovery', exact: true });
+    await expect(
+      recovery.getByRole('button', { name: 'Compare board versions', exact: true }),
+    ).toBeVisible();
+    await a.screenshot({ path: testInfo.outputPath('settings-form.png') });
+    await recovery.getByRole('button', { name: 'Compare board versions', exact: true }).click();
+    await expect(
+      a.getByRole('dialog', { name: 'Compare board versions', exact: true }),
+    ).toBeVisible();
+    await expect(a.getByRole('dialog')).toContainText('No differences.');
+    await a.screenshot({ path: testInfo.outputPath('settings-review.png') });
+    await a.getByRole('button', { name: 'Back to settings', exact: true }).click();
+    await expect(a.getByLabel('Board name', { exact: true })).toHaveValue('Unsaved settings draft');
+    expect(await a.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await a.screenshot({ path: testInfo.outputPath('settings-draft.png') });
+    await a.keyboard.press('Escape');
+    await expect(a.getByRole('dialog', { name: 'Discard this draft?' })).toBeVisible();
+    await a.getByRole('button', { name: 'Keep draft', exact: true }).click();
+    await expect(a.getByLabel('Board name', { exact: true })).toHaveValue('Unsaved settings draft');
+    await a.keyboard.press('Escape');
+    await a.getByRole('button', { name: 'Discard draft', exact: true }).click();
+    await expect(a.getByRole('dialog')).toHaveCount(0);
+    await expect(settings).toBeFocused();
+  });
+}

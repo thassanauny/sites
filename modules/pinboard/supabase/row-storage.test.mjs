@@ -69,6 +69,244 @@ const card = (overrides = {}) => ({
   ...overrides,
 });
 
+const content = ({ title, description, columns, cards, card_fields }) => ({
+  title,
+  description,
+  columns,
+  cards,
+  ...(card_fields ? { card_fields } : {}),
+});
+
+test('board copies are complete, private, atomic and idempotent after a lost reply', async (t) => {
+  const db = await setup(forward);
+  t.after(() => db.close());
+  let source = await create(db);
+  source = await mutate(db, source.id, {
+    type: 'update_board',
+    patch: {
+      card_fields: {
+        hidden: ['dueDate'],
+        custom: [{ id: fieldId, title: 'Estimate', hidden: false }],
+        assignees: ['Alex'],
+      },
+    },
+  });
+  source = await mutate(db, source.id, {
+    type: 'create_card',
+    card: card({ assignee: 'Alex', customFields: { [fieldId]: 'Large' } }),
+  });
+  source = await mutate(db, source.id, { type: 'create_card', card: card({ archived: true }) });
+  const snapshot = { ...content(source), title: 'Recovered project (copy)' },
+    id = randomUUID();
+  const copy = async (target = id, value = snapshot) =>
+    (
+      await db.query('select public.pinboard_copy_board($1,$2::jsonb) board', [
+        target,
+        JSON.stringify(value),
+      ])
+    ).rows[0].board;
+  let copied = await copy();
+  assert.deepEqual(content(copied), snapshot);
+  assert.notEqual(copied.invite_code, source.invite_code);
+  assert.equal(copied.id, id);
+  assert.deepEqual(await document(db, source.id), source);
+  await actor(db, creator);
+  assert.deepEqual(
+    (
+      await db.query('select user_id from public.pinboard_board_access where board_id=$1', [id])
+    ).rows.map((row) => row.user_id),
+    [creator],
+  );
+  copied = await mutate(db, id, {
+    type: 'update_card',
+    id: copied.cards[0].id,
+    patch: { description: 'Edited after the first copy was committed' },
+  });
+  assert.deepEqual(await copy(), copied);
+  await db.exec('reset role');
+  assert.equal(
+    (await db.query('select count(*)::int total from public.pinboard_boards')).rows[0].total,
+    2,
+  );
+  const counts = (
+    await db.query(
+      'select card_count,active_card_count,column_count,deleted_column_ids from public.pinboard_boards where id=$1',
+      [id],
+    )
+  ).rows[0];
+  assert.deepEqual(counts, {
+    card_count: 2,
+    active_card_count: 1,
+    column_count: 3,
+    deleted_column_ids: [],
+  });
+  await actor(db, stranger);
+  await assert.rejects(copy(), /PINBOARD_INVALID_BOARD/);
+  await assert.rejects(
+    db.query('select private.pinboard_replace_snapshot($1,$2::jsonb)', [
+      id,
+      JSON.stringify(snapshot),
+    ]),
+    /permission denied/,
+  );
+  await actor(db, creator);
+  const invalid = randomUUID();
+  await assert.rejects(
+    copy(invalid, { ...snapshot, cards: [card({ columnId: 'missing' })] }),
+    /PINBOARD_INVALID_BOARD/,
+  );
+  await assert.rejects(copy(invalid, { ...snapshot, title: undefined }), /PINBOARD_INVALID_BOARD/);
+  await db.exec('reset role');
+  assert.equal(
+    (
+      await db.query('select count(*)::int total from public.pinboard_boards where id=$1', [
+        invalid,
+      ])
+    ).rows[0].total,
+    0,
+  );
+});
+
+test('force sync is checked, atomic and receipt-protected without replaying over later shared changes', async (t) => {
+  const db = await setup(forward);
+  t.after(() => db.close());
+  let board = await create(db);
+  const restored = card(),
+    removed = card();
+  board = await mutate(db, board.id, { type: 'create_card', card: restored });
+  const local = content(board);
+  board = await mutate(db, board.id, { type: 'delete_card', id: restored.id });
+  board = await mutate(db, board.id, { type: 'create_card', card: removed });
+  const token = randomUUID(),
+    base = board.revision;
+  const force = async (value = local, receipt = token) =>
+    (
+      await db.query('select public.pinboard_force_board_once($1,$2,$3::jsonb,$4) board', [
+        board.id,
+        receipt,
+        JSON.stringify(value),
+        base,
+      ])
+    ).rows[0].board;
+  await actor(db, stranger);
+  await assert.rejects(force(), /PINBOARD_ACCESS_DENIED/);
+  await actor(db, creator);
+  const before = await document(db, board.id);
+  await actor(db, creator);
+  await assert.rejects(
+    force({ ...local, cards: [card({ columnId: 'missing' })] }),
+    /PINBOARD_INVALID_BOARD/,
+  );
+  assert.deepEqual(await document(db, board.id), before);
+  await actor(db, creator);
+  const saved = await force();
+  assert.deepEqual(content(saved), local);
+  board = await mutate(db, board.id, { type: 'create_card', card: removed });
+  assert.deepEqual(board.cards, [restored]); // A stale queued creation cannot undo the explicit removal.
+  board = await mutate(db, board.id, {
+    type: 'update_card',
+    id: restored.id,
+    patch: { description: 'Saved later by a collaborator' },
+  });
+  assert.deepEqual(await force(), board);
+  await assert.rejects(
+    force({ ...local, description: 'Different replay payload' }),
+    /PINBOARD_INVALID_OPERATION/,
+  );
+  await db.exec('reset role');
+  assert.equal(
+    (
+      await db.query(
+        'select count(*)::int total from private.pinboard_operation_receipts where board_id=$1 and operation_id=$2',
+        [board.id, token],
+      )
+    ).rows[0].total,
+    1,
+  );
+  const counts = (
+    await db.query(
+      'select card_count,active_card_count,column_count from public.pinboard_boards where id=$1',
+      [board.id],
+    )
+  ).rows[0];
+  assert.deepEqual(counts, { card_count: 1, active_card_count: 1, column_count: 3 });
+});
+
+test('refresh repairs nullable card counts and initializes future boards without changing saved work', async (t) => {
+  const db = await setup(forward);
+  t.after(() => db.close());
+  // This formerly generated count was nullable and had no default.
+  // Reproduce that installed column shape, rather than an archived schema bridge.
+  await db.exec(`alter table public.pinboard_boards
+    alter column active_card_count drop not null,
+    alter column active_card_count drop default;`);
+  let board = await create(db);
+  const value = card();
+  board = await mutate(db, board.id, { type: 'create_card', card: value });
+  board = await mutate(db, board.id, {
+    type: 'move_card',
+    id: value.id,
+    columnId: 'doing',
+    position: 1024,
+  });
+  board = await mutate(db, board.id, { type: 'create_card', card: card({ archived: true }) });
+  await db.exec('reset role');
+  const snapshot = async () => ({
+    board: await document(db, board.id),
+    access: (
+      await db.query(
+        'select * from public.pinboard_board_access where board_id=$1 order by user_id',
+        [board.id],
+      )
+    ).rows,
+    receipts: (
+      await db.query(
+        'select * from private.pinboard_operation_receipts where board_id=$1 order by operation_id',
+        [board.id],
+      )
+    ).rows,
+  });
+  const before = await snapshot();
+  assert.equal(
+    (await db.query('select active_card_count from public.pinboard_boards where id=$1', [board.id]))
+      .rows[0].active_card_count,
+    null,
+  );
+  await db.exec(forward);
+  assert.deepEqual(await snapshot(), before);
+  const column = (
+    await db.query(`select is_nullable,column_default from information_schema.columns
+    where table_schema='public' and table_name='pinboard_boards' and column_name='active_card_count'`)
+  ).rows[0];
+  assert.equal(column.is_nullable, 'NO');
+  assert.equal(column.column_default, '0');
+  await actor(db, creator);
+  const summaries = (await db.query("select public.pinboard_sync_summaries('{}') result")).rows[0]
+    .result;
+  assert.equal(summaries.boards.find((item) => item.id === board.id).active_card_count, 1);
+  const next = await create(db);
+  assert.equal(
+    (
+      await db.query('select active_card_count from public.pinboard_board_summaries where id=$1', [
+        next.id,
+      ])
+    ).rows[0].active_card_count,
+    0,
+  );
+  await mutate(db, next.id, { type: 'create_card', card: card() });
+  assert.equal(
+    (
+      await db.query('select active_card_count from public.pinboard_board_summaries where id=$1', [
+        next.id,
+      ])
+    ).rows[0].active_card_count,
+    1,
+  );
+  await db.exec('reset role');
+  await db.exec(forward);
+  assert.deepEqual(await snapshot(), before);
+});
+
 test('refresh preserves current rows, invitations and receipts while retiring unchecked APIs', async (t) => {
   const db = await setup(forward);
   t.after(() => db.close());

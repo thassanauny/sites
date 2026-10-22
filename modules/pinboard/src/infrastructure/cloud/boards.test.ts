@@ -103,6 +103,20 @@ describe('online board sharing', () => {
     expect(mock.from).toHaveBeenCalledExactlyOnceWith('pinboard_board_documents');
   });
 
+  it('rejects an uninitialized count and resumes compact refresh after the database is repaired', async () => {
+    const { summarizeBoard } = await import('../../domain/boards/summary');
+    const summary = summarizeBoard({ ...board, revision: 2 });
+    const response = (row: unknown) => ({
+      data: { format: 1, heads: [{ id: board.id, revision: 2 }], boards: [row] },
+      error: null,
+    });
+    mock.rpc.mockResolvedValueOnce(response({ ...summary, active_card_count: null }));
+    mock.rpc.mockResolvedValueOnce(response(summary));
+    const cloud = await import('./boards');
+    await expect(cloud.loadBoardList()).rejects.toThrow('Refresh the Pinboard database schema');
+    expect(await cloud.loadBoardList()).toEqual([summary]);
+    expect(mock.from).not.toHaveBeenCalled();
+  });
   it.each(['PGRST202', '42883'])(
     'reports missing summary setup without full-board reads (%s)',
     async (code) => {

@@ -7,7 +7,6 @@ import { CreateBoardDialog } from './dialogs/CreateBoardDialog';
 import { HelpDialog } from './dialogs/HelpDialog';
 import { JoinBoardDialog } from './dialogs/JoinBoardDialog';
 import { ShareDialog } from './dialogs/ShareDialog';
-import { PendingBoardDialog } from './dialogs/PendingBoardDialog';
 import type { PendingBoardReview } from '../../infrastructure/cloud/offlineBoards';
 
 export interface BoardDialogProps {
@@ -21,6 +20,8 @@ export interface BoardDialogProps {
   onClose: () => void;
   onSave: (boardId: string, operation: Operation, recovery?: Board) => Promise<boolean>;
   onCreate: (id: string, title: string, description: string) => Promise<boolean>;
+  onCopy: (id: string, source: Board) => Promise<boolean>;
+  onForce: (review: PendingBoardReview) => Promise<boolean>;
   onJoin: (code: string) => Promise<boolean>;
   onRecover: (code: string) => Promise<boolean>;
   onRemove: (board: Board) => void;
@@ -40,6 +41,8 @@ export function BoardDialog({
   onClose,
   onSave,
   onCreate,
+  onCopy,
+  onForce,
   onJoin,
   onRecover,
   onRemove,
@@ -49,17 +52,6 @@ export function BoardDialog({
 }: BoardDialogProps) {
   const shared = { busy, offline, serverError, onClose };
   switch (modal.type) {
-    case 'pending':
-      return (
-        <PendingBoardDialog
-          board={modal.board}
-          busy={busy}
-          serverError={serverError}
-          onClose={onClose}
-          onReview={onReview}
-          onResolve={onResolve}
-        />
-      );
     case 'help':
       return <HelpDialog busy={busy} onClose={onClose} />;
     case 'share':
@@ -79,6 +71,10 @@ export function BoardDialog({
           onRecover={onRecover}
           onRemove={onRemove}
           onNotice={onNotice}
+          onReview={onReview}
+          onResolve={onResolve}
+          onCopy={onCopy}
+          onForce={onForce}
         />
       );
     case 'card':

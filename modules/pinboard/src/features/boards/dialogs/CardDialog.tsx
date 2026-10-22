@@ -10,7 +10,7 @@ import {
 } from '../../../domain/boards/fields';
 import { Dialog } from '../../../ui/Dialog';
 import { message } from '../../../ui/message';
-import { downloadBoardDraft } from './PendingBoardDialog';
+import { downloadBoardDraft } from './PendingBoardReview';
 import {
   DescriptionField,
   DiscardDraft,
@@ -222,8 +222,8 @@ export function CardDialog({
           {cardRemoved && (
             <section className="draft-recovery" aria-label="Deleted card recovery">
               <p>
-                This card was removed. Save keeps a device backup for Review device edits; it cannot
-                restore the shared card.
+                This card was removed. Save keeps a device backup in Settings → Compare board
+                versions. Normal Save cannot restore the shared card.
               </p>
               <button
                 type="button"

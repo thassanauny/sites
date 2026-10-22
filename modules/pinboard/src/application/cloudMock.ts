@@ -10,6 +10,8 @@ export const cloud = {
   loadBoardList: vi.fn<(known: readonly BoardSummary[]) => Promise<BoardSnapshot[]>>(),
   loadBoard: vi.fn<(id: string) => Promise<Board>>(),
   createBoard: vi.fn(),
+  copyBoard: vi.fn(),
+  forcePendingBoard: vi.fn(),
   joinBoard: vi.fn(),
   mutateBoard: vi.fn(),
   recoveryDraft: vi.fn<(board: Board) => void>(),
@@ -44,6 +46,8 @@ export const cloudModule = {
   },
   loadBoard: cloud.loadBoard,
   createBoard: cloud.createBoard,
+  copyBoard: cloud.copyBoard,
+  forcePendingBoard: cloud.forcePendingBoard,
   joinBoard: cloud.joinBoard,
   // Existing UI assertions inspect the wire operation; recovery never goes to RPCs.
   mutateBoard: (id: string, operation: Operation, recovery?: Board) => {

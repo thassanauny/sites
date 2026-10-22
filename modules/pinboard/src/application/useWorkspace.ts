@@ -4,6 +4,8 @@ import { nextPosition, placeCard, sortedCards } from '../domain/boards/board';
 import {
   cloudConfigured,
   createBoard,
+  copyBoard,
+  forcePendingBoard,
   joinBoard,
   mutateBoard,
   startNewSession,
@@ -199,6 +201,16 @@ export function useWorkspace() {
   const create = useCallback(
     (id: string, title: string, description: string) =>
       action(() => createBoard(id, title, description), 'Your board is ready', true),
+    [action],
+  );
+  const saveCopy = useCallback(
+    (id: string, source: Board) =>
+      action(() => copyBoard(id, source), 'Your board copy is ready', true),
+    [action],
+  );
+  const forcePending = useCallback(
+    (review: PendingBoardReview) =>
+      action(() => forcePendingBoard(review), 'Your version replaced the shared board'),
     [action],
   );
   const join = useCallback(
@@ -415,6 +427,8 @@ export function useWorkspace() {
     dismissError,
     setNotice,
     create,
+    saveCopy,
+    forcePending,
     join,
     recoverDraft,
     removeDeviceBoard,

@@ -4,6 +4,22 @@ import { makeNode } from "../src/domain/boards/components";
 import { createBoard } from "../src/domain/boards/templates";
 
 describe("collaborative undo history", () => {
+  it("retains accepted collaborator positions through undo and redo of independent edits", () => {
+    const original = createBoard();
+    const current = structuredClone(original);
+    current.nodes[0].position = { x: 50, y: 60 };
+    current.nodes[1].data.label = "Our new name";
+    const remote = structuredClone(current);
+    remote.nodes[0].position = { x: 70, y: 80 };
+    const result = rebaseHistory(current, remote, [historyEntry(original)], [historyEntry(current)]);
+    expect(result.past).toHaveLength(1);
+    expect(result.future).toHaveLength(1);
+    expect(result.past[0].nodes[0].position).toEqual(remote.nodes[0].position);
+    expect(result.future[0].nodes[0].position).toEqual(remote.nodes[0].position);
+    expect(result.past[0].nodes[1].data.label).toBe(original.nodes[1].data.label);
+    expect(result.future[0].nodes[1].data.label).toBe("Our new name");
+  });
+
   it("undoes our addition and move while retaining another person's addition and property", () => {
     const original = createBoard();
     const moved = structuredClone(original);

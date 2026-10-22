@@ -117,6 +117,92 @@ test("simultaneous independent additions and moves converge after a real revisio
   } finally { gate.release(); await team.close(); }
 });
 
+for (const first of ["alice", "bob"] as const) {
+  test(`competing moves converge to the accepted position when ${first} saves first`, async ({ browser, baseURL }) => {
+    const team = await openTeam(browser, baseURL!);
+    const { cloud, alice, bob } = team;
+    const gate = cloud.holdNextSaves();
+    try {
+      await moveNode(team[first], "team-api", 75, 55);
+      await expect.poll(() => gate.arrived).toBe(1);
+      await moveNode(first === "alice" ? bob : alice, "team-api", -40, 95);
+      await expect.poll(() => gate.arrived).toBe(2);
+      gate.release();
+      await expect.poll(() => cloud.writes.length).toBe(2);
+      expect(cloud.writes.filter(write => write.accepted)).toHaveLength(1);
+      expect(cloud.writes.find(write => write.accepted)!.userId).toBe(
+        first === "alice" ? collaborationUsers.creator : collaborationUsers.collaborator,
+      );
+      const position = cloud.board().document.nodes.find(item => item.id === "team-api")!.position;
+      for (const page of [alice, bob]) {
+        await expectPosition(page, "team-api", position);
+        await expect(page.locator(".connection")).toHaveText("Connected");
+      }
+      await Promise.all([alice.reload(), bob.reload()]);
+      for (const page of [alice, bob]) {
+        await expectPosition(page, "team-api", position);
+        await expect(page.locator(".connection")).toHaveText("Connected");
+      }
+      expect(cloud.writes).toHaveLength(2);
+      expect(cloud.writes.every(write => write.expectedRevision === 1)).toBe(true);
+    } finally { gate.release(); await team.close(); }
+  });
+}
+
+test("a rejected competing move still saves independent edits and keeps shared positions through undo", async ({ browser, baseURL }) => {
+  const team = await openTeam(browser, baseURL!);
+  const { cloud, alice, bob } = team;
+  const gate = cloud.holdNextSaves();
+  try {
+    await moveNode(alice, "team-api");
+    await expect.poll(() => gate.arrived).toBe(1);
+    await bob.getByTitle("Add Cache", { exact: true }).click();
+    await moveNode(bob, "team-api", -40, 95);
+    await expect.poll(() => gate.arrived).toBe(2);
+    gate.release();
+    await expect.poll(() => cloud.writes.filter(write => write.accepted).length).toBe(2);
+    expect(cloud.writes.filter(write => !write.accepted)).toHaveLength(1);
+    const position = cloud.writes.find(write => write.accepted)!.document.nodes.find(item => item.id === "team-api")!.position;
+    for (const page of [alice, bob]) {
+      await expect(page.locator(".react-flow__node")).toHaveCount(4);
+      await expectPosition(page, "team-api", position);
+      await expect(page.locator(".connection")).toHaveText("Connected");
+    }
+    // The first Undo removes the losing drag; the second undoes our addition.
+    const undo = bob.getByRole("button", { name: "Undo", exact: true });
+    await undo.click();
+    await expectPosition(bob, "team-api", position);
+    await undo.click();
+    for (const page of [alice, bob]) {
+      await expect(page.locator(".react-flow__node")).toHaveCount(3);
+      await expectPosition(page, "team-api", position);
+      await expect(page.locator(".connection")).toHaveText("Connected");
+    }
+    expect(cloud.writes.every(write => write.expectedRevision !== undefined)).toBe(true);
+  } finally { gate.release(); await team.close(); }
+});
+
+test("a newer move made during an upload is saved after that upload finishes", async ({ browser, baseURL }) => {
+  const team = await openTeam(browser, baseURL!);
+  const { cloud, alice, bob } = team;
+  const gate = cloud.holdNextSaves(1);
+  try {
+    await moveNode(alice, "team-api");
+    await expect.poll(() => gate.arrived).toBe(1);
+    await moveNode(alice, "team-api", 50, -30);
+    const latest = await node(alice, "team-api").evaluate(element => element.style.transform);
+    gate.release();
+    await expect.poll(() => cloud.writes.filter(write => write.accepted).length).toBe(2);
+    const position = cloud.board().document.nodes.find(item => item.id === "team-api")!.position;
+    expect(`translate(${position.x}px, ${position.y}px)`).toBe(latest);
+    for (const page of [alice, bob]) {
+      await expectPosition(page, "team-api", position);
+      await expect(page.locator(".connection")).toHaveText("Connected");
+    }
+    expect(cloud.writes.map(write => write.expectedRevision)).toEqual([1, 2]);
+  } finally { gate.release(); await team.close(); }
+});
+
 test("offline and online independent edits converge on reconnect without losing either user's additions", async ({ browser, baseURL }) => {
   const team = await openTeam(browser, baseURL!);
   const { alice, bob, cloud, contexts } = team;

@@ -15,7 +15,6 @@ export function ComponentPalette({
   controller: Pick<
     WorkspaceController,
     | "readOnly"
-    | "board"
     | "sidebarTab"
     | "setSidebarTab"
     | "search"
@@ -26,7 +25,6 @@ export function ComponentPalette({
 }) {
   const {
     readOnly,
-    board,
     sidebarTab,
     setSidebarTab,
     search,
@@ -132,9 +130,6 @@ export function ComponentPalette({
             <div className="sidebar-template-cards"><TemplateCards onChoose={newBoard} /></div>
           </div>
         )}
-      </div>
-      <div className="sidebar-footer">
-        <span className="footer-board-change">Last board change: <time dateTime={board.updatedAt}>{new Date(board.updatedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', hour12: true })}</time></span>
       </div>
     </aside>
   );

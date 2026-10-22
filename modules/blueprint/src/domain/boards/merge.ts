@@ -49,8 +49,10 @@ function mergeValue(base: Json | undefined, local: Json | undefined, remote: Jso
     }
     return merged;
   }
-  // Moving the same component in two directions is one conflicting edit.
-  if (key !== "position" && object(base) && object(local) && object(remote)) {
+  // A competing move uses the accepted position, never a mix of two drags' axes.
+  // Other fields still merge independently or keep the draft for explicit review.
+  if (key === "position" && object(base) && object(local) && object(remote)) return remote;
+  if (object(base) && object(local) && object(remote)) {
     const merged: Record<string, Json> = {};
     for (const property of new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)])) {
       const value = mergeValue(base[property], local[property], remote[property], property);
@@ -62,7 +64,7 @@ function mergeValue(base: Json | undefined, local: Json | undefined, remote: Jso
   return conflict;
 }
 
-/** Combine disjoint changes, refusing ambiguous changes and dangling connections. */
+/** Combine independent edits and accept shared moves; refuse text/deletion conflicts and invalid topology. */
 export function mergeBoardContent(base: string, local: Board, remote: Board): Board | undefined {
   try {
     const content = mergeValue(JSON.parse(base), JSON.parse(boardContent(local)), JSON.parse(boardContent(remote)));
@@ -93,7 +95,7 @@ export function cloudBaseline(board: Board): Board {
   }
 }
 
-/** A stale or overlapping refresh never replaces unacknowledged local edits. */
+/** Preserve drafts on overlap, except competing moves which use the accepted shared position. */
 export function mergeCloudBoard(local: Board, remote: Board): Board {
   if (remote === local || remote.revision < local.revision) return local;
   const content = boardContent(remote);

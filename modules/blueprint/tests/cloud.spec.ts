@@ -141,6 +141,7 @@ test("Save changes bypasses autosave delays and waits for the cloud acknowledgem
   const cloud = await mockCloud(page);
   await signIn(page);
   await page.goto("./#/board/" + invite);
+  await expect(page.locator(".connection")).toHaveText("Connected");
   await openProperties(page);
   const settings = page.getByRole("dialog", { name: "Board settings", exact: true });
   await page.clock.install();
@@ -162,7 +163,7 @@ test("Save changes bypasses autosave delays and waits for the cloud acknowledgem
     await expect.poll(async () => {
       if (elapsed < 100) { elapsed++; await page.clock.runFor(1); }
       return requestStarted;
-    }).toBe(true);
+    }, { intervals: [10] }).toBe(true);
     await expect(settings.getByRole("button", { name: "Saving…", exact: true })).toBeDisabled();
     await expect(settings).toBeVisible();
     expect(cloud.rows[0].title).toBe("Saved production system");
@@ -902,28 +903,36 @@ test("the board icon set choices fit and work in narrow Settings", async ({ page
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
 });
 
-test('centers one divided bottom dock without overlapping its control groups', async ({ page }) => {
+test('centers the footer timestamp and divided bottom dock without overlapping controls', async ({ page }, testInfo) => {
   await mockCloud(page);
   await signIn(page);
-  for (const width of [360, 768, 1440, 1800]) {
+  for (const width of [360, 684, 768, 1440, 1800]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('./#/board/' + invite);
     await expect(page.locator('.footer-sync')).toHaveText(/^Synced \d{2}:\d{2} [AP]M$/);
-    const layout = await page.evaluate(() => {
+    const layout = await page.evaluate((width) => {
       const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
       const tools = rect('.canvas-toolbar'), zoom = rect('.zoom-controls'), dock = rect('.canvas-dock'), canvas = rect('#main-content');
       const sidebar = rect('.sidebar'), sync = rect('.footer-sync');
+      const change = rect('.footer-board-change'), version = rect('.app-version');
       return { sidebarVisible: sidebar.width > 0, seamOffset: sync.right - sidebar.right, centerOffset: (dock.left + dock.width / 2) - (canvas.left + canvas.width / 2), divider: rect('.dock-divider').width > 0, gap: canvas.bottom - dock.bottom, footerTextTop: rect('.app-version').top + 10, dockBottom: dock.bottom,
+        timestampCenterOffset: (change.left + change.width / 2) - (canvas.left + canvas.width / 2),
+        timestampRowOffset: change.top + change.height / 2 - (sync.top + sync.height / 2),
+        metadataOverlap: width > 640 ? sync.right > change.left || change.right > version.left : change.top < Math.max(sync.bottom, version.bottom),
         overlap: tools.left < zoom.right && tools.right > zoom.left && tools.top < zoom.bottom && tools.bottom > zoom.top,
         overflow: document.documentElement.scrollWidth > innerWidth };
-    });
+    }, width);
     expect(layout.centerOffset).toBeCloseTo(0, 0);
     expect(layout.divider).toBe(true);
     if (width > 760 && layout.sidebarVisible) expect(layout.seamOffset).toBeCloseTo(0, 0);
     expect(layout.gap).toBeCloseTo(-8, 0);
     expect(layout.dockBottom).toBeLessThan(layout.footerTextTop);
     expect(layout.overlap).toBe(false);
+    expect(layout.timestampCenterOffset).toBeCloseTo(0, 0);
+    if (width > 640) expect(layout.timestampRowOffset).toBeCloseTo(0, 0);
+    expect(layout.metadataOverlap).toBe(false);
     expect(layout.overflow).toBe(false);
+    await page.screenshot({ path: testInfo.outputPath(`footer-${width}.png`) });
   }
 });
 
@@ -938,14 +947,14 @@ test("loads cloud boards and flushes edits to background boards after navigation
   );
   await expect(page.locator('.footer-sync')).toHaveText(/^Synced \d{2}:\d{2} [AP]M$/);
   await expect(page.locator('.app-version')).toContainText('blueprint ·');
-  await expect(page.locator('.sidebar-footer .footer-board-change')).toContainText('Last board change:');
-  await expect(page.locator('.sidebar-footer .footer-board-change time')).toHaveAttribute('datetime', cloud.rows[0].updated_at);
+  await expect(page.locator('.app-footer .footer-board-change')).toContainText('Last board change:');
+  await expect(page.locator('.app-footer .footer-board-change time')).toHaveAttribute('datetime', cloud.rows[0].updated_at);
   await expect(page.locator('.react-flow__attribution')).toHaveCount(0);
   await page.getByTitle("Add Service", { exact: true }).click();
   await expect.poll(() => cloud.rows[0].document.nodes.length).toBe(10);
   await page.getByRole("button", { name: "Open your boards" }).click();
   await expect(page.locator('.footer-sync')).toHaveText(/^Synced \d{2}:\d{2} [AP]M$/);
-  await expect(page.locator('.sidebar-footer .footer-board-change')).toHaveCount(0);
+  await expect(page.locator('.footer-board-change')).toHaveCount(0);
   await page.getByRole("button", { name: "Create a board", exact: true }).click();
   await page.getByRole("button", { name: /A clean slate/ }).click();
   await page.getByRole("button", { name: "Open your boards" }).click();

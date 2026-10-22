@@ -63,6 +63,11 @@ export interface BoardHead {
   revision: number;
 }
 
+export type BoardContent = Pick<
+  Board,
+  'title' | 'description' | 'columns' | 'cards' | 'card_fields'
+>;
+
 /** Collection navigation never needs card text or field settings. */
 export type BoardSummary = Omit<Board, 'cards' | 'card_fields'> & { active_card_count: number };
 

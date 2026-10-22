@@ -5,6 +5,7 @@ import type { Board, BoardHead, BoardSummary, Operation } from '../../domain/boa
 import { readBoardSummary } from '../../domain/boards/summary';
 import {
   normalizeInviteCode,
+  boardSnapshot,
   readBoard,
   readBoardHead,
   validateBoardDetails,
@@ -313,6 +314,56 @@ async function remoteJoinBoard(code: string): Promise<Board> {
   return board;
 }
 
+async function snapshotRequest(
+  action: string,
+  rpc: string,
+  args: Record<string, unknown>,
+  id: string,
+): Promise<Board> {
+  await initializeCloud();
+  ensureOnline();
+  const { data, error } = await call(action, () => getClient().rpc(rpc, args));
+  if (error) throw serviceError(error, action);
+  const board = readCloudBoard(data);
+  if (board.id !== id)
+    throw new Error('The server returned a different board. Your local draft is kept.');
+  return board;
+}
+
+async function remoteCopyBoard(id: string, source: Board): Promise<Board> {
+  validateUuid(id, 'Board ID');
+  if (id === source.id) throw new Error('A board copy needs a new ID.');
+  return snapshotRequest(
+    'save the new board',
+    'pinboard_copy_board',
+    { p_id: id, p_board: boardSnapshot(source) },
+    id,
+  );
+}
+
+async function remoteForceBoard(
+  id: string,
+  token: string,
+  source: Board,
+  baseRevision: number,
+): Promise<Board> {
+  validateUuid(id, 'Board ID');
+  validateUuid(token, 'Operation ID');
+  if (source.id !== id || !Number.isSafeInteger(baseRevision) || baseRevision < 1)
+    throw new Error('Refresh the board comparison before syncing.');
+  return snapshotRequest(
+    'force sync the board',
+    'pinboard_force_board_once',
+    {
+      p_board_id: id,
+      p_operation_id: token,
+      p_board: boardSnapshot(source),
+      p_base_revision: baseRevision,
+    },
+    id,
+  );
+}
+
 async function remoteMutateBoard(
   boardId: string,
   operation: Operation,
@@ -344,12 +395,16 @@ const offlineBoards = withOfflineBoards({
   loadBoardList: remoteLoadBoardList,
   loadBoard: remoteLoadBoard,
   createBoard: remoteCreateBoard,
+  copyBoard: remoteCopyBoard,
+  forceBoard: remoteForceBoard,
   joinBoard: remoteJoinBoard,
   mutateBoard: remoteMutateBoard,
 });
 export const loadBoardList = offlineBoards.loadBoardList;
 export const loadBoard = offlineBoards.loadBoard;
 export const createBoard = offlineBoards.createBoard;
+export const copyBoard = offlineBoards.copyBoard;
+export const forcePendingBoard = offlineBoards.forcePendingBoard;
 export const joinBoard = offlineBoards.joinBoard;
 export const mutateBoard = offlineBoards.mutateBoard;
 export const reviewPendingBoard = offlineBoards.reviewPendingBoard;

@@ -64,7 +64,7 @@ interface Write {
   user: string;
   boardId: string;
   operationId: string;
-  operation: Operation;
+  operation: Operation | { type: 'replace_board'; board: unknown };
   baseRevision: number;
   revision?: number;
   error?: string;
@@ -363,24 +363,43 @@ export async function createCloud() {
             await notify(rows[0]!.board.id);
             return;
           }
-          if (url.pathname === '/rest/v1/rpc/pinboard_mutate_board_once') {
+          if (url.pathname === '/rest/v1/rpc/pinboard_copy_board') {
+            await waitAt(user, 'request');
+            const rows = await query<{ board: Board }>(
+              user,
+              'select public.pinboard_copy_board($1,$2::jsonb) board',
+              [args.p_id, JSON.stringify(args.p_board)],
+            );
+            await notify(rows[0]!.board.id);
+            const gate = await waitAt(user, 'response');
+            if (gate?.loseReply) await route.abort('failed');
+            else await fulfill(rows[0]!.board);
+            return;
+          }
+          if (
+            url.pathname === '/rest/v1/rpc/pinboard_mutate_board_once' ||
+            url.pathname === '/rest/v1/rpc/pinboard_force_board_once'
+          ) {
+            const force = url.pathname.endsWith('/pinboard_force_board_once');
             await waitAt(user, 'request');
             const write: Write = {
               user,
               boardId: args.p_board_id,
               operationId: args.p_operation_id,
-              operation: args.p_operation,
+              operation: force ? { type: 'replace_board', board: args.p_board } : args.p_operation,
               baseRevision: args.p_base_revision,
             };
             writes.push(write);
             try {
               const rows = await query<{ board: Board }>(
                 user,
-                'select public.pinboard_mutate_board_once($1, $2, $3::jsonb, $4::bigint) as board',
+                force
+                  ? 'select public.pinboard_force_board_once($1,$2,$3::jsonb,$4::bigint) board'
+                  : 'select public.pinboard_mutate_board_once($1, $2, $3::jsonb, $4::bigint) as board',
                 [
                   write.boardId,
                   write.operationId,
-                  JSON.stringify(write.operation),
+                  JSON.stringify(force ? args.p_board : write.operation),
                   write.baseRevision,
                 ],
               );

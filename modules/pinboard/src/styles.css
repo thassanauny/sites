@@ -276,14 +276,6 @@ a {
   background: none;
   color: #738175;
 }
-.sidebar-footer {
-  margin-top: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 9px;
-  color: #94a08f;
-}
 .main {
   margin-left: 240px;
   flex: 1;
@@ -1242,6 +1234,7 @@ a {
 .card-field-settings,
 .assignee-settings,
 .archive-settings,
+.sync-settings,
 .column-order-settings,
 .device-board-actions {
   border-top: 1px solid var(--border);
@@ -1251,6 +1244,7 @@ a {
 .card-field-settings h3,
 .assignee-settings h3,
 .archive-settings h3,
+.sync-settings h3,
 .column-order-settings h3,
 .device-board-actions h3 {
   font-size: 12px;
@@ -1259,6 +1253,7 @@ a {
 .card-field-settings > p,
 .assignee-settings > p,
 .archive-settings > p,
+.sync-settings > p,
 .column-order-settings > p,
 .device-board-actions p {
   color: var(--muted);
@@ -2168,7 +2163,6 @@ a {
 /* Keep meaningful secondary text legible on the soft board backgrounds. */
 .brand-subtitle,
 .sidebar-empty,
-.sidebar-footer,
 .board-nav-count,
 .connection,
 .home-heading p:not(.eyebrow),

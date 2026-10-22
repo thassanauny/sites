@@ -1,14 +1,30 @@
 import { sameShape, useRecoveryDraft } from '../../../application/useRecoveryDraft';
-import { useEffect, useId, useState, type FormEvent } from 'react';
-import { Archive, ArrowDown, ArrowUp, LogOut, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import {
+  Archive,
+  ArrowDown,
+  ArrowUp,
+  Copy,
+  GitCompareArrows,
+  LogOut,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import type { Board, Column, Operation } from '../../../domain/boards/types';
+import type { PendingBoardReview as BoardReview } from '../../../infrastructure/cloud/offlineBoards';
+import { PendingBoardReview } from './PendingBoardReview';
 import {
   boardAssignees,
   cardFields,
   FIELD_LIMITS,
   sameFieldSettings,
 } from '../../../domain/boards/fields';
-import { COLUMN_COLORS, LIMITS, readCardFieldSettings } from '../../../domain/boards/board';
+import {
+  boardSnapshot,
+  COLUMN_COLORS,
+  LIMITS,
+  readCardFieldSettings,
+} from '../../../domain/boards/board';
 import { CardFieldsSettings } from './CardFieldsSettings';
 import { ArchivedCardsView } from './ArchivedCardsView';
 import { Dialog } from '../../../ui/Dialog';
@@ -37,6 +53,10 @@ export function BoardSettingsDialog({
   onRecover,
   onRemove,
   onNotice,
+  onReview,
+  onResolve,
+  onCopy,
+  onForce,
 }: {
   board: Board;
   currentBoard?: Board;
@@ -49,6 +69,10 @@ export function BoardSettingsDialog({
   onRecover: (code: string) => Promise<boolean>;
   onRemove: (board: Board) => void;
   onNotice: (text: string) => void;
+  onReview: (id: string) => Promise<BoardReview>;
+  onResolve: (review: BoardReview, action: 'retry' | 'discard') => Promise<boolean>;
+  onCopy: (id: string, source: Board) => Promise<boolean>;
+  onForce: (review: BoardReview) => Promise<boolean>;
 }) {
   const sample = {
     baseline: { title: board.title, description: board.description, fields: cardFields(board) },
@@ -87,6 +111,8 @@ export function BoardSettingsDialog({
     recovery.setValue((current) => ({ ...current, newColumn }));
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+  const copyRequest = useRef<{ id: string; signature: string } | undefined>(undefined);
   const [deleteColumn, setDeleteColumn] = useState('');
   const [moveTo, setMoveTo] = useState('');
   const { localError, setLocalError, copied, copy } = useDialogMessages(onNotice);
@@ -221,13 +247,39 @@ export function BoardSettingsDialog({
       setLocalError(message(error));
     }
   }
+  async function saveAsCopy() {
+    setLocalError('');
+    if (busy || !navigator.onLine) return;
+    try {
+      if (newColumn || newAssignee.trim())
+        throw new Error('Finish adding the column or assignee before saving a copy.');
+      const source = currentBoard ?? board;
+      const name = title.trim() !== baseline.title ? title.trim() : source.title;
+      if (!name) throw new Error('Enter a board name before saving a copy.');
+      const snapshot = {
+        ...source,
+        title: `${name.slice(0, LIMITS.title - 7)} (copy)`,
+        description:
+          description.trim() !== baseline.description ? description.trim() : source.description,
+        card_fields: fieldsChanged ? readCardFieldSettings(fields) : source.card_fields,
+      };
+      const signature = JSON.stringify(boardSnapshot(snapshot));
+      if (copyRequest.current?.signature !== signature)
+        copyRequest.current = { id: crypto.randomUUID(), signature };
+      if (await onCopy(copyRequest.current!.id, snapshot)) recovery.clear();
+    } catch (failure) {
+      setLocalError(message(failure));
+    }
+  }
   const view = discard.confirming
     ? 'discard'
     : confirmRemove
       ? 'remove'
       : showArchive
         ? 'archive'
-        : 'form';
+        : showReview
+          ? 'review'
+          : 'form';
   return (
     <Dialog
       className={
@@ -244,8 +296,11 @@ export function BoardSettingsDialog({
             ? 'Remove from this device?'
             : view === 'archive'
               ? 'Archived cards'
-              : 'Board settings'
+              : view === 'review'
+                ? 'Compare board versions'
+                : 'Board settings'
       }
+      wide={view === 'review'}
       busy={busy}
       onClose={
         view === 'discard'
@@ -321,6 +376,17 @@ export function BoardSettingsDialog({
           serverError={serverError}
           onSave={onSave}
           onBack={() => setShowArchive(false)}
+        />
+      ) : view === 'review' ? (
+        <PendingBoardReview
+          board={board}
+          busy={busy}
+          serverError={serverError}
+          onClose={discard.close}
+          onBack={() => setShowReview(false)}
+          onReview={onReview}
+          onResolve={onResolve}
+          onForce={onForce}
         />
       ) : (
         <EditorForm
@@ -596,6 +662,26 @@ export function BoardSettingsDialog({
               </section>
             </div>
             <div className="settings-column">
+              <section className="sync-settings" aria-label="Sync and recovery">
+                <h3>Sync and recovery</h3>
+                <button
+                  className="button secondary settings-shortcut"
+                  type="button"
+                  disabled={busy || removed}
+                  onClick={() => setShowReview(true)}
+                >
+                  <GitCompareArrows size={16} />
+                  Compare board versions
+                </button>
+                <button
+                  className="button secondary settings-shortcut"
+                  type="button"
+                  disabled={busy || !navigator.onLine}
+                  onClick={() => void saveAsCopy()}
+                >
+                  <Copy size={16} /> Save my changes as a new board
+                </button>
+              </section>
               <CardFieldsSettings
                 settings={fields}
                 savedIds={

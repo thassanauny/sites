@@ -1,5 +1,6 @@
 import type {
   Board,
+  BoardContent,
   BoardHead,
   Card,
   CardDropTarget,
@@ -292,6 +293,12 @@ function revisionOf(input: unknown): number {
   if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 1)
     fail('The board revision is invalid.');
   return revision;
+}
+
+/** Recovery snapshots contain content only; identities, revisions and device flags stay separate. */
+export function boardSnapshot(input: Board): BoardContent {
+  const { title, description, columns, cards, card_fields } = readBoard(input);
+  return { title, description, columns, cards, ...(card_fields ? { card_fields } : {}) };
 }
 
 /** Only plain, bounded data enters the UI, and every nested array is cloned. Unknown top-level fields are ignored. */

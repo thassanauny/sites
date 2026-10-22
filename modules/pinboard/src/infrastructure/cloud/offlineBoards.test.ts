@@ -28,6 +28,11 @@ let online = true;
 let identity = 'first';
 let database: OfflineDatabase<Entry>;
 let current: Board;
+const recoveryRemote = {
+  copyBoard: vi.fn<(id: string, source: Board) => Promise<Board>>(),
+  forceBoard:
+    vi.fn<(id: string, token: string, source: Board, revision: number) => Promise<Board>>(),
+};
 const mutate =
   vi.fn<
     (
@@ -41,6 +46,16 @@ beforeEach(() => {
   online = true;
   identity = 'first';
   current = structuredClone(original);
+  recoveryRemote.copyBoard.mockReset().mockImplementation(async (id, source) => ({
+    ...source,
+    id,
+    invite_code: 'b'.repeat(32),
+    revision: 1,
+  }));
+  recoveryRemote.forceBoard.mockReset().mockImplementation(async (_id, _token, source) => {
+    current = { ...structuredClone(source), revision: current.revision + 1 };
+    return current;
+  });
   let tail = Promise.resolve();
   vi.stubGlobal('navigator', {
     get onLine() {
@@ -65,6 +80,7 @@ afterEach(() => vi.unstubAllGlobals());
 function open() {
   return withOfflineBoards(
     {
+      ...recoveryRemote,
       loadBoardList: async () => [summarizeBoard(current)],
       loadBoard: async () => current,
       createBoard: async () => current,
@@ -87,6 +103,94 @@ describe('durable offline boards', () => {
     dueDate: '',
     labels: [],
   };
+  it('keeps a force request and original queue until acknowledgement, then preserves newer local and shared edits', async () => {
+    const cloud = open();
+    await cloud.loadBoard(original.id);
+    online = false;
+    await cloud.mutateBoard(original.id, {
+      type: 'update_board',
+      patch: { title: 'Device version' },
+    });
+    online = true;
+    current = { ...current, description: 'Shared before force', revision: 2 };
+    const review = await cloud.reviewPendingBoard(original.id);
+    let first = true;
+    recoveryRemote.forceBoard.mockImplementation(async (_id, _token, source) => {
+      if (first) {
+        first = false;
+        current = {
+          ...source,
+          revision: 3,
+          description: 'Collaborator changed this after force committed',
+        };
+        throw new Error('Network response lost');
+      }
+      return current;
+    });
+    await expect(cloud.forcePendingBoard(review)).rejects.toThrow('Network response lost');
+    const uncertain = await database.read(original.id);
+    expect(uncertain?.pending.map((change) => change.id)).toEqual(review.pendingIds);
+    expect(uncertain?.force?.board.title).toBe('Device version');
+    expect(uncertain?.backups).toHaveLength(1);
+    online = false;
+    await cloud.mutateBoard(original.id, {
+      type: 'update_board',
+      patch: { title: 'Typed while force was awaiting acknowledgement' },
+    });
+    expect((await database.read(original.id))?.pending).toHaveLength(2);
+    online = true;
+    await open().loadBoardList(); // A reload uses the durable force token and snapshot.
+    const [firstCall, retry] = recoveryRemote.forceBoard.mock.calls;
+    expect(retry).toEqual(firstCall);
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(current).toMatchObject({
+      title: 'Typed while force was awaiting acknowledgement',
+      description: 'Collaborator changed this after force committed',
+    });
+    expect((await database.read(original.id))?.force).toBeUndefined();
+    expect((await database.read(original.id))?.pending).toEqual([]);
+  });
+  it('never sends force sync when its durable recovery copy cannot be saved or another tab changed the queue', async () => {
+    const cloud = open();
+    await cloud.loadBoard(original.id);
+    const review = await cloud.reviewPendingBoard(original.id);
+    vi.spyOn(database, 'change').mockRejectedValueOnce(new Error('Quota exceeded'));
+    await expect(cloud.forcePendingBoard(review)).rejects.toThrow('Quota exceeded');
+    expect(recoveryRemote.forceBoard).not.toHaveBeenCalled();
+    online = false;
+    await cloud.mutateBoard(original.id, {
+      type: 'update_board',
+      patch: { title: 'Another tab draft' },
+    });
+    online = true;
+    await expect(cloud.forcePendingBoard(review)).rejects.toThrow('Device edits changed');
+    expect(recoveryRemote.forceBoard).not.toHaveBeenCalled();
+    expect((await database.read(original.id))?.pending).toHaveLength(1);
+  });
+  it('copies recovered deleted-card edits without clearing the original recovery or queue', async () => {
+    current = { ...current, cards: [newCard] };
+    const cloud = open();
+    const opened = await cloud.loadBoard(original.id);
+    current = { ...current, cards: [], revision: 2 };
+    await cloud.loadBoard(original.id);
+    await expect(
+      cloud.mutateBoard(
+        original.id,
+        { type: 'update_card', id: newCard.id, patch: { title: 'Recovered task' } },
+        { ...opened, cards: [{ ...newCard, title: 'Recovered task' }] },
+      ),
+    ).rejects.toThrow('backed up');
+    const before = await database.read(original.id),
+      id = crypto.randomUUID();
+    const copied = await cloud.copyBoard(id, { ...opened, title: 'Recovery (copy)' });
+    expect(copied.id).toBe(id);
+    expect(copied.cards[0].title).toBe('Recovered task');
+    expect(current.cards).toEqual([]);
+    const after = await database.read(original.id);
+    expect(after?.pending).toEqual(before?.pending);
+    expect(after?.unappliedBackupId).toBe(before?.unappliedBackupId);
+    expect(after?.backups?.some((backup) => backup.id === id)).toBe(true);
+  });
   it('automatically uploads an offline card creation and later edit in order with their original IDs', async () => {
     const cloud = open();
     await cloud.loadBoard(original.id);
@@ -322,6 +426,7 @@ describe('durable offline boards', () => {
       };
       const cloud = withOfflineBoards(
         {
+          ...recoveryRemote,
           loadBoard: delayed,
           loadBoardList: async () => [summarizeBoard(await delayed())],
           createBoard: delayed,
@@ -365,6 +470,7 @@ describe('durable offline boards', () => {
     const createBoard = vi.fn(async () => current);
     const cloud = withOfflineBoards(
       {
+        ...recoveryRemote,
         initialize,
         createBoard,
         loadBoard: async () => current,
@@ -716,6 +822,7 @@ describe('durable offline boards', () => {
     });
     const cloud = withOfflineBoards(
       {
+        ...recoveryRemote,
         loadBoardList: async () => [...remoteBoards.values()].map(summarizeBoard),
         loadBoard: async (id) => remoteBoards.get(id)!,
         createBoard: async () => original,

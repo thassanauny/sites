@@ -61,11 +61,48 @@ describe("independent diagram edits", () => {
     expect(merged.edges[0]).toMatchObject({ label: "Our label", animated: remote.edges[0].animated });
   });
 
+  it.each([
+    [{ x: 50, y: 60 }, { x: 70, y: 80 }],
+    [{ x: 50, y: 0 }, { x: 0, y: 80 }],
+  ])("accepts a competing shared move as a whole position and retains independent edits (%j, %j)", (ours, theirs) => {
+    const base = shared();
+    base.nodes[0].position = { x: 0, y: 0 };
+    base.cloudSavedContent = boardContent(base);
+    const local = structuredClone(base), remote = structuredClone(base);
+    local.nodes[0].position = ours;
+    local.nodes[0].data.description = "Our explanation";
+    local.nodes[0].selected = true;
+    remote.nodes[0].position = theirs;
+    remote.nodes[1].data.label = "Their name";
+    remote.revision = 2;
+    const merged = mergeCloudBoard(local, remote);
+    expect(merged.nodes[0]).toMatchObject({ position: theirs, selected: true, data: { description: "Our explanation" } });
+    expect(merged.nodes[1].data.label).toBe("Their name");
+    expect(merged.revision).toBe(2);
+    expect(merged.cloudSavedContent).toBe(boardContent(remote));
+    expect(boardContent(merged)).not.toBe(merged.cloudSavedContent);
+    expect(mergeCloudBoard(merged, base)).toBe(merged);
+  });
+
+  it("acknowledges competing moves without another upload when no independent edits remain", () => {
+    const base = shared();
+    const local = structuredClone(base), remote = structuredClone(base);
+    local.nodes[0].position = { x: 50, y: 60 };
+    remote.nodes[0].position = { x: 70, y: 80 };
+    remote.revision = 2;
+    const merged = mergeCloudBoard(local, remote);
+    expect(merged.nodes[0].position).toEqual(remote.nodes[0].position);
+    expect(boardContent(merged)).toBe(merged.cloudSavedContent);
+    expect(merged.revision).toBe(2);
+  });
+
   it("keeps same-property and delete-versus-edit conflicts untouched", () => {
     const base = shared();
     const local = structuredClone(base), remote = structuredClone(base);
     local.nodes[0].data.label = "Ours";
     remote.nodes[0].data.label = "Theirs";
+    local.nodes[0].position = { x: 50, y: 60 };
+    remote.nodes[0].position = { x: 70, y: 80 };
     remote.revision = 2;
     expect(mergeCloudBoard(local, remote)).toBe(local);
     remote.nodes = remote.nodes.filter(node => node.id !== local.nodes[0].id);
@@ -99,6 +136,18 @@ describe("independent diagram edits", () => {
 });
 
 describe("durable changes from another tab", () => {
+  it("keeps the durable position when tabs move the same component, without losing other changes", () => {
+    const board = shared();
+    const base = { boards: [board], activeId: board.id };
+    const local = structuredClone(base), latest = structuredClone(base);
+    local.boards[0].nodes[0].position = { x: 50, y: 60 };
+    local.boards[0].description = "Our draft";
+    latest.boards[0].nodes[0].position = { x: 70, y: 80 };
+    const merged = mergeDeviceWorkspace(base, local, latest)!;
+    expect(merged.boards[0].nodes[0].position).toEqual({ x: 70, y: 80 });
+    expect(merged.boards[0].description).toBe("Our draft");
+  });
+
   it("retains independent board drafts and newer cloud acknowledgements", () => {
     const board = shared(), second = shared();
     const base = { boards: [board], activeId: board.id };

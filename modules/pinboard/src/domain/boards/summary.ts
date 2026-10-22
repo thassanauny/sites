@@ -18,7 +18,9 @@ export function readBoardSummary(input: unknown): BoardSummary {
     Number(active_card_count) < 0 ||
     Number(active_card_count) > 2000
   )
-    throw new Error('Invalid board count.');
+    throw new Error(
+      'The shared board returned an invalid card count. Your device copy is kept. Refresh the Pinboard database schema, then retry.',
+    );
   const board = readBoard({ ...fields, cards: [] });
   const { cards: _cards, card_fields: _settings, ...summary } = board;
   return { ...summary, active_card_count: Number(active_card_count) };

@@ -531,11 +531,6 @@ button:disabled:hover {
   --tone: #7a8b88;
   --tone-light: #f0f4f2;
 }
-.sidebar-footer {
-  padding: 16px 15px 0;
-  border-top: 1px solid #f0f3f0;
-  flex-shrink: 0;
-}
 .little-tip {
   display: flex;
   gap: 9px;
@@ -2211,9 +2206,6 @@ button:disabled:hover {
   .palette-section h3 {
     font-size: 8px;
     letter-spacing: 0.8px;
-  }
-  .sidebar-footer {
-    padding: 12px 10px 0;
   }
   .little-tip {
     padding: 10px 7px;
