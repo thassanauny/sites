@@ -447,4 +447,70 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
     ).toEqual([{ anonymous: false, signed_in: true, direct: false }]);
     expect(await siblings()).toEqual(siblingState);
   });
+  describe('checked saves and replay receipts', () => {
+    async function checked(page: TextDropPage, text: string, operation = randomUUID()) {
+      const { createHash } = await import('node:crypto');
+      return (
+        await database.query<{ result: Record<string, unknown> }>('select public.textdrop_save_checked($1::uuid,$2,$3::bigint,$4,$5::uuid) as result', [
+          page.id,
+          text,
+          page.version,
+          createHash('sha256').update(page.text).digest('hex'),
+          operation,
+        ])
+      ).rows[0]!.result;
+    }
+    it('rejects stale edits, replays lost responses without overwriting newer text, and keeps receipts compact', async () => {
+      await identity(creator);
+      const page = await create();
+      const operation = randomUUID();
+      const first = await checked(page, 'First accepted', operation);
+      expect(Object.keys(first).sort()).toEqual(['code', 'id', 'name', 'updatedAt', 'version']);
+      await save(page.id, 'Newer device text');
+      expect(await checked(page, 'First accepted', operation)).toEqual(first);
+      expect((await load(page.id)).text).toBe('Newer device text');
+      expect(await checked(page, 'Stale offline text')).toMatchObject({ conflict: { text: 'Newer device text', version: 3 } });
+      await expect(checked(page, 'Changed payload', operation)).rejects.toThrow('TEXTDROP_INVALID_SAVE');
+      await identity(stranger);
+      await expect(checked(page, 'Unauthorized')).rejects.toThrow('TEXTDROP_ACCESS_DENIED');
+    });
+    it('allows a name-only revision, acknowledges identical text without another write, and handles maximum text', async () => {
+      await identity(creator);
+      const page = await create();
+      await database.query('select public.textdrop_rename_page($1::uuid,$2)', [page.id, 'Name only']);
+      const text = '😀'.repeat(MAX_TEXT_BYTES / 4);
+      const saved = await checked(page, text);
+      expect(saved).toMatchObject({ name: 'Name only', version: 3 });
+      expect(Buffer.byteLength(JSON.stringify(saved))).toBeLessThan(256);
+      const same = await checked(await load(page.id), text);
+      expect(same.version).toBe(3);
+      expect((await load(page.id)).text).toBe(text);
+    });
+    it('replays the additive upgrade without changing data, permissions or sibling apps', async () => {
+      await database.exec('reset role');
+      const before = (await database.query('select id,code,content,version,mutation_floor from public.textdrop_pages order by id')).rows;
+      const sql = await readFile(new URL('../supabase/update-checked-saves.sql', import.meta.url), 'utf8');
+      await database.exec(sql);
+      await database.exec(sql);
+      expect((await database.query('select id,code,content,version,mutation_floor from public.textdrop_pages order by id')).rows).toEqual(before);
+      expect(
+        (
+          await database.query(`select has_function_privilege('anon','public.textdrop_save_checked(uuid,text,bigint,text,uuid)','execute') as anonymous,
+      has_table_privilege('authenticated','private.textdrop_save_receipts','select,insert,update,delete') as direct`)
+        ).rows,
+      ).toEqual([{ anonymous: false, direct: false }]);
+      expect(await siblings()).toEqual(siblingState);
+    });
+    it('bounds receipts and refuses an evicted retry even after text returns to the old baseline', async () => {
+      await identity(creator);
+      const initial = await create();
+      const operation = randomUUID();
+      await checked(initial, 'Old acknowledged edit', operation);
+      for (let index = 0; index < 130; index++) await checked(await load(initial.id), `Edit ${index}`);
+      await save(initial.id, initial.text);
+      expect(await checked(initial, 'Old acknowledged edit', operation)).toMatchObject({ conflict: { text: initial.text } });
+      await database.exec('reset role');
+      expect((await database.query<{ count: number }>('select count(*)::integer as count from private.textdrop_save_receipts where page_id=$1::uuid', [initial.id])).rows[0]!.count).toBe(128);
+    });
+  });
 });

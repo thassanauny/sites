@@ -33,9 +33,34 @@ async function mutate(boardId, operation) {
   return result.rows[0].board;
 }
 
+async function mutateOnce(boardId, operationId, operation, baseRevision = null) {
+  const result = await database.query(
+    'select public.pinboard_mutate_board_once($1::uuid, $2::uuid, $3::jsonb, $4::bigint) as board',
+    [boardId, operationId, JSON.stringify(operation), baseRevision],
+  );
+  return result.rows[0].board;
+}
+
 async function join(code) {
   const result = await database.query('select public.pinboard_join_board($1) as board', [code]);
   return result.rows[0].board;
+}
+
+// Administrator-only fixture population; application writes always use checked RPCs.
+async function seedCards(id, cards) {
+  await database.query('delete from public.pinboard_cards where board_id=$1', [id]);
+  await database.query(
+    `insert into public.pinboard_cards(board_id,data,ordinal)
+    select $1,value,ordinality from jsonb_array_elements($2::jsonb) with ordinality`,
+    [id, JSON.stringify(cards)],
+  );
+  await database.query(
+    `update public.pinboard_boards b set card_count=$2, next_card_ordinal=$2+1,
+    active_card_count=(select count(*) from public.pinboard_cards where board_id=b.id and not coalesce((data->>'archived')::boolean,false)),
+    content_bytes=octet_length((select coalesce(jsonb_agg(data order by ordinal),'[]'::jsonb) from public.pinboard_columns where board_id=b.id)::text)
+      +octet_length($3::jsonb::text)+octet_length(coalesce(card_fields,'null'::jsonb)::text) where id=$1`,
+    [id, cards.length, JSON.stringify(cards)],
+  );
 }
 
 function card(overrides = {}) {
@@ -147,7 +172,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       where n.nspname in ('public','private') and p.proname like 'pinboard_%'
       order by n.nspname, p.proname
     `);
-    assert.equal(permissions.rows.length, 18);
+    assert.equal(permissions.rows.length, 21);
     for (const permission of permissions.rows) {
       assert.equal(permission.anonymous, false, permission.proname);
       assert.equal(permission.public, false, permission.proname);
@@ -157,11 +182,174 @@ describe('Supabase schema in actual embedded PostgreSQL', {
           'pinboard_create_board',
           'pinboard_join_board',
           'pinboard_mutate_board',
+          'pinboard_mutate_board_once',
           'pinboard_sync_summaries',
         ].includes(permission.proname),
         permission.proname,
       );
     }
+  });
+
+  test('a durable operation retry preserves a later same-field edit and rejects token reuse', async () => {
+    await identity(creator);
+    const board = await createBoard();
+    const token = randomUUID();
+    const operation = { type: 'update_board', patch: { title: 'First accepted title' } };
+    const first = await mutateOnce(board.id, token, operation, board.revision);
+    await identity(collaborator);
+    await join(board.invite_code);
+    const newer = await mutate(board.id, {
+      type: 'update_board',
+      patch: { title: 'Later remote title' },
+    });
+    await identity(creator);
+    assert.deepEqual(await mutateOnce(board.id, token, operation, board.revision), newer);
+    assert.equal(newer.revision, first.revision + 1);
+    await assert.rejects(
+      mutateOnce(
+        board.id,
+        token,
+        { type: 'update_board', patch: { title: 'Different payload' } },
+        first.revision,
+      ),
+      /PINBOARD_INVALID_OPERATION/,
+    );
+    await database.exec('reset role');
+    const rows = await database.query(
+      'select octet_length(operation_hash) as bytes from private.pinboard_operation_receipts where board_id=$1',
+      [board.id],
+    );
+    assert.deepEqual(rows.rows, [{ bytes: 32 }]);
+    await identity(stranger);
+    await assert.rejects(
+      mutateOnce(board.id, token, operation, board.revision),
+      /PINBOARD_ACCESS_DENIED/,
+    );
+    await assert.rejects(
+      database.query('select * from private.pinboard_operation_receipts'),
+      /permission denied/,
+    );
+  });
+
+  test('receipt retention is bounded and evicted retries fail without replaying old work', async () => {
+    await identity(creator);
+    const board = await createBoard();
+    const expiredToken = randomUUID();
+    const operation = { type: 'update_board', patch: { title: 'Old title' } };
+    const first = await mutateOnce(board.id, expiredToken, operation, board.revision);
+    await database.exec('reset role');
+    await database.query(
+      `insert into private.pinboard_operation_receipts
+      (board_id,user_id,operation_id,operation_hash,accepted_revision)
+      select $1::uuid,$2::uuid,gen_random_uuid(),sha256(convert_to('{}','UTF8')),$3::bigint
+      from generate_series(1,999)`,
+      [board.id, creator, first.revision],
+    );
+    await identity(creator);
+    const latestToken = randomUUID();
+    const latestOperation = { type: 'update_board', patch: { title: 'Latest title' } };
+    const latest = await mutateOnce(board.id, latestToken, latestOperation, first.revision);
+    await assert.rejects(
+      mutateOnce(board.id, expiredToken, operation, board.revision),
+      /PINBOARD_OPERATION_TOO_OLD/,
+    );
+    assert.deepEqual(
+      await mutateOnce(board.id, latestToken, latestOperation, first.revision),
+      latest,
+    );
+    await database.exec('reset role');
+    assert.deepEqual(
+      (
+        await database.query(
+          'select count(*)::integer as count from private.pinboard_operation_receipts where board_id=$1',
+          [board.id],
+        )
+      ).rows,
+      [{ count: 1000 }],
+    );
+    const snapshot = await database.query(
+      'select * from private.pinboard_operation_receipts where board_id=$1 order by receipt_id',
+      [board.id],
+    );
+    await database.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
+    assert.deepEqual(
+      (
+        await database.query(
+          'select * from private.pinboard_operation_receipts where board_id=$1 order by receipt_id',
+          [board.id],
+        )
+      ).rows,
+      snapshot.rows,
+    );
+    await identity(creator);
+    await assert.rejects(
+      mutateOnce(board.id, expiredToken, operation, board.revision),
+      /PINBOARD_OPERATION_TOO_OLD/,
+    );
+    assert.deepEqual(
+      await mutateOnce(board.id, latestToken, latestOperation, first.revision),
+      latest,
+    );
+  });
+
+  test('failed or rolled-back operations leave neither a receipt nor a board change', async () => {
+    await identity(creator);
+    const board = await createBoard();
+    const token = randomUUID();
+    await assert.rejects(
+      mutateOnce(board.id, token, { type: 'invalid' }, board.revision),
+      /PINBOARD_INVALID_OPERATION/,
+    );
+    await database.exec('begin');
+    await mutateOnce(
+      board.id,
+      token,
+      { type: 'update_board', patch: { title: 'Rolled back' } },
+      board.revision,
+    );
+    await database.exec('rollback; reset role');
+    assert.deepEqual(
+      (
+        await database.query(
+          'select count(*)::integer as count from private.pinboard_operation_receipts where board_id=$1',
+          [board.id],
+        )
+      ).rows,
+      [{ count: 0 }],
+    );
+    assert.equal(
+      (await database.query('select title from public.pinboard_boards where id=$1', [board.id]))
+        .rows[0].title,
+      board.title,
+    );
+  });
+
+  test('a window filled by unchanged operations still permits fresh edits', async () => {
+    await identity(creator);
+    const board = await createBoard();
+    await database.exec('reset role');
+    await database.query(
+      `insert into private.pinboard_operation_receipts
+      (board_id,user_id,operation_id,operation_hash,accepted_revision)
+      select $1::uuid,$2::uuid,gen_random_uuid(),sha256(convert_to('{}','UTF8')),$3::bigint
+      from generate_series(1,1000)`,
+      [board.id, creator, board.revision],
+    );
+    await identity(creator);
+    const advanced = await mutateOnce(
+      board.id,
+      randomUUID(),
+      { type: 'update_board', patch: { title: board.title } },
+      board.revision,
+    );
+    assert.equal(advanced.revision, board.revision + 1);
+    const saved = await mutateOnce(
+      board.id,
+      randomUUID(),
+      { type: 'update_board', patch: { title: 'Still editable' } },
+      advanced.revision,
+    );
+    assert.equal(saved.title, 'Still editable');
   });
 
   test('anonymous visitors and signed-in strangers cannot read or mutate a board', async () => {
@@ -375,7 +563,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       /PINBOARD_CARD_NOT_FOUND/,
     );
     const stored = await database.query(
-      'select cards, revision from public.pinboard_boards where id = $1',
+      'select cards, revision from public.pinboard_board_documents where id = $1',
       [board.id],
     );
     assert.deepEqual(stored.rows[0].cards, []);
@@ -546,7 +734,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       /PINBOARD_INVALID_OPERATION/,
     );
     const stored = await database.query(
-      'select columns,cards from public.pinboard_boards where id = $1',
+      'select columns,cards from public.pinboard_board_documents where id = $1',
       [board.id],
     );
     assert.equal(stored.rows[0].columns.length, 1);
@@ -652,8 +840,11 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     assert.equal(last.revision, first.revision + 2);
     await identity(creator);
     assert.deepEqual(
-      (await database.query('select columns from public.pinboard_boards where id = $1', [board.id]))
-        .rows[0].columns,
+      (
+        await database.query('select columns from public.pinboard_board_documents where id = $1', [
+          board.id,
+        ])
+      ).rows[0].columns,
       last.columns,
     );
   });
@@ -841,17 +1032,17 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     );
     // Seed the maximum through the administrator, then exercise the public RPC.
     await database.exec('reset role');
-    await database.query('update public.pinboard_boards set cards = $1::jsonb where id = $2', [
-      JSON.stringify(Array.from({ length: 2000 }, () => card())),
+    await seedCards(
       board.id,
-    ]);
+      Array.from({ length: 2000 }, () => card()),
+    );
     await identity(creator);
     await assert.rejects(
       mutate(board.id, { type: 'create_card', card: card() }),
       /PINBOARD_INVALID_OPERATION/,
     );
     const stored = await database.query(
-      'select columns,cards from public.pinboard_boards where id = $1',
+      'select columns,cards from public.pinboard_board_documents where id = $1',
       [board.id],
     );
     assert.equal(stored.rows[0].columns.length, 20);
@@ -871,8 +1062,8 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     await database.exec('reset role');
     await database.query(
       `
-      insert into public.pinboard_boards (id, invite_code, title, description, columns, created_by)
-      select gen_random_uuid(), replace(gen_random_uuid()::text, '-', ''), 'Limit fixture', '', columns, $1::uuid
+      insert into public.pinboard_boards (id, invite_code, title, description, created_by)
+      select gen_random_uuid(), replace(gen_random_uuid()::text, '-', ''), 'Limit fixture', '', $1::uuid
       from public.pinboard_boards cross join generate_series(1,99) where id = $2::uuid
     `,
       [limitedCreator, original.id],
@@ -889,8 +1080,8 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     await database.exec('reset role');
     const seeded = await database.query(
       `
-      insert into public.pinboard_boards (id, invite_code, title, description, columns)
-      select gen_random_uuid(), replace(gen_random_uuid()::text, '-', ''), 'Membership fixture', '', columns
+      insert into public.pinboard_boards (id, invite_code, title, description)
+      select gen_random_uuid(), replace(gen_random_uuid()::text, '-', ''), 'Membership fixture', ''
       from public.pinboard_boards cross join generate_series(1,1000) where id = $1::uuid
       returning id, invite_code
     `,
@@ -992,9 +1183,10 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       }),
       /PINBOARD_CARD_NOT_FOUND/,
     );
-    const stored = await database.query('select cards from public.pinboard_boards where id = $1', [
-      board.id,
-    ]);
+    const stored = await database.query(
+      'select cards from public.pinboard_board_documents where id = $1',
+      [board.id],
+    );
     assert.deepEqual(stored.rows[0].cards, [original]);
   });
 
@@ -1545,8 +1737,8 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     await database.exec('reset role');
     await database.exec(`create or replace function private.pinboard_board_json(p_board public.pinboard_boards)
       returns jsonb language sql immutable security invoker set search_path = '' as $$
-        -- Model the old schema before optional settings and the computed summary count.
-        select to_jsonb(p_board) - array['created_by', 'deleted_card_ids', 'deleted_column_ids', 'card_fields', 'active_card_count'];
+        -- Model the old schema before optional settings, counts and retry metadata.
+        select to_jsonb(d) - 'card_fields' from public.pinboard_board_documents d where d.id=p_board.id;
       $$`);
     const volatility = async () =>
       (
@@ -1643,7 +1835,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     const allowed =
       'id, invite_code, title, description, columns, cards, revision, created_at, updated_at';
     const rows = (
-      await database.query(`select ${allowed} from public.pinboard_boards where id = $1`, [
+      await database.query(`select ${allowed} from public.pinboard_board_documents where id = $1`, [
         board.id,
       ])
     ).rows;
@@ -1662,7 +1854,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     );
     await identity(stranger);
     assert.deepEqual(
-      (await database.query(`select ${allowed} from public.pinboard_boards`)).rows,
+      (await database.query(`select ${allowed} from public.pinboard_board_documents`)).rows,
       [],
     );
   });
@@ -1679,7 +1871,16 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     const expected = await columnPrivileges();
     assert.deepEqual(
       expected.filter((column) => !column.readable).map((column) => column.attname),
-      ['created_by', 'deleted_card_ids', 'deleted_column_ids'],
+      [
+        'card_count',
+        'column_count',
+        'content_bytes',
+        'created_by',
+        'deleted_card_ids',
+        'deleted_column_ids',
+        'next_card_ordinal',
+        'operation_receipt_floor',
+      ],
     );
     await database.exec('grant select on public.pinboard_boards to authenticated');
     assert.ok(
@@ -1788,10 +1989,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     const cards = Array.from({ length: 202 }, (_, index) =>
       card({ position: 1000 * (index + 1), description: 'x'.repeat(10000) }),
     );
-    await database.query('update public.pinboard_boards set cards = $2::jsonb where id = $1', [
-      board.id,
-      JSON.stringify(cards),
-    ]);
+    await seedCards(board.id, cards);
     await identity(creator);
     await assert.rejects(
       mutate(board.id, { type: 'create_card', card: card() }),

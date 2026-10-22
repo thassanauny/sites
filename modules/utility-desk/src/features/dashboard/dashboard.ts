@@ -5,7 +5,7 @@ import { PRESENTATION, GROUPS } from '../../ui/presentation';
 import { hrefFor } from '../../application/router';
 import { toolInfo } from '../../application/tools';
 import { detectCapabilities } from '../../infrastructure/capabilities';
-import { store } from '../../infrastructure/storage';
+import { ACTIVITY_KEY, store } from '../../infrastructure/storage';
 
 /** The Home screen: search, grouped utility cards, browser capabilities and recent activity. */
 export function dashboard(root: HTMLElement) {
@@ -94,4 +94,10 @@ export function dashboard(root: HTMLElement) {
     ),
   );
   filter();
+  // Refresh just the history: another tab must not reset this page's search/focus.
+  const changed = (event: StorageEvent) => {
+    if (event.key === ACTIVITY_KEY || event.key === null) renderAct();
+  };
+  window.addEventListener('storage', changed);
+  return () => window.removeEventListener('storage', changed);
 }

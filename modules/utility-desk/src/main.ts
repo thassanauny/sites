@@ -24,7 +24,7 @@ async function render() {
     else a.removeAttribute('aria-current');
   });
   if (id === 'dashboard') {
-    dashboard(root);
+    cleanup = dashboard(root);
     document.title = 'Utility Desk';
   } else if (id === 'notfound') {
     document.title = 'Page not found · Utility Desk';

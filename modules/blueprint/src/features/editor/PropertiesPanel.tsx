@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { PropertyField } from "./PropertyField";
 import { useOnViewportChange } from "@xyflow/react";
 import type { WorkspaceController } from "../../application/useWorkspaceController";
 import {
@@ -149,45 +150,35 @@ export function PropertiesPanel({
           <>
             {selectedNode.data.kind === "text" ? <label className="field">
               Text
-              <textarea
-                key={`${selectedNode.id}-label-${selectedNode.data.label}`}
+              <PropertyField multiline
+                key={`${selectedNode.id}-label`}
                 readOnly={readOnly}
-                defaultValue={selectedNode.data.label}
+                value={selectedNode.data.label}
                 placeholder="Write text…"
                 rows={3}
                 maxLength={120}
-                onBlur={event => {
-                  if (event.target.value !== selectedNode.data.label) updateNode({ label: event.target.value });
-                }}
+                onChange={(label, remember) => updateNode({ label }, remember)}
               />
             </label> : <label className="field">
               {selectedNode.data.kind === "note" ? "Name (optional)" : "Name"}
-              <input
-                key={`${selectedNode.id}-label-${selectedNode.data.label}`}
+              <PropertyField
+                key={`${selectedNode.id}-label`}
                 readOnly={readOnly}
-                defaultValue={selectedNode.data.label}
+                value={selectedNode.data.label}
                 placeholder={selectedNode.data.kind === "note" ? "Add a name" : undefined}
-                onBlur={(event) => {
-                  const label = selectedNode.data.kind === "note"
-                    ? event.target.value.trim()
-                    : event.target.value || "Untitled";
-                  if (label !== selectedNode.data.label) updateNode({ label });
-                }}
+                onChange={(label, remember) => updateNode({ label }, remember)}
                 maxLength={120}
               />
             </label>}
             {!["note", "text"].includes(selectedNode.data.kind) && !isFrameKind(selectedNode.data.kind) && (
               <label className="field">
                 {isFlowKind(selectedNode.data.kind) ? "Subtitle (optional)" : "Technology"}
-                <input
-                  key={`${selectedNode.id}-tech-${selectedNode.data.technology}`}
+                <PropertyField
+                  key={`${selectedNode.id}-tech`}
                   readOnly={readOnly}
-                  defaultValue={selectedNode.data.technology}
+                  value={selectedNode.data.technology}
                   placeholder={isFlowKind(selectedNode.data.kind) ? "Add a subtitle" : "e.g. PostgreSQL"}
-                  onBlur={(event) => {
-                    if (event.target.value !== selectedNode.data.technology)
-                      updateNode({ technology: event.target.value });
-                  }}
+                  onChange={(technology, remember) => updateNode({ technology }, remember)}
                   maxLength={120}
                 />
               </label>
@@ -198,24 +189,19 @@ export function PropertiesPanel({
             </label>}
             {selectedNode.data.kind === "swimlane" && <label className="field">
               Lanes (one per line, up to 8)
-              <textarea key={`${selectedNode.id}-lanes-${selectedNode.data.lanes?.join("\n")}`} readOnly={readOnly}
-                defaultValue={swimlaneLabels(selectedNode.data.lanes).join("\n")} rows={4} maxLength={487}
-                onBlur={event => {
-                  const lanes = swimlaneLabels(event.target.value.split("\n"));
-                  if (JSON.stringify(lanes) !== JSON.stringify(selectedNode.data.lanes)) updateNode({ lanes });
-                }} />
+              <PropertyField multiline key={`${selectedNode.id}-lanes`} readOnly={readOnly}
+                value={swimlaneLabels(selectedNode.data.lanes).join("\n")} rows={4} maxLength={487}
+                normalize={text => swimlaneLabels(text.split("\n")).join("\n")}
+                onChange={(text, remember) => updateNode({ lanes: swimlaneLabels(text.split("\n")) }, remember)} />
             </label>}
             {selectedNode.data.kind !== "note" && <label className="field">
               Description
-              <textarea
-                key={`${selectedNode.id}-desc-${selectedNode.data.description}`}
+              <PropertyField multiline
+                key={`${selectedNode.id}-desc`}
                 readOnly={readOnly}
-                defaultValue={selectedNode.data.description}
+                value={selectedNode.data.description}
                 placeholder="What does this component do?"
-                onBlur={(event) => {
-                  if (event.target.value !== selectedNode.data.description)
-                    updateNode({ description: event.target.value });
-                }}
+                onChange={(description, remember) => updateNode({ description }, remember)}
                 rows={3}
                 maxLength={4000}
               />
@@ -261,21 +247,21 @@ export function PropertiesPanel({
           <>
             <label className="field">
               Label
-              <input
+              <PropertyField
                 key={selectedEdge.id}
                 readOnly={readOnly}
-                defaultValue={String(selectedEdge.label || "")}
+                value={String(selectedEdge.label || "")}
                 placeholder="e.g. HTTPS / read / write"
                 maxLength={120}
-                onBlur={(event) =>
+                onChange={(label, remember) =>
                   update((current) => ({
                     ...current,
                     edges: current.edges.map((edge) =>
                       edge.id === selectedEdge.id
-                        ? { ...edge, label: event.target.value }
+                        ? { ...edge, label }
                         : edge,
                     ),
-                  }))
+                  }), remember)
                 }
               />
             </label>

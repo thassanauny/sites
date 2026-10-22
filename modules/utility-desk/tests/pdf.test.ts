@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { PDFDocument } from 'pdf-lib';
 import * as pdfjs from 'pdfjs-dist';
 import { parsePageRanges } from '../src/domain/pdf/ranges';
-import { mergePdfs, splitEachPage, splitPages, extractPages, pageCount, layoutImage, pageDimensions, imagesToPdf } from '../src/domain/pdf/operations';
+import { mergePdfs, splitPages, extractPages, pageCount, layoutImage, pageDimensions, imagesToPdf } from '../src/domain/pdf/operations';
 
 beforeAll(() => {
   pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(resolve('node_modules/pdfjs-dist/build/pdf.worker.min.mjs')).href;
@@ -44,7 +44,10 @@ describe('pdf operations', () => {
   });
   it('splits each page and extracts ranges', async () => {
     const src = await makePdf(4);
-    const parts = await splitEachPage(src);
+    const parts: Uint8Array[] = [];
+    await splitPages(src, (part) => {
+      parts.push(part);
+    });
     expect(parts).toHaveLength(4);
     expect(await pageCount(parts[2])).toBe(1);
     expect(await pageCount(await extractPages(src, [2, 4]))).toBe(2);
@@ -97,7 +100,14 @@ describe('pdf operations', () => {
     const merge = new AbortController();
     await expect(mergePdfs([{ bytes }], merge.signal, () => merge.abort())).rejects.toMatchObject({ name: 'AbortError' });
     const split = new AbortController();
-    await expect(splitEachPage(bytes, split.signal, () => split.abort())).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(
+      splitPages(
+        bytes,
+        () => {},
+        split.signal,
+        () => split.abort(),
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
   });
   it('lays out images', () => {
     const page = pageDimensions('A4', 'auto', { width: 2000, height: 1000 }, 150);

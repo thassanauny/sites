@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import {
-  copySnapshot, helperName, isShipped, prepareManagedApp, readAppVersion, retargetPublishScript, shipHelper, stat,
+  copySnapshot, helperName, isShipped, prepareManagedApp, prepareManagedAppAsync, readAppVersion, retargetPublishScript, shipHelper, stat,
   toolPath, validateManagedDestination,
 } from './snapshot-lib.mjs';
 
@@ -51,6 +51,8 @@ const spec = {
 
 /** Builds and prepares only Utility Desk; never pushes or deploys. */
 export const prepareUtility = (app, target, run = execFileSync, options) => prepareManagedApp(spec, app, target, run, options);
+/** Like prepareUtility, but awaits `run` so other apps can prepare meanwhile. */
+export const prepareUtilityAsync = (app, target, run, options) => prepareManagedAppAsync(spec, app, target, run, options);
 
 if (process.argv[1] && stat(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(file)) {
   if (!process.argv[2]) { console.error('Use make -C websites publish from the development repository root.'); process.exitCode = 1; }

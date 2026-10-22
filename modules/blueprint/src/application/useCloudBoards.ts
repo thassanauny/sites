@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { Board } from "../domain/boards/types";
 import { boardContent } from "../domain/boards/codec";
+import { cloudBaseline, mergeCloudBoard, sameBoardContent } from "../domain/boards/merge";
 import type { useWorkspace } from "./useWorkspace";
 import { supabase } from "../infrastructure/cloud/client";
+import { watchBoardChanges } from "../infrastructure/cloud/live";
 import {
   listCloudBoards,
   joinCloudBoard,
@@ -47,15 +49,22 @@ export function useCloudBoards(
   const inFlight = useRef(false);
   const immediateSave = useRef(false);
   const syncGeneration = useRef(0);
+  const refreshRequested = useRef(false);
+  const refreshCloud = useRef<() => void>(() => {});
+  const retryCloud = useRef<() => void>(() => {});
   const conflicts = useRef(new Map<string, string>());
   const failures = useRef(
     new Map<string, { content: string; message: string }>(),
   );
   const { board, mergeCloudBoards, markCloudSaved, openCloudBoard } = workspace;
   const knownBoards = useRef(workspace.boards);
+  // Keep observed remote documents separate from dirty local baselines. A genuine
+  // conflict should not download the same remote revision on every poll.
+  const remoteBoards = useRef(new Map<string, Board>());
   knownBoards.current = workspace.boards;
+  const contents = useMemo(() => new Map(workspace.boards.map(item => [item.id, boardContent(item)])), [workspace.boards]);
   const pendingBoards = workspace.boards.filter(
-    (item) => item.cloudSavedContent !== boardContent(item),
+    (item) => item.cloudSavedContent !== contents.get(item.id),
   );
   const candidates = [
     ...workspace.boards.filter((item) => item.id === board.id),
@@ -63,11 +72,11 @@ export function useCloudBoards(
   ];
   const pendingBoard = candidates.find(
     (item) =>
-      item.cloudSavedContent !== boardContent(item) &&
+      item.cloudSavedContent !== contents.get(item.id) &&
       !conflicts.current.has(item.id) &&
-      failures.current.get(item.id)?.content !== boardContent(item),
+      failures.current.get(item.id)?.content !== contents.get(item.id),
   );
-  const signature = pendingBoard ? boardContent(pendingBoard) : "";
+  const signature = pendingBoard ? contents.get(pendingBoard.id)! : "";
 
   useEffect(() => {
     active.current = true;
@@ -80,8 +89,24 @@ export function useCloudBoards(
     const client = supabase;
     let cancelled = false;
     let reading = false;
+    let liveHealthy = false;
+    let readFailed = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const clearRetry = () => { clearTimeout(retryTimer); retryTimer = undefined; };
+    const retrySoon = () => {
+      if (cancelled || !liveHealthy || document.hidden || !navigator.onLine || retryTimer !== undefined) return;
+      retryTimer = setTimeout(() => {
+        retryTimer = undefined;
+        // An active read covers this retry. A save cannot repair a failed
+        // collection read, so hand that catch-up to its serialized completion.
+        if (inFlight.current && readFailed) refreshRequested.current = true;
+        else if (!reading && !inFlight.current) void refresh();
+      }, 10_000);
+    };
     async function refresh() {
-      if (reading || inFlight.current) return;
+      if (cancelled || document.hidden) return;
+      if (reading || inFlight.current) { refreshRequested.current = true; return; }
+      refreshRequested.current = false;
       if (!navigator.onLine) { setReady(knownBoards.current.some(board => board.revision > 0)); setStatus('offline'); return; }
       reading = true;
       const generation = syncGeneration.current;
@@ -90,9 +115,27 @@ export function useCloudBoards(
         setReady(false);
       }
       try {
-        const boards = await listCloudBoards(client, knownBoards.current);
+        const known = knownBoards.current.map(board => {
+          const remote = remoteBoards.current.get(board.id);
+          return remote && remote.revision >= board.revision ? remote : cloudBaseline(board);
+        });
+        const boards = await listCloudBoards(client, known);
         if (cancelled || generation !== syncGeneration.current) return;
+        remoteBoards.current = new Map(boards.map(board => [board.id, board]));
+        const locals = new Map(knownBoards.current.map(board => [board.id, board]));
+        for (const remote of boards) {
+          const local = locals.get(remote.id);
+          if (!local || (remote.revision <= local.revision && !sameBoardContent(local, remote))) continue;
+          const merged = mergeCloudBoard(local, remote);
+          if (merged.revision === remote.revision && merged.cloudSavedContent === boardContent(remote)) {
+            conflicts.current.delete(remote.id);
+          } else {
+            conflicts.current.set(remote.id, `“${local.title}”: ${messageFor(new CloudConflictError())}`);
+          }
+        }
         mergeCloudBoards(boards);
+        readFailed = false;
+        clearRetry();
         setLastSync(new Date());
         initialized.current = true;
         setReady(true);
@@ -108,22 +151,40 @@ export function useCloudBoards(
           }
           setError(messageFor(fetchError));
           setStatus("error");
+          readFailed = true;
+          retrySoon();
         }
       } finally {
         reading = false;
+        if (!cancelled && refreshRequested.current && !inFlight.current && !document.hidden)
+          queueMicrotask(() => { void refresh(); });
       }
     }
     void refresh();
     const onFocus = () => {
-      if (!document.hidden) void refresh();
+      if (document.hidden) clearRetry();
+      else void refresh();
     };
-    const timer = setInterval(onFocus, 10000);
+    refreshCloud.current = onFocus;
+    retryCloud.current = retrySoon;
+    const stopLive = watchBoardChanges(client, user.id, onFocus, id =>
+      Math.max(remoteBoards.current.get(id)?.revision ?? 0, knownBoards.current.find(board => board.id === id)?.revision ?? 0),
+      healthy => {
+        liveHealthy = healthy;
+        if (!healthy) clearRetry();
+        else if (readFailed || failures.current.size) retrySoon();
+      });
     window.addEventListener("focus", onFocus);
+    window.addEventListener("offline", clearRetry);
     document.addEventListener("visibilitychange", onFocus);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      stopLive();
+      if (refreshCloud.current === onFocus) refreshCloud.current = () => {};
+      if (retryCloud.current === retrySoon) retryCloud.current = () => {};
+      clearRetry();
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("offline", clearRetry);
       document.removeEventListener("visibilitychange", onFocus);
     };
   }, [user?.id, retry, mergeCloudBoards]);
@@ -131,7 +192,7 @@ export function useCloudBoards(
   useEffect(() => {
     if (!supabase || !user || !ready) return;
     if (!online) { setStatus('offline'); return; }
-    if (workspace.localStatus !== 'saved') return;
+    if (!workspace.cloudDurable) return;
     if (inFlight.current) return;
     if (!pendingBoard) {
       immediateSave.current = false;
@@ -141,7 +202,6 @@ export function useCloudBoards(
       setError(conflict || failure?.message || "");
       return;
     }
-    if (inFlight.current) return;
     setStatus("saving");
     const client = supabase;
     const timer = setTimeout(async () => {
@@ -156,20 +216,24 @@ export function useCloudBoards(
           markCloudSaved(pendingBoard.id, saved.revision, signature, {
             inviteCode: saved.inviteCode,
           });
+          remoteBoards.current.set(pendingBoard.id, { ...pendingBoard, ...saved, cloudSavedContent: signature });
         }
       } catch (saveError) {
         if (active.current) {
           const message = `“${pendingBoard.title}”: ${messageFor(saveError)}`;
-          if (saveError instanceof CloudConflictError)
+          if (saveError instanceof CloudConflictError) {
             conflicts.current.set(pendingBoard.id, message);
-          else
+            setRetry(value => value + 1);
+          } else
             failures.current.set(pendingBoard.id, {
               content: signature,
               message,
             });
+          retryCloud.current();
         }
       } finally {
         inFlight.current = false;
+        if (refreshRequested.current) refreshCloud.current();
         if (active.current) setSaveTick((v) => v + 1);
       }
     }, immediateSave.current ? 0 : 700);
@@ -183,7 +247,7 @@ export function useCloudBoards(
     markCloudSaved,
     saveTick,
     online,
-    workspace.localStatus,
+    workspace.cloudDurable,
   ]);
 
   const joinBoard = async (input: string, restore = true, current = () => true) => {
@@ -214,7 +278,7 @@ export function useCloudBoards(
       inviteCode: undefined,
       updatedAt: new Date().toISOString(),
     };
-    if (conflicts.current.has(source.id)) workspace.deleteBoard(source.id);
+    if (conflicts.current.has(source.id) || workspace.localError.includes("another tab")) workspace.deleteBoard(source.id);
     workspace.addBoard(copy);
     conflicts.current.delete(source.id);
     setError("");
@@ -226,7 +290,7 @@ export function useCloudBoards(
     if (!board.revision)
       throw new Error("Save this board online before force syncing.");
     if (inFlight.current) throw new Error("Wait for saving to finish, then try again.");
-    if (workspace.localStatus !== "saved")
+    if (!workspace.cloudDurable)
       throw new Error("Wait for your local recovery copy to save, then try again.");
     const snapshot = board;
     const content = boardContent(snapshot);
@@ -244,9 +308,11 @@ export function useCloudBoards(
       }
     } catch (failure) {
       if (active.current) conflicts.current.set(snapshot.id, `“${snapshot.title}”: ${messageFor(failure)}`);
+      if (active.current) retryCloud.current();
       throw failure;
     } finally {
       inFlight.current = false;
+      if (refreshRequested.current) refreshCloud.current();
       if (active.current) setSaveTick(value => value + 1);
     }
   };

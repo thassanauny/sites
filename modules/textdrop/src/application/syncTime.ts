@@ -25,7 +25,9 @@ export function withSyncTime(remote: Cloud): Cloud {
     joinPage: track(remote.joinPage),
     pollPage: track(remote.pollPage),
     savePage: track(remote.savePage),
+    ...(remote.saveCheckedPage ? { saveCheckedPage: track(remote.saveCheckedPage) } : {}),
     ...(remote.renamePage ? { renamePage: track(remote.renamePage) } : {}),
+    ...(remote.renameCheckedPage ? { renameCheckedPage: track(remote.renameCheckedPage) } : {}),
     ...(remote.listNames ? { listNames: (codes: string[]) => (codes.length ? track(remote.listNames!)(codes) : remote.listNames!(codes)) } : {}),
   };
 }

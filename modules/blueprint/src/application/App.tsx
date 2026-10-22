@@ -148,8 +148,7 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
       )}
       {workspace.localStatus === "error" && (
         <div className="storage-error" role="alert">
-          Your browser could not save a recovery copy. Keep this board open and
-          check that changes save online before closing it.
+          {workspace.localError || "Your browser could not save a recovery copy. Keep this board open and check that changes save online before closing it."}
         </div>
       )}
 
@@ -204,7 +203,7 @@ function Workspace({ auth }: { auth: ReturnType<typeof useAuth> }) {
           cloud={cloud}
           readOnly={readOnly}
           onDetailsChange={home ? undefined : (patch, remember = true) => { if (!readOnly) workspace.update(current => ({ ...current, ...patch }), remember); }}
-          onSave={home ? undefined : () => { workspace.saveNow(); cloud.flushNow(); }}
+          onSave={home ? undefined : async () => { await workspace.saveNow(); cloud.flushNow(); }}
           onRemove={home ? undefined : async () => {
             if (cloud.status === "saving") throw new Error("Wait for saving to finish, then try again.");
             await workspace.removeFromDevice(board.id);

@@ -1,14 +1,11 @@
-import { mergeWorkspace, openWorkspaceBoard } from "../domain/boards/workspace";
+import { mergeDeviceWorkspace, mergeWorkspace, openWorkspaceBoard, type WorkspaceData } from "../domain/boards/workspace";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Board, Diagram } from "../domain/boards/types";
+import type { Board } from "../domain/boards/types";
 import { cleanDiagram } from "../domain/boards/codec";
 import { createBoard } from "../domain/boards/templates";
 import { workspaceStorage } from "../infrastructure/storage/workspace";
-
-type HistoryEntry = Diagram & Pick<Board, "iconStyle" | "colorIntensity">;
-function historyEntry(board: Board): HistoryEntry {
-  return { ...cleanDiagram(board), iconStyle: board.iconStyle, colorIntensity: board.colorIntensity };
-}
+import { sameBoardContent, sameJson } from "../domain/boards/merge";
+import { historyEntry, rebaseHistory, type HistoryEntry } from "../domain/boards/history";
 
 export function useWorkspace(userId?: string) {
   const storage = useMemo(() => workspaceStorage(userId), [userId]);
@@ -25,9 +22,11 @@ export function useWorkspace(userId?: string) {
   useEffect(() => storage.watchRemoved((ids) => { removalVersion.current++; setRemovedIds(ids); }), [storage]);
   const hadLocalWorkspace = useRef(storage.hasSaved());
   const [workspace, setWorkspace] = useState(() => storage.load());
-  const [localStatus, setLocalStatus] = useState<"saved" | "saving" | "error">(
-    "saved",
-  );
+  const currentWorkspace = useRef(workspace);
+  currentWorkspace.current = workspace;
+  const durableWorkspace = useRef(storage.baseline());
+  const [savedSnapshot, setSavedSnapshot] = useState<WorkspaceData>();
+  const [localError, setLocalError] = useState("");
   const [historyVersion, setHistoryVersion] = useState(0);
   const past = useRef<HistoryEntry[]>([]);
   const future = useRef<HistoryEntry[]>([]);
@@ -39,6 +38,29 @@ export function useWorkspace(userId?: string) {
   removedRef.current = removedIds;
   const boardRef = useRef(board);
   boardRef.current = board;
+  // Apply each transition once outside React's replayable state updater.
+  const changeWorkspace = useCallback((recipe: (current: WorkspaceData) => WorkspaceData, external = false) => {
+    const previous = currentWorkspace.current;
+    const next = recipe(previous);
+    if (external) {
+      const before = previous.boards.find(item => item.id === previous.activeId);
+      const after = next.boards.find(item => item.id === next.activeId);
+      if (before && after) {
+        const rebased = rebaseHistory(before, after, past.current, future.current);
+        if (rebased.past !== past.current || rebased.future !== future.current) {
+          past.current = rebased.past;
+          future.current = rebased.future;
+          setHistoryVersion(value => value + 1);
+        }
+      } else {
+        past.current = [];
+        future.current = [];
+        setHistoryVersion(value => value + 1);
+      }
+    }
+    currentWorkspace.current = next;
+    setWorkspace(next);
+  }, []);
   const serialized = JSON.stringify({
     ...workspace,
     boards: workspace.boards.map((item) => ({
@@ -47,49 +69,72 @@ export function useWorkspace(userId?: string) {
     })),
   });
 
-  const savedSerialized = useRef<string | undefined>(undefined);
-  const saveNow = useCallback(() => {
+  const snapshot = useMemo(() => JSON.parse(serialized) as WorkspaceData, [serialized]);
+  const localStatus: "saved" | "saving" | "error" = localError ? "error"
+    : savedSnapshot && sameJson(snapshot, savedSnapshot) ? "saved" : "saving";
+  const durableBoards = new Map(savedSnapshot?.boards.map(item => [item.id, item]));
+  const cloudDurable = !localError && savedSnapshot?.boards.length === snapshot.boards.length
+    && snapshot.boards.every(item => {
+      const saved = durableBoards.get(item.id);
+      return saved && item.revision === saved.revision && item.cloudSavedContent === saved.cloudSavedContent
+        && item.inviteCode === saved.inviteCode && sameBoardContent(item, saved);
+    });
+  const persist = useCallback(async (snapshot: string) => {
+    const requested = JSON.parse(snapshot) as WorkspaceData;
     try {
-      storage.save(serialized);
-      savedSerialized.current = serialized;
-      setLocalStatus("saved");
-    } catch {
-      setLocalStatus("error");
-      throw new Error("Could not save on this device. Keep this board open and try again.");
+      const saved = await storage.save(snapshot);
+      durableWorkspace.current = saved;
+      setSavedSnapshot(saved);
+      changeWorkspace(current => sameJson(requested, saved) ? current : mergeDeviceWorkspace(requested, current, saved) ?? current, true);
+      setLocalError("");
+    } catch (error) {
+      const message = error instanceof Error && error.message.includes("another tab")
+        ? error.message : "Could not save on this device. Keep this board open and try again.";
+      setLocalError(message);
+      throw new Error(message);
     }
-  }, [serialized, storage]);
+  }, [storage, changeWorkspace]);
+  const saveNow = useCallback(() => persist(serialized), [persist, serialized]);
+
+  useEffect(() => storage.watch(external => {
+    const merged = mergeDeviceWorkspace(durableWorkspace.current, currentWorkspace.current, external);
+    if (merged) changeWorkspace(() => merged, true);
+    else {
+      setLocalError("This draft changed in another tab. Keep this board open and save your changes as a new board to preserve both versions.");
+    }
+  }), [storage, changeWorkspace]);
 
   useEffect(() => {
-    if (savedSerialized.current === serialized) { setLocalStatus("saved"); return; }
-    setLocalStatus("saving");
+    if (savedSnapshot && sameJson(snapshot, savedSnapshot)) return;
     const timer = setTimeout(() => {
-      try {
-        storage.save(serialized);
-        savedSerialized.current = serialized;
-        setLocalStatus("saved");
-      } catch {
-        setLocalStatus("error");
-      }
+      void persist(serialized).catch(() => {});
     }, 350);
     return () => clearTimeout(timer);
-  }, [serialized, storage]);
+  }, [serialized, snapshot, savedSnapshot, persist]);
 
   useEffect(() => {
     const flush = () => {
-      try {
-        storage.save(serialized);
-      } catch {
-        /* Status is surfaced by autosave. */
-      }
+      try { storage.stage(serialized); } catch { /* Existing durable drafts remain untouched. */ }
+      void persist(serialized).catch(() => {});
     };
     window.addEventListener("pagehide", flush);
     return () => window.removeEventListener("pagehide", flush);
-  }, [serialized, storage]);
+  }, [serialized, persist, storage]);
+
+  useEffect(() => {
+    if (localStatus === "saved") return;
+    const pending = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", pending);
+    return () => window.removeEventListener("beforeunload", pending);
+  }, [localStatus]);
 
   const checkpoint = useCallback(() => {
     past.current = [
       ...past.current.slice(-59),
-      structuredClone(historyEntry(boardRef.current)),
+      structuredClone(historyEntry(currentWorkspace.current.boards.find(item => item.id === currentWorkspace.current.activeId) || boardRef.current)),
     ];
     future.current = [];
     setHistoryVersion((v) => v + 1);
@@ -99,7 +144,7 @@ export function useWorkspace(userId?: string) {
     (recipe: (board: Board) => Board, remember = true, touch = true) => {
       if (touch) hadLocalWorkspace.current = true;
       if (remember) checkpoint();
-      setWorkspace((previous) => ({
+      changeWorkspace((previous) => ({
         ...previous,
         boards: previous.boards.map((item) =>
           item.id === previous.activeId
@@ -111,7 +156,7 @@ export function useWorkspace(userId?: string) {
         ),
       }));
     },
-    [checkpoint],
+    [checkpoint, changeWorkspace],
   );
 
   const travel = useCallback(
@@ -131,25 +176,25 @@ export function useWorkspace(userId?: string) {
     past.current = [];
     future.current = [];
     setHistoryVersion((v) => v + 1);
-    setWorkspace((previous) => ({ ...previous, activeId: id }));
-  }, []);
+    changeWorkspace((previous) => ({ ...previous, activeId: id }));
+  }, [changeWorkspace]);
 
   const addBoard = useCallback((newBoard: Board) => {
     hadLocalWorkspace.current = true;
     past.current = [];
     future.current = [];
     setHistoryVersion((v) => v + 1);
-    setWorkspace((previous) => ({
+    changeWorkspace((previous) => ({
       boards: [newBoard, ...previous.boards.filter((item) => item.id !== newBoard.id)],
       activeId: newBoard.id,
     }));
-  }, []);
+  }, [changeWorkspace]);
 
   const deleteBoard = useCallback((id: string) => {
     past.current = [];
     future.current = [];
     setHistoryVersion((v) => v + 1);
-    setWorkspace((previous) => {
+    changeWorkspace((previous) => {
       const remaining = previous.boards.filter((item) => item.id !== id);
       return {
         boards: remaining,
@@ -157,7 +202,7 @@ export function useWorkspace(userId?: string) {
           previous.activeId === id ? remaining[0]?.id || "" : previous.activeId,
       };
     });
-  }, []);
+  }, [changeWorkspace]);
 
   const removeFromDevice = useCallback(
     async (id: string) => {
@@ -176,10 +221,11 @@ export function useWorkspace(userId?: string) {
     const replaceStarter =
       !hadLocalWorkspace.current && remoteBoards.length > 0;
     if (replaceStarter) hadLocalWorkspace.current = true;
-    setWorkspace((previous) =>
+    changeWorkspace((previous) =>
       mergeWorkspace(previous, remoteBoards, replaceStarter),
+      true,
     );
-  }, []);
+  }, [changeWorkspace]);
 
   const markCloudSaved = useCallback(
     (
@@ -188,16 +234,16 @@ export function useWorkspace(userId?: string) {
       content: string,
       metadata: Partial<Pick<Board, "inviteCode">> = {},
     ) => {
-      setWorkspace((previous) => ({
+      changeWorkspace((previous) => ({
         ...previous,
         boards: previous.boards.map((item) =>
-          item.id === id
+          item.id === id && item.revision <= revision
             ? { ...item, ...metadata, revision, cloudSavedContent: content }
             : item,
         ),
       }));
     },
-    [],
+    [changeWorkspace],
   );
 
   const openCloudBoard = useCallback(
@@ -209,11 +255,11 @@ export function useWorkspace(userId?: string) {
       setHistoryVersion((v) => v + 1);
       const replaceStarter = !hadLocalWorkspace.current;
       hadLocalWorkspace.current = true;
-      setWorkspace((previous) =>
+      changeWorkspace((previous) =>
         openWorkspaceBoard(previous, remote, replaceStarter),
       );
     },
-    [updateRemoved],
+    [updateRemoved, changeWorkspace],
   );
 
   return {
@@ -236,6 +282,8 @@ export function useWorkspace(userId?: string) {
     canUndo: historyVersion >= 0 && past.current.length > 0,
     canRedo: historyVersion >= 0 && future.current.length > 0,
     localStatus,
+    cloudDurable,
+    localError,
     saveNow,
     mergeCloudBoards,
     markCloudSaved,

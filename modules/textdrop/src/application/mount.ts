@@ -83,6 +83,22 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
   });
 
   let naming = false;
+  let stopChanges: (() => void) | undefined;
+  function watchChanges(): void {
+    const active = configured && session.state.online && document.visibilityState === 'visible' && Boolean(session.state.page || rememberedSnippets.length);
+    if (active && !stopChanges && cloud.subscribeChanges)
+      stopChanges = cloud.subscribeChanges(
+        () => {
+          void refreshes.wake(true);
+        },
+        healthy => refreshes.setLiveHealthy(healthy),
+      );
+    if (!active && stopChanges) {
+      stopChanges();
+      stopChanges = undefined;
+      refreshes.setLiveHealthy(false);
+    }
+  }
   let sharedMark = '';
   function cacheName(page: TextDropPage): boolean {
     if (page.name === undefined || !deviceSnippets.sharedName) return true;
@@ -193,11 +209,16 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
   }
 
   function render(): void {
+    watchChanges();
     const { page, draft, phase, dirty, error, online, sessionDamaged } = session.state;
     const opening = phase === 'opening';
     ui.home.hidden = Boolean(page);
     ui.workspace.hidden = !page;
     ui.snippetActions.hidden = !page;
+    ui.conflictReview.hidden = !page?.localConflict;
+    if (page?.localConflict && ui.conflictText.value !== page.localConflict.text) ui.conflictText.value = page.localConflict.text;
+    ui.keepLocal.disabled = !online || phase === 'saving' || measure(draft).tooLarge;
+    ui.useShared.disabled = phase === 'saving';
     ui.connection.classList.toggle('disconnected', !online || !!error || !!nameSyncError || !configured);
     setText(
       ui.connectionLabel,
@@ -235,8 +256,11 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
       const { lines, tooLarge } = measure(draft);
       setText(ui.textCount, `${draft.length.toLocaleString()} characters · ${lines.toLocaleString()} lines${tooLarge ? ' · over 1 MiB limit' : ''}`);
       ui.textCount.classList.toggle('over-limit', tooLarge);
-      const status =
-        !online && !cloud.offlineCapable
+      const status = page.localConflict
+        ? cloud.offlineCapable
+          ? 'Saved on this device · conflict to review'
+          : 'Text conflict · review both versions'
+        : !online && !cloud.offlineCapable
           ? 'Offline · editing paused'
           : phase === 'saving'
             ? 'Saving…'
@@ -273,7 +297,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     ui.noticeMessage.textContent = notice;
     const link = readRoute(location.hash);
     const retryOpening = !page && !opening && !!error && configured && online && link.kind === 'page';
-    ui.retry.hidden = !retryOpening && (!page || !dirty || !online || phase === 'saving' || measure(draft).tooLarge);
+    ui.retry.hidden = Boolean(page?.localConflict) || (!retryOpening && (!page || !dirty || !online || phase === 'saving' || measure(draft).tooLarge));
     setText(ui.retry, retryOpening ? 'Retry opening' : 'Retry save');
     ui.newSession.hidden = !(sessionDamaged && notice === error);
     dialogs.render({ page, dirty, phase, sessionError: error, sessionDamaged, online, configured });
@@ -456,6 +480,20 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
         event.preventDefault();
         void session.save();
       }
+    },
+    { signal },
+  );
+  ui.keepLocal.addEventListener(
+    'click',
+    () => {
+      void session.save(true);
+    },
+    { signal },
+  );
+  ui.useShared.addEventListener(
+    'click',
+    () => {
+      void session.acceptShared();
     },
     { signal },
   );
@@ -789,6 +827,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
   document.addEventListener(
     'visibilitychange',
     () => {
+      watchChanges();
       if (document.visibilityState === 'visible') {
         refreshDeviceSnippets();
         void refreshes.wake();
@@ -813,6 +852,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
   return () => {
     stopBrandFit();
     stopSyncTime?.();
+    stopChanges?.();
     lifecycle.abort();
     refreshes.stop();
     clearTimeout(toastTimer);

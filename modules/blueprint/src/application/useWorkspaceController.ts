@@ -311,7 +311,7 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
     [update, readOnly],
   );
 
-  const updateNode = (changes: Partial<ComponentData>) => {
+  const updateNode = (changes: Partial<ComponentData>, remember = true) => {
     if (readOnly || !selectedNode) return;
     update((current) => ({
       ...current,
@@ -324,7 +324,7 @@ export function useWorkspaceController(auth: ReturnType<typeof useAuth>) {
         return { ...node, data, ...(data.kind === "swimlane" && changes.lanes
           ? { height, style: { ...node.style, height } } : {}) };
       }),
-    }));
+    }), remember);
   };
 
   const [creating, setCreating] = useState(false);

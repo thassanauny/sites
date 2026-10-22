@@ -149,9 +149,30 @@ describe('durable offline changes', () => {
     const merged = mergeLatestGroup(base, local, remote)
     expect(merged.name).toBe('Our trip')
     expect(merged.description).toBe('Their description')
-    expect(merged.transactions.find(t => t.id === 'same')).toEqual(remote.transactions[0])
+    const combined = { ...local.transactions[0], description: 'Latest dinner' }
+    expect(merged.transactions.find(t => t.id === 'same')).toEqual(combined)
     expect(merged.transactions.map(t => t.id)).toEqual(['same', 'theirs', 'ours'])
-    expect(mergeLatestGroup(base, { ...local, updatedAt: time(4) }, remote).transactions[0]).toEqual(local.transactions[0])
+    expect(mergeLatestGroup(base, { ...local, updatedAt: time(4) }, remote).transactions[0]).toEqual(combined)
+  })
+
+  it('merges independent expense details while resolving the whole financial change by time, with server ties', () => {
+    const entry = expense('same')
+    const base = { ...group(), transactions: [entry] }
+    const local = { ...base, updatedAt: time(2), transactions: [{ ...entry, amount: 2000, shares: { amy: 2000 }, description: 'Local description' }] }
+    const remote = { ...base, updatedAt: time(2), transactions: [{ ...entry, paidBy: 'ben', category: 'other', date: '2026-10-09' }] }
+    expect(mergeLatestGroup(base, local, remote).transactions[0]).toEqual({ ...remote.transactions[0], description: 'Local description' })
+    expect(mergeLatestGroup(base, { ...local, updatedAt: time(3) }, remote).transactions[0]).toEqual({ ...local.transactions[0], category: 'other', date: '2026-10-09' })
+    const conflicting = { ...remote, transactions: [{ ...remote.transactions[0], description: 'Server description' }] }
+    expect(mergeLatestGroup(base, local, conflicting).transactions[0]).toEqual(conflicting.transactions[0])
+  })
+
+  it('merges payment note/date independently of the amount and both participants', () => {
+    const entry = { id: 'payment', type: 'payment' as const, fromId: 'ben', toId: 'amy', amount: 500, note: '', date: '2026-10-08', createdAt: time(1) }
+    const base = { ...group(), transactions: [entry] }
+    const local = { ...base, updatedAt: time(3), transactions: [{ ...entry, amount: 700, note: 'Bank transfer' }] }
+    const remote = { ...base, updatedAt: time(2), transactions: [{ ...entry, fromId: 'amy', toId: 'ben', date: '2026-10-09' }] }
+    expect(mergeLatestGroup(base, local, remote).transactions[0]).toEqual({ ...local.transactions[0], date: '2026-10-09' })
+    expect(mergeLatestGroup(base, { ...local, updatedAt: time(2) }, remote).transactions[0]).toEqual({ ...remote.transactions[0], note: 'Bank transfer' })
   })
 
   it('merges deletion and later edits by time without restoring deleted transactions', () => {

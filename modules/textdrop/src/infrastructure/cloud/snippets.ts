@@ -1,8 +1,9 @@
 import { createClient, navigatorLock, type SupabaseClient } from '@supabase/supabase-js';
 import type { Cloud } from '../../application/ports';
-import { normalizeCode, readPage, validateName, validateText, validateUuid, type TextDropPage } from '../../domain/snippets/model';
+import { normalizeCode, readPage, TextConflictError, validateName, validateText, validateUuid, type TextDropPage } from '../../domain/snippets/model';
 import { discardDamagedSession, migrateLegacyAuthStorage, TEXTDROP_AUTH_KEY } from '../auth/sessionStorage';
 import { fetchWithTimeout } from './requestTimeout';
+import { listenForChanges } from './liveChanges';
 
 interface ServiceError {
   code?: string;
@@ -67,6 +68,11 @@ function privateKey(key: string): boolean {
   }
 }
 
+async function textHash(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
+}
+
 /** Remote API; the offline adapter separately owns cached content and pending edits. */
 export function createCloud(url: string, key: string): Cloud {
   const projectUrl = url.trim();
@@ -128,6 +134,57 @@ export function createCloud(url: string, key: string): Cloud {
   }
 
   return {
+    initialize,
+    subscribeChanges: (listener, health = () => {}) => {
+      health(false);
+      let stopped = false;
+      let dispose: (() => void) | undefined;
+      void initialize()
+        .then(() => {
+          if (!stopped) dispose = listenForChanges(getClient(), listener, health);
+        })
+        .catch(() => {});
+      return () => {
+        stopped = true;
+        dispose?.();
+        health(false);
+      };
+    },
+    renameCheckedPage: async (id, name, cached) => {
+      const pageId = validateUuid(id);
+      if (cached.id !== pageId) throw new Error(INVALID_RESPONSE);
+      const hash = await textHash(validateText(cached.text));
+      await initialize();
+      const action = 'save the snippet name';
+      const { data, error } = await call(action, () => getClient().rpc('textdrop_rename_checked', { p_id: pageId, p_name: validateName(name), p_text_hash: hash }));
+      if (error) throw serviceError(error, action);
+      const page = parsePage({ text: cached.text, ...data });
+      if (page.id !== pageId) throw new Error(INVALID_RESPONSE);
+      return page;
+    },
+    saveCheckedPage: async (id, text, save) => {
+      const pageId = validateUuid(id);
+      const sent = validateText(text);
+      const base = validateText(save.baseText);
+      if (!Number.isSafeInteger(save.baseVersion) || save.baseVersion < 1) throw new Error(INVALID_RESPONSE);
+      const operationId = validateUuid(save.operationId ?? crypto.randomUUID());
+      const baseHash = await textHash(base);
+      await initialize();
+      const action = 'save the snippet';
+      const { data, error } = await call(action, () =>
+        getClient().rpc('textdrop_save_checked', { p_id: pageId, p_text: sent, p_expected: save.baseVersion, p_base_hash: baseHash, p_operation_id: operationId }),
+      );
+      if (error) throw serviceError(error, action);
+      if (data && typeof data === 'object' && Object.keys(data).join() === 'conflict') {
+        const page = parsePage(data.conflict);
+        if (page.id !== pageId) throw new Error(INVALID_RESPONSE);
+        throw new TextConflictError(page);
+      }
+      if (!data || typeof data !== 'object' || Array.isArray(data) || Object.hasOwn(data, 'text')) throw new Error(INVALID_RESPONSE);
+      const page = parsePage({ ...data, text: sent });
+      if (page.id !== pageId) throw new Error(INVALID_RESPONSE);
+      return page;
+    },
     renamePage: async (id, name) => {
       const pageId = validateUuid(id);
       const page = await rpc('save the snippet name', 'textdrop_rename_page', { p_id: pageId, p_name: validateName(name) });

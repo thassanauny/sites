@@ -15,6 +15,7 @@ vi.mock('./infrastructure/cloud/groups', () => ({
   loadCloudGroups: mocks.load,
   createCloudGroup: vi.fn(),
   saveCloudGroup: vi.fn(),
+  watchCloudGroups: vi.fn(() => () => {}),
 }))
 vi.mock('virtual:pwa-register/react', () => ({ useRegisterSW: () => ({ needRefresh: [false, vi.fn()], offlineReady: [false, vi.fn()], updateServiceWorker: vi.fn() }) }))
 const codeA = 'a'.repeat(32),

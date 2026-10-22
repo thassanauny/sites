@@ -1,9 +1,4 @@
-import { Zip, ZipPassThrough, zipSync } from 'fflate';
-
-export interface ZipItem {
-  name: string;
-  data: Uint8Array;
-}
+import { Zip, ZipPassThrough } from 'fflate';
 
 /** Hands out `name`, then `name-2`, `name-3`… so no entry replaces another. Names compare case-insensitively. */
 export function nameAllocator(): (name: string) => string {
@@ -19,11 +14,6 @@ export function nameAllocator(): (name: string) => string {
   };
 }
 
-export function uniqueNames(names: string[]): string[] {
-  const next = nameAllocator();
-  return names.map(next);
-}
-
 /** Entry names may contain "/" for subfolders, but never "..", absolute paths or backslashes. */
 export function safeZipPath(p: string): string {
   const parts = p
@@ -31,15 +21,6 @@ export function safeZipPath(p: string): string {
     .split('/')
     .filter((s) => s && s !== '.' && s !== '..');
   return parts.join('/') || 'file';
-}
-
-export function makeZip(items: ZipItem[], opts: { store?: boolean } = {}): Uint8Array {
-  const names = uniqueNames(items.map((i) => safeZipPath(i.name)));
-  const files: Record<string, Uint8Array> = {};
-  items.forEach((it, i) => {
-    files[names[i]] = it.data;
-  });
-  return zipSync(files, { level: opts.store ? 0 : 6 });
 }
 
 export interface ZipWriter {

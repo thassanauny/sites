@@ -27,6 +27,63 @@ afterEach(() => {
 });
 
 describe('page refresh schedule', () => {
+  it('uses minute reconciliation while healthy without typing postponing the bounded poll', async () => {
+    scheduler.start();
+    scheduler.setLiveHealthy(true);
+    for (let second = 0; second < 59; second++) {
+      scheduler.activity();
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    expect(refresh).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(times).toEqual([60]);
+    await scheduler.wake(true);
+    expect(times).toEqual([60, 60]);
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    scheduler.setLiveHealthy(false);
+    scheduler.activity();
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(refresh).toHaveBeenCalledTimes(3);
+  });
+
+  it('restores fast reconciliation when live health fails during a read and retains failure backoff', async () => {
+    let finish!: (result: RefreshResult) => void;
+    refresh.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          finish = resolve;
+        }),
+    );
+    scheduler.start();
+    scheduler.setLiveHealthy(true);
+    const reading = scheduler.wake();
+    scheduler.setLiveHealthy(false);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    finish('unchanged');
+    await reading;
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    outcomes.push('failed', 'unchanged');
+    scheduler.setLiveHealthy(true);
+    await scheduler.wake(true);
+    const failedAt = times.at(-1)!;
+    await vi.advanceTimersByTimeAsync(5999);
+    expect(times.at(-1)).toBe(failedAt);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(times.at(-1)).toBe(failedAt + 6);
+    const before = times.length;
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(times).toHaveLength(before);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(times).toHaveLength(before + 1);
+  });
+
   it('asks for newer text every 3 seconds while the page is in use', async () => {
     scheduler.start();
     await vi.advanceTimersByTimeAsync(seconds(3) - 1);
@@ -166,4 +223,22 @@ describe('page refresh schedule', () => {
     await vi.advanceTimersByTimeAsync(seconds(6));
     expect(refresh).toHaveBeenCalledTimes(2);
   });
+});
+
+it('catches up once when a live notification arrives during an active read', async () => {
+  let finish!: (value: RefreshResult) => void;
+  refresh.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        finish = resolve;
+      }),
+  );
+  scheduler.start();
+  const current = scheduler.wake();
+  void scheduler.wake(true);
+  void scheduler.wake(true);
+  finish('unchanged');
+  await current;
+  await vi.advanceTimersByTimeAsync(0);
+  expect(refresh).toHaveBeenCalledTimes(2);
 });

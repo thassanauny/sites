@@ -53,6 +53,26 @@ describe('state persistence', () => {
     };
     expect(() => new Store(throwing).addActivity({ tool: 't', message: 'm', status: 'failed' })).not.toThrow();
   });
+  it('rejects malformed activity shapes and bounds valid history on read without altering saved data', () => {
+    const kv = mem();
+    const store = new Store(kv);
+    for (const value of [null, {}, 7, 'wrong', { entries: [] }]) {
+      const raw = JSON.stringify(value);
+      kv.setItem('utility-desk:v1:activity', raw);
+      expect(store.getActivity()).toEqual([]);
+      expect(kv.getItem('utility-desk:v1:activity')).toBe(raw);
+    }
+    const entry = { id: 'valid', tool: 'compress-pdf', message: 'Saved', status: 'done', ts: 1 };
+    const invalid = [null, [], {}, { ...entry, id: '' }, { ...entry, tool: null }, { ...entry, message: 3 }, { ...entry, status: 'pending' }, { ...entry, ts: '1' }, { ...entry, ts: -1 }, { ...entry, ts: 8_640_000_000_000_001 }];
+    const entries = Array.from({ length: MAX_ACTIVITY + 10 }, (_, index) => ({ ...entry, id: `entry-${index}` }));
+    const raw = JSON.stringify([...invalid, entry, entry, ...entries]);
+    kv.setItem('utility-desk:v1:activity', raw);
+    expect(store.getActivity()).toEqual([entry, ...entries.slice(0, MAX_ACTIVITY - 1)]);
+    expect(kv.getItem('utility-desk:v1:activity')).toBe(raw);
+    expect(() => store.addActivity({ tool: 'qr-generator', message: 'Created', status: 'done' })).not.toThrow();
+    expect(store.getActivity()).toHaveLength(MAX_ACTIVITY);
+    expect(store.getActivity()[0].tool).toBe('qr-generator');
+  });
 });
 
 describe('unsupported browser states', () => {

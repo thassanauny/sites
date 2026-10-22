@@ -3,12 +3,14 @@ import type { RefreshResult } from './PageSession';
 const ACTIVE_MS = 3000;
 const QUIET_MS = 10_000;
 const IDLE_MS = 30_000;
+const LIVE_MS = 60_000;
 const QUIET_AFTER_MS = 60_000;
 const IDLE_AFTER_MS = 300_000;
 
 /**
  * Decides when the open page asks for newer text. It asks every 3 seconds while the page is in use,
- * every 10 seconds after a quiet minute and every 30 seconds after five quiet minutes. Failed requests
+ * every 10 seconds after a quiet minute and every 30 seconds after five quiet minutes. A subscribed
+ * live channel uses minute reconciliation; activity cannot postpone that timer. Failed requests
  * double the wait (6, 12, 24, then 30 seconds) until one succeeds. `wake` asks at once.
  */
 export class RefreshScheduler {
@@ -20,6 +22,8 @@ export class RefreshScheduler {
   private failures = 0;
   private lastActivity = Date.now();
   private armedDelay = ACTIVE_MS;
+  private catchUp = false;
+  private liveHealthy = false;
 
   constructor(refresh: () => Promise<RefreshResult>, visible: () => boolean) {
     this.refresh = refresh;
@@ -34,6 +38,7 @@ export class RefreshScheduler {
 
   stop(): void {
     this.stopped = true;
+    this.catchUp = false;
     clearTimeout(this.timer);
     this.timer = undefined;
   }
@@ -41,17 +46,26 @@ export class RefreshScheduler {
   /** The person is using the page: go back to the quick pace without restarting a quick timer. */
   activity(): void {
     this.lastActivity = Date.now();
-    if (!this.stopped && this.armedDelay > ACTIVE_MS && this.failures === 0) this.arm();
+    if (!this.stopped && this.armedDelay > this.delay() && this.failures === 0) this.arm();
+  }
+
+  /** Slow reconciliation only after the live channel actually subscribed. */
+  setLiveHealthy(healthy: boolean): void {
+    if (this.liveHealthy === healthy) return;
+    this.liveHealthy = healthy;
+    if (!this.stopped) this.arm();
   }
 
   /** Asks now (focus, page visible again, connection back). Simultaneous calls share one request. */
-  wake(): Promise<void> {
+  wake(afterCurrent = false): Promise<void> {
     this.lastActivity = Date.now();
+    if (afterCurrent && this.running) this.catchUp = true;
     return this.refreshNow();
   }
 
   private delay(): number {
     if (this.failures > 0) return Math.min(ACTIVE_MS * 2 ** this.failures, IDLE_MS);
+    if (this.liveHealthy) return LIVE_MS;
     const quiet = Date.now() - this.lastActivity;
     return quiet >= IDLE_AFTER_MS ? IDLE_MS : quiet >= QUIET_AFTER_MS ? QUIET_MS : ACTIVE_MS;
   }
@@ -80,7 +94,10 @@ export class RefreshScheduler {
       })
       .finally(() => {
         if (this.running === request) this.running = undefined;
-        this.arm();
+        if (this.catchUp && !this.stopped) {
+          this.catchUp = false;
+          void this.refreshNow();
+        } else this.arm();
       });
     this.running = request;
     return request;

@@ -4,6 +4,7 @@
   "files": {
     "includes": [
       "src/**",
+      "tests/**",
       "supabase/*.mjs",
       "*.ts",
       "index.html",

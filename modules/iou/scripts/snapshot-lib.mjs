@@ -278,18 +278,52 @@ function removeAbandonedStages(parent, prefix) {
   }
 }
 
-/** Run `action(stage)` in a private folder inside `parent`, removed afterwards unless a rollback failed. */
-export function withStage(parent, prefix, action) {
+/* Steps: one preparation, blocking or concurrent */
+
+// Preparation is written once as a generator that yields each external command as
+// [command, args, options]. `perform` runs it with a blocking runner (execFileSync, the
+// standalone helpers, tests); `performAsync` awaits the runner so apps can build concurrently.
+// A failing command is thrown back into the generator, so its cleanup and rollback still run.
+
+/** Run `steps` to completion, calling the blocking `run(command, args, options)` for each yielded command. */
+export function perform(steps, run) {
+  let next = steps.next();
+  while (!next.done) {
+    try { run(...next.value); }
+    catch (error) { next = steps.throw(error); continue; }
+    next = steps.next();
+  }
+  return next.value;
+}
+
+/** Like `perform`, but awaits `run`, which may return a promise; other callers keep working while it runs. */
+export async function performAsync(steps, run) {
+  let next = steps.next();
+  while (!next.done) {
+    try { await run(...next.value); }
+    catch (error) { next = steps.throw(error); continue; }
+    next = steps.next();
+  }
+  return next.value;
+}
+
+/** Run `body(stage)` (a generator) in a private folder inside `parent`, removed afterwards unless a rollback failed. */
+function* stageSteps(parent, prefix, body) {
   removeAbandonedStages(parent, prefix);
   const stage = mkdtempSync(join(parent, prefix));
   writeFileSync(join(stage, stageOwner), JSON.stringify({ pid: process.pid }));
   let keep = false;
-  try { return action(stage); }
+  try { return yield* body(stage); }
   catch (error) {
     keep = error instanceof RestoreFailure;
     if (keep) rmSync(join(stage, stageOwner), { force: true });
     throw error;
   } finally { if (!keep) rmSync(stage, { recursive: true, force: true }); }
+}
+
+/** Run `action(stage)` in a private folder inside `parent`, removed afterwards unless a rollback failed. */
+export function withStage(parent, prefix, action) {
+  return perform(stageSteps(parent, prefix, function* (stage) { return action(stage); }));
 }
 
 /** Move each staged file or folder into place, keeping the previous one in `stage`; undo all on any failure. */
@@ -347,11 +381,18 @@ function toolIdentity(command, env) {
   return null;
 }
 
-/** Private attestations bind successful checks to exact public inputs, environment and runtime/tool versions. */
+// The variables that can change what the checks and builds do or produce: Vite/app settings (VITE_*, BASE_PATH), Node.js
+// and npm behavior, tool lookup, CI mode, locale/time zone, and the Blueprint, Playwright and Postgres test settings.
+// Terminal, session and agent variables (PWD, OLDPWD, SHLVL, TERM_SESSION_ID, VSCODE_*, CURSOR_*, SSH_AUTH_SOCK, ...)
+// differ between every shell, so hashing them would rebuild every app whenever a different terminal publishes.
+// A new variable that a build starts to read must be added here; WEBSITE_BUILD_CACHE=0 forces a rebuild meanwhile.
+const verifiedEnvironment = /^(?:VITE_|BASE_PATH$|NODE|NPM$|npm_config_|PATH$|PATHEXT$|HOME$|CI$|TZ$|LANG$|LC_|BLUEPRINT_|BROWSER_WORKERS$|PLAYWRIGHT_|POSTGRES_)/i;
+
+/** Private attestations bind successful checks to exact public inputs, build-relevant environment and runtime/tool versions. */
 function verifiedBuild(origin, sourceFiles, env) {
   if (stat(join(origin, manifestName))) return undefined;
   const enabled = env.WEBSITE_BUILD_CACHE !== '0' && env.WEBSITE_DEPENDENCY_CACHE !== '0';
-  const environment = Object.entries(env).filter(([name]) => !['WEBSITE_BUILD_CACHE', 'WEBSITE_DEPENDENCY_CACHE'].includes(name)).sort();
+  const environment = Object.entries(env).filter(([name]) => verifiedEnvironment.test(name)).sort();
   const key = digest(JSON.stringify({
     format: 1, sourceFiles, environment, npm: npmContext(env),
     runtime: { versions: process.versions, platform: process.platform, arch: process.arch, os: release(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
@@ -381,24 +422,20 @@ function saveVerification(cache, manifest) {
 }
 
 /** Check and build fresh staged source; Make installs dependencies through npm's download cache. */
-export function buildStagedApp({ run, preview, origin, stagedSource, stage, env, label }) {
+function* buildSteps({ preview, origin, stagedSource, stage, env, label }) {
   const buildApp = preview ? origin : join(stage, 'build-app');
   if (!preview) cpSync(stagedSource, buildApp, { recursive: true });
   const started = Date.now();
-  run('make', ['-C', buildApp, ...(preview ? ['build'] : ['check', 'build']), 'NODE=' + process.execPath], { stdio: 'inherit', env });
+  yield ['make', ['-C', buildApp, ...(preview ? ['build'] : ['check', 'build']), 'NODE=' + process.execPath], { stdio: 'inherit', env }];
   const dist = join(buildApp, 'dist');
   if (!regular(join(dist, 'index.html'), 'file')) throw new Error('The ' + label + ' build did not produce dist/index.html.');
   console.log(label + ' checks/build: ' + ((Date.now() - started) / 1000).toFixed(1) + 's.');
   return dist;
 }
 
-/**
- * Stage, build, verify and atomically replace one managed app's website and source snapshot.
- * `spec` supplies what differs per app: app, label, site, source, file (the calling helper),
- * validate(target), snapshot(origin, stagedSource), version(stagedSource), environment(origin, stagedSource),
- * allowed(kind, name) for built files, and the optional check(dist) and report(stagedSite, { version, env }).
- */
-export function prepareManagedApp(spec, origin, target, run, { preview = false, reuseVerified = true } = {}) {
+export const buildStagedApp = ({ run, ...build }) => perform(buildSteps(build), run);
+
+function* prepareSteps(spec, origin, target, { preview = false, reuseVerified = true } = {}) {
   const { app: name, label, site: siteName, source: sourceName } = spec;
   requireNode24(label + ' preparation');
   if (!regular(origin, 'directory')) throw new Error('Choose the ' + label + ' application source.');
@@ -406,7 +443,7 @@ export function prepareManagedApp(spec, origin, target, run, { preview = false, 
   assertOutsideRepository(spec.file, target);
   target = spec.validate(target);
   assertOutsideApp(origin, target);
-  return withStage(target, '.' + name + '-prepare-', stage => {
+  return yield* stageSteps(target, '.' + name + '-prepare-', function* (stage) {
     const stagedSite = join(stage, 'site');
     const stagedSource = join(stage, 'source');
     spec.snapshot(origin, stagedSource);
@@ -423,7 +460,7 @@ export function prepareManagedApp(spec, origin, target, run, { preview = false, 
     }
     // A failed forced rerun must not leave an earlier success eligible for reuse.
     if (cache && regular(cache.entry, 'file')) rmSync(cache.entry);
-    const dist = buildStagedApp({ run, preview, origin, stagedSource, stage, env, label });
+    const dist = yield* buildSteps({ preview, origin, stagedSource, stage, env, label });
     spec.check?.(dist);
     mkdirSync(stagedSite);
     copyFiles(dist, stagedSite, approvedFiles(Object.keys(collect(dist)), 'build', label, spec.allowed));
@@ -439,3 +476,13 @@ export function prepareManagedApp(spec, origin, target, run, { preview = false, 
     return manifest;
   });
 }
+
+/**
+ * Stage, build, verify and atomically replace one managed app's website and source snapshot.
+ * `spec` supplies what differs per app: app, label, site, source, file (the calling helper),
+ * validate(target), snapshot(origin, stagedSource), version(stagedSource), environment(origin, stagedSource),
+ * allowed(kind, name) for built files, and the optional check(dist) and report(stagedSite, { version, env }).
+ * `run` is called once per build command; `prepareManagedAppAsync` awaits it so apps can prepare concurrently.
+ */
+export const prepareManagedApp = (spec, origin, target, run, options) => perform(prepareSteps(spec, origin, target, options), run);
+export const prepareManagedAppAsync = (spec, origin, target, run, options) => performAsync(prepareSteps(spec, origin, target, options), run);

@@ -16,6 +16,7 @@ import {
   refresh,
   status,
   syncLabel,
+  navigateHash,
   unmount,
   installHarness,
 } from './testSupport';
@@ -26,6 +27,247 @@ vi.mock('../infrastructure/cloud/boards', async () => (await import('./cloudMock
 installHarness();
 
 describe('Pinboard UI: synchronization and connectivity', () => {
+  it.each([false, true])(
+    'retries clean selected details despite another pending board (rejected: %s)',
+    async (rejected) => {
+      let health!: (healthy: boolean) => void;
+      cloud.subscribeBoardChanges.mockImplementation((_listener, reportHealth) => {
+        health = reportHealth!;
+        return () => health(false);
+      });
+      const pending = {
+        ...summarizeBoard(board),
+        id: '33333333-3333-4333-8333-333333333333',
+        invite_code: 'b'.repeat(32),
+        title: 'Other pending board',
+        localPending: true,
+        ...(rejected ? { localError: 'That card was removed. Pending work is kept.' } : {}),
+      };
+      cloud.loadBoard.mockRejectedValueOnce(new Error('Selected detail connection failed'));
+      await mount([board, pending]);
+      await act(async () => health(true));
+      await advance(9999);
+      expect(cloud.loadBoard).toHaveBeenCalledTimes(1);
+      await advance(1);
+      expect(cloud.loadBoard).toHaveBeenCalledTimes(2);
+      expect(cloud.loadBoard.mock.calls.every(([id]) => id === board.id)).toBe(true);
+      expect(document.querySelector('h1')?.textContent).toBe(board.title);
+      expect(document.querySelector('.pinboard-columns')).not.toBeNull();
+      if (rejected)
+        expect(document.querySelector('[role="alert"]')?.textContent).toContain(pending.localError);
+      const reads = cloud.loadBoardList.mock.calls.length;
+      await advance(59_999);
+      expect(cloud.loadBoardList).toHaveBeenCalledTimes(reads);
+      await advance(1);
+      expect(cloud.loadBoardList).toHaveBeenCalledTimes(reads + 1);
+      expect(cloud.loadBoard).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('keeps Home on failed-read backoff when a healthy live channel receives success-shaped cached summaries', async () => {
+    let health!: (healthy: boolean) => void;
+    cloud.subscribeBoardChanges.mockImplementation((_listener, reportHealth) => {
+      health = reportHealth!;
+      return () => health(false);
+    });
+    await mount([board], '');
+    await act(async () => health(true));
+    cloud.loadBoardList.mockResolvedValue([
+      {
+        ...summarizeBoard(board),
+        localCached: true,
+        localError: 'Data API unavailable; saved boards are kept',
+      },
+    ]);
+    await refresh();
+    expect(document.querySelector('.board-preview')?.textContent).toContain(board.title);
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('Data API unavailable');
+    await advance(9999);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(2);
+    await advance(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(3);
+    await advance(19_999);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(3);
+    cloud.loadBoardList.mockResolvedValue([board]);
+    await advance(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(4);
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+    await advance(59_999);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(4);
+    await advance(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(5);
+    expect(cloud.loadBoard).not.toHaveBeenCalled();
+  });
+
+  it('retries failed selected details at the existing backoff while live transport and summaries stay healthy', async () => {
+    let health!: (healthy: boolean) => void;
+    cloud.subscribeBoardChanges.mockImplementation((_listener, reportHealth) => {
+      health = reportHealth!;
+      return () => health(false);
+    });
+    cloud.loadBoard.mockRejectedValueOnce(new Error('Detail connection failed'));
+    await mount();
+    await act(async () => health(true));
+    const pending = deferred<Board>();
+    cloud.loadBoard.mockReturnValueOnce(pending.promise);
+    await advance(9999);
+    expect(cloud.loadBoard).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(cloud.loadBoard).toHaveBeenCalledTimes(2);
+    await advance(5000);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(4);
+    expect(cloud.loadBoard).toHaveBeenCalledTimes(2);
+    await act(async () => pending.resolve(board));
+    expect(document.querySelector('h1')?.textContent).toBe(board.title);
+    expect(document.body.textContent).not.toContain('Detail connection failed');
+    await advance(59_999);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(4);
+    await advance(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(5);
+  });
+
+  it('keeps a stale cached detail readable without losing fast retry or its backoff', async () => {
+    let health!: (healthy: boolean) => void;
+    cloud.subscribeBoardChanges.mockImplementation((_listener, reportHealth) => {
+      health = reportHealth!;
+      return () => health(false);
+    });
+    const latest = { ...board, title: 'Latest board', revision: 2 };
+    cloud.loadBoard.mockResolvedValueOnce({
+      ...board,
+      localCached: true,
+      localError: 'Detail service unavailable',
+    });
+    cloud.loadBoard.mockResolvedValueOnce(latest);
+    await mount([latest]);
+    await act(async () => health(true));
+    expect(document.querySelector('h1')?.textContent).toBe(board.title);
+    await advance(9999);
+    expect(cloud.loadBoard).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(cloud.loadBoard).toHaveBeenCalledTimes(2);
+    expect(document.querySelector('h1')?.textContent).toBe(latest.title);
+    const reads = cloud.loadBoardList.mock.calls.length;
+    await advance(59_999);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(reads);
+    await advance(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(reads + 1);
+  });
+
+  it('returns to minute reconciliation when navigating away from failed selected details', async () => {
+    let health!: (healthy: boolean) => void;
+    cloud.subscribeBoardChanges.mockImplementation((_listener, reportHealth) => {
+      health = reportHealth!;
+      return () => health(false);
+    });
+    cloud.loadBoard.mockRejectedValueOnce(new Error('Detail connection failed'));
+    await mount();
+    await act(async () => health(true));
+    await navigateHash('');
+    await advance(59_999);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(1);
+    expect(cloud.loadBoard).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(2);
+    expect(cloud.loadBoard).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps failed-read backoff while the live channel remains subscribed', async () => {
+    let health!: (healthy: boolean) => void;
+    cloud.subscribeBoardChanges.mockImplementation((_listener, reportHealth) => {
+      health = reportHealth!;
+      return () => health(false);
+    });
+    await mount();
+    await act(async () => health(true));
+    cloud.loadBoardList.mockRejectedValueOnce(new Error('Connection lost'));
+    await refresh();
+    await advance(9999);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(2);
+    await advance(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(3);
+    await advance(59_999);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(3);
+    await advance(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(4);
+  });
+
+  it('reconciles every minute while subscribed, keeps live catch-up and restores fast polls during an active read', async () => {
+    let health!: (healthy: boolean) => void;
+    let wake!: () => void;
+    cloud.subscribeBoardChanges.mockImplementation((listener, reportHealth) => {
+      wake = listener;
+      health = reportHealth!;
+      return () => health(false);
+    });
+    await mount();
+    await act(async () => health(true));
+    await advance(59_999);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(2);
+    await act(async () => wake());
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(3);
+    const pending = deferred<Board[]>();
+    cloud.loadBoardList.mockReturnValueOnce(pending.promise);
+    await act(async () => wake());
+    await act(async () => health(false));
+    await advance(5000);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(4);
+    await act(async () => pending.resolve([board]));
+    await advance(4999);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(4);
+    await advance(1);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(5);
+    await unmount();
+    await advance(60_000);
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(5);
+  });
+
+  it('keeps an open draft after access disappears and prompts Join only after the editor closes', async () => {
+    await mount();
+    await click('Settings');
+    await fill('Board name', 'Retain this unsaved board draft');
+    cloud.loadBoardList.mockResolvedValue([]);
+    await refresh();
+    expect(field('Board name').value).toBe('Retain this unsaved board draft');
+    expect(document.querySelector('dialog h2')?.textContent).not.toBe('Join a board.');
+    expect(cloud.joinBoard).not.toHaveBeenCalled();
+    cloud.mutateBoard.mockRejectedValueOnce(new Error('You no longer have access to this board.'));
+    await click('Save details');
+    expect(field('Board name').value).toBe('Retain this unsaved board draft');
+    expect(document.querySelector('dialog')?.textContent).toContain('no longer have access');
+    await click('Close dialog');
+    await click('Discard draft');
+    expect(document.querySelector('dialog h2')?.textContent).toBe('Join a board.');
+    expect(cloud.joinBoard).not.toHaveBeenCalled();
+  });
+  it('refreshes after live invalidation, catches an event during a read and stops listening while hidden', async () => {
+    const stop = vi.fn();
+    let wake!: () => void;
+    cloud.subscribeBoardChanges.mockImplementation((listener: () => void) => {
+      wake = listener;
+      return stop;
+    });
+    await mount();
+    const pending = deferred<Board[]>();
+    cloud.loadBoardList.mockReturnValueOnce(pending.promise);
+    await act(async () => wake());
+    const reads = cloud.loadBoardList.mock.calls.length;
+    await act(async () => wake());
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(reads);
+    await act(async () => pending.resolve([board]));
+    expect(cloud.loadBoardList).toHaveBeenCalledTimes(reads + 1);
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+    expect(stop).toHaveBeenCalled();
+    const listeners = cloud.subscribeBoardChanges.mock.calls.length;
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+    expect(cloud.subscribeBoardChanges).toHaveBeenCalledTimes(listeners + 1);
+    await unmount();
+    expect(stop.mock.calls.length).toBeGreaterThan(1);
+  });
   it('waits for the initial list in StrictMode before trying an existing invitation', async () => {
     const pending = deferred<Board[]>();
     cloud.loadBoardList.mockReturnValueOnce(pending.promise);

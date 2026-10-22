@@ -1,27 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
-import { makeZip, nameAllocator, uniqueNames, safeZipPath, zipWriter } from '../src/shared/zip';
+import { nameAllocator, safeZipPath, zipWriter } from '../src/shared/zip';
 import { sanitizeFilename } from '../src/shared/util';
 import { blobBytes } from './helpers';
 
 describe('zip', () => {
-  it('round-trips and dedupes names', () => {
-    const z = makeZip([
-      { name: 'a.txt', data: new Uint8Array([1]) },
-      { name: 'a.txt', data: new Uint8Array([2]) },
-      { name: 'dir/b.txt', data: new Uint8Array([3]) },
-    ]);
-    const files = unzipSync(z);
-    expect(Object.keys(files).sort()).toEqual(['a-2.txt', 'a.txt', 'dir/b.txt']);
-    expect(files['a-2.txt'][0]).toBe(2);
-  });
   it('prevents path traversal', () => {
     expect(safeZipPath('../../etc/passwd')).toBe('etc/passwd');
     expect(safeZipPath('C:\\x\\y.txt')).toBe('C:/x/y.txt');
-    expect(uniqueNames(['x', 'x'])).toEqual(['x', 'x-2']);
+    expect(['x', 'x'].map(nameAllocator())).toEqual(['x', 'x-2']);
   });
   it('never hands out a name twice, even when a numbered name is already taken', () => {
-    expect(uniqueNames(['a.txt', 'a.txt', 'a-2.txt', 'A.TXT'])).toEqual(['a.txt', 'a-2.txt', 'a-2-2.txt', 'A-3.TXT']);
+    expect(['a.txt', 'a.txt', 'a-2.txt', 'A.TXT'].map(nameAllocator())).toEqual(['a.txt', 'a-2.txt', 'a-2-2.txt', 'A-3.TXT']);
     const next = nameAllocator();
     expect([next('.hidden'), next('.hidden'), next('dir/x'), next('dir/x')]).toEqual(['.hidden', '.hidden-2', 'dir/x', 'dir/x-2']);
   });

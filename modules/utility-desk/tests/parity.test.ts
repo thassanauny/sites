@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
 import { parsePageRanges } from '../src/domain/pdf/ranges';
-import { extractPages, splitEachPage } from '../src/domain/pdf/operations';
+import { extractPages, splitPages } from '../src/domain/pdf/operations';
 import { dateToTimestamp } from '../src/domain/datetime/dates';
 import { sizeImage } from '../src/domain/images/operations';
 import { mediaArgs, mediaSeconds } from '../src/domain/media/ffmpeg';
@@ -20,7 +20,16 @@ describe('original functionality parity', () => {
     const selected = parsePageRanges('3,1,3', 3, true);
     const extracted = await PDFDocument.load(await extractPages(bytes, selected));
     expect(extracted.getPages().map((p) => p.getWidth())).toEqual([103, 101, 103]);
-    const parts = await splitEachPage(bytes, undefined, undefined, parsePageRanges('3,1,3', 3));
+    const parts: Uint8Array[] = [];
+    await splitPages(
+      bytes,
+      (part) => {
+        parts.push(part);
+      },
+      undefined,
+      undefined,
+      parsePageRanges('3,1,3', 3),
+    );
     expect(await Promise.all(parts.map(async (p) => (await PDFDocument.load(p)).getPage(0).getWidth()))).toEqual([101, 103]);
     expect(() => parsePageRanges('1,', 3)).toThrow();
     expect(() => parsePageRanges('1-1001', 1001)).toThrow(/1,000/);

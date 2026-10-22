@@ -3,7 +3,7 @@ import { PDFArray, PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import { zlibSync, unzlibSync } from 'fflate';
 import { restoreStreamLengths } from '../src/domain/pdf/streams';
 import { compressPdf } from '../src/domain/pdf/compression';
-import { extractPages, mergePdfs, splitEachPage } from '../src/domain/pdf/operations';
+import { extractPages, mergePdfs, splitPages } from '../src/domain/pdf/operations';
 
 function fixture() {
   const encoder = new TextEncoder();
@@ -83,7 +83,10 @@ describe('forward stream lengths', () => {
   it('preserves complete stream bytes when merging, splitting, or extracting pages', async () => {
     const { original, compressed } = fixture();
     const before = original.slice();
-    const outputs = [await mergePdfs([{ bytes: original }]), ...(await splitEachPage(original)), await extractPages(original, [1])];
+    const outputs = [await mergePdfs([{ bytes: original }]), await extractPages(original, [1])];
+    await splitPages(original, (part) => {
+      outputs.push(part);
+    });
     for (const bytes of outputs) {
       const document = await PDFDocument.load(bytes);
       const contents = document.getPage(0).node.Contents();

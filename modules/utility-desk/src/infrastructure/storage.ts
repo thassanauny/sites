@@ -8,7 +8,14 @@ export interface Activity {
 }
 
 const PREFIX = 'utility-desk:v1:';
+export const ACTIVITY_KEY = `${PREFIX}activity`;
 export const MAX_ACTIVITY = 30;
+
+function isActivity(value: unknown): value is Activity {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.id === 'string' && row.id.length > 0 && typeof row.tool === 'string' && row.tool.length > 0 && typeof row.message === 'string' && ['done', 'failed', 'cancelled'].includes(row.status as string) && typeof row.ts === 'number' && Number.isFinite(row.ts) && row.ts >= 0 && row.ts <= 8_640_000_000_000_000;
+}
 
 export class Store {
   private drafts = new Map<string, Record<string, string>>();
@@ -55,7 +62,17 @@ export class Store {
   }
 
   getActivity(): Activity[] {
-    return this.read<Activity[]>('activity', []);
+    const saved = this.read<unknown>('activity', []);
+    if (!Array.isArray(saved)) return [];
+    const seen = new Set<string>();
+    const entries: Activity[] = [];
+    for (const row of saved) {
+      if (!isActivity(row) || seen.has(row.id)) continue;
+      seen.add(row.id);
+      entries.push(row);
+      if (entries.length === MAX_ACTIVITY) break;
+    }
+    return entries;
   }
   addActivity(a: Omit<Activity, 'id' | 'ts'>): Activity {
     const entry: Activity = { ...a, id: Math.random().toString(36).slice(2, 10), ts: Date.now() };

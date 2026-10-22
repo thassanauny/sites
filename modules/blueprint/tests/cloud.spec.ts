@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { invite, signIn, mockCloud } from "./support/cloud";
 import { componentIconSets, componentKinds, flowComponentKinds, type ComponentIconStyle, type DiagramEdge } from "../src/domain/boards/types";
 import { componentMeta, makeNode } from "../src/domain/boards/components";
+import { createBoard } from "../src/domain/boards/templates";
 
 async function openProperties(page: Page) {
   await page.getByRole('button', { name: 'Board settings', exact: true }).click();
@@ -1353,4 +1354,110 @@ test("sync and copy actions remain available without a conflict and copying reta
   await expect(page.locator(".board-card")).toHaveCount(2);
   expect(cloud.rows[0].title).toBe("Saved production system");
   expect(cloud.rows[1].title).toBe("Saved production system (copy)");
+});
+
+test("a committed save with a lost reply is acknowledged without another write", async ({ page }) => {
+  const cloud = await mockCloud(page);
+  await signIn(page);
+  await page.goto("./#/board/" + invite);
+  await expect(page.locator(".connection")).toHaveText("Connected");
+  cloud.loseNextSaveReply();
+  await page.getByTitle("Add Cache", { exact: true }).click();
+  await expect.poll(() => cloud.rows[0].revision).toBe(2);
+  await expect(page.locator(".connection")).toHaveText("Needs attention");
+  // Visibility refresh uses the same path as the next automatic poll.
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect(page.locator(".connection")).toHaveText("Connected");
+  expect(cloud.writes).toEqual(["PATCH"]);
+  await page.reload();
+  await expect(page.locator(".architecture-node")).toHaveCount(10);
+  await expect(page.locator(".connection")).toHaveText("Connected");
+  expect(cloud.writes).toEqual(["PATCH"]);
+});
+
+test("independent remote properties merge automatically while genuine conflicts stop repeated document downloads", async ({ page }) => {
+  const cloud = await mockCloud(page);
+  await signIn(page);
+  await page.goto("./#/board/" + invite);
+  await expect(page.locator(".connection")).toHaveText("Connected");
+  await page.evaluate(() => { Object.defineProperty(navigator, "onLine", { value: false, configurable: true }); window.dispatchEvent(new Event("offline")); });
+  const note = cloud.rows[0].document.nodes.find((node: { data: { kind: string } }) => node.data.kind === "note");
+  const editor = page.locator(`.react-flow__node[data-id="${note.id}"]`).getByRole("textbox", { name: "Note description", exact: true });
+  await editor.fill("Our offline note");
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("blueprint.workspace.v1") || "{}").boards?.[0]?.nodes.find((node: { data: { kind: string } }) => node.data.kind === "note")?.data.description)).toBe("Our offline note");
+  note.data.label = "Their independent heading";
+  cloud.rows[0].revision++;
+  await page.evaluate(() => { Object.defineProperty(navigator, "onLine", { value: true, configurable: true }); window.dispatchEvent(new Event("online")); });
+  await expect.poll(() => cloud.rows[0].document.nodes.find((node: { id: string }) => node.id === note.id).data.description).toBe("Our offline note");
+  expect(cloud.rows[0].document.nodes.find((node: { id: string }) => node.id === note.id).data.label).toBe("Their independent heading");
+  await expect(page.locator(".connection")).toHaveText("Connected");
+  await page.evaluate(() => { Object.defineProperty(navigator, "onLine", { value: false, configurable: true }); window.dispatchEvent(new Event("offline")); });
+  await editor.fill("Our conflicting note");
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("blueprint.workspace.v1") || "{}").boards?.[0]?.nodes.find((node: { data: { kind: string } }) => node.data.kind === "note")?.data.description)).toBe("Our conflicting note");
+  cloud.rows[0].document.nodes.find((node: { id: string }) => node.id === note.id).data.description = "Their conflicting note";
+  cloud.rows[0].revision++;
+  await page.evaluate(() => { Object.defineProperty(navigator, "onLine", { value: true, configurable: true }); window.dispatchEvent(new Event("online")); });
+  await expect(page.locator(".connection")).toHaveText("Needs attention");
+  await expect(editor).toHaveValue("Our conflicting note");
+  const before = cloud.downloaded.length;
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect.poll(() => cloud.polls.length).toBeGreaterThan(before);
+  expect(cloud.downloaded.at(-1)).toEqual([]);
+  expect(cloud.polls.at(-1)?.[cloud.rows[0].id]).toBe(cloud.rows[0].revision);
+});
+
+test("separate tabs serialize durable drafts without Web Locks and reject overlapping edits", async ({ page }) => {
+  await mockCloud(page);
+  await signIn(page);
+  await page.goto("./");
+  await expect(page.locator(".connection")).toHaveText("Connected");
+  const other = await page.context().newPage();
+  await mockCloud(other);
+  await other.goto("http://127.0.0.1:5194/");
+  await expect(other.locator(".connection")).toHaveText("Connected");
+  const board = createBoard();
+  const initial = { boards: [board], activeId: board.id };
+  const key = "blueprint.workspace.v1.storage-concurrency";
+  await page.evaluate(({ key, initial }) => localStorage.setItem(key, JSON.stringify(initial)), { key, initial });
+  for (const tab of [page, other]) {
+    await tab.evaluate(async () => {
+      Object.defineProperty(navigator, "locks", { value: undefined, configurable: true });
+      const modulePath = "/src/infrastructure/storage/workspace.ts";
+      const { workspaceStorage } = await import(modulePath);
+      const storage = workspaceStorage("storage-concurrency");
+      const draft = structuredClone(storage.load());
+      Object.assign(window, { concurrentWorkspace: { storage, draft } });
+    });
+  }
+  const save = (tab: Page, field: string, value: string) => tab.evaluate(async ({ field, value }) => {
+    const state = (window as unknown as { concurrentWorkspace: { storage: { save: (value: string) => Promise<unknown> }; draft: { boards: Record<string, unknown>[] } } }).concurrentWorkspace;
+    state.draft.boards[0][field] = value;
+    return state.storage.save(JSON.stringify(state.draft));
+  }, { field, value });
+  await Promise.all([save(page, "title", "First tab's title"), save(other, "description", "Second tab's description")]);
+  const combined = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), key);
+  expect(combined.boards[0]).toMatchObject({ title: "First tab's title", description: "Second tab's description" });
+  // Both adapters have their own stale snapshots; changing the same field must
+  // not replace an edit that the other tab already acknowledged.
+  await save(page, "title", "Acknowledged title");
+  await expect(save(other, "title", "Overlapping title")).rejects.toThrow("another tab");
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).boards[0].title, key)).toBe("Acknowledged title");
+  const recovery = await other.evaluate(async () => {
+    const modulePath = "/src/infrastructure/storage/workspace.ts";
+    const { workspaceStorage } = await import(modulePath);
+    const state = (window as any).concurrentWorkspace;
+    state.storage.stage(JSON.stringify(state.draft));
+    const reopened = workspaceStorage("storage-concurrency");
+    const draft = reopened.load();
+    const recoveredTitle = draft.boards[0].title;
+    let refused = false;
+    try { await reopened.save(JSON.stringify(draft)); } catch { refused = true; }
+    const copy = { ...draft.boards[0], id: crypto.randomUUID(), revision: 0, inviteCode: undefined, cloudSavedContent: undefined };
+    await reopened.save(JSON.stringify({ boards: [copy], activeId: copy.id }));
+    return { recoveredTitle, refused, journal: sessionStorage.getItem("blueprint.workspace.v1.storage-concurrency.pending"), boards: JSON.parse(localStorage.getItem("blueprint.workspace.v1.storage-concurrency")!).boards };
+  });
+  expect(recovery.recoveredTitle).toBe("Overlapping title");
+  expect(recovery.refused).toBe(true);
+  expect(recovery.journal).toBeNull();
+  expect(recovery.boards.map((item: { title: string }) => item.title).sort()).toEqual(["Acknowledged title", "Overlapping title"]);
 });

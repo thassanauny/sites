@@ -81,6 +81,8 @@ const session = (user) => `begin; set local statement_timeout = '10s';
   select set_config('request.jwt.claim.sub', ${quote(user)}, true); set local role authenticated;`;
 const mutation = (boardId, operation) =>
   `select public.pinboard_mutate_board(${quote(boardId)}::uuid, ${json(operation)});`;
+const mutationOnce = (boardId, token, operation, baseRevision) =>
+  `select public.pinboard_mutate_board_once(${quote(boardId)}::uuid, ${quote(token)}::uuid, ${json(operation)}, ${Number(baseRevision)});`;
 const create = (id, title = 'Concurrent board') =>
   `select public.pinboard_create_board(${quote(id)}::uuid, ${quote(title)}, '');`;
 const boardResult = (output) =>
@@ -274,6 +276,77 @@ async function main() {
       insert into auth.users(id) values (${quote(creator)}),(${quote(collaborator)}),(${quote(limitedCreator)});
     `);
     await sql(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
+    // Isolated stand-in for existing Supabase-owned Realtime objects; only this
+    // disposable fixture creates them, never the app's optional migration.
+    await sql(`create schema realtime;
+      create table realtime.messages(topic text, extension text, event text, payload jsonb, private boolean);
+      alter table realtime.messages enable row level security;
+      grant usage on schema realtime to authenticated;
+      grant select on realtime.messages to authenticated;
+      create function realtime.topic() returns text language sql stable as $$
+        select current_setting('realtime.topic',true) $$;
+      create function realtime.send(payload jsonb,event text,topic text,private boolean) returns void
+        language sql as $$ insert into realtime.messages values($3,'broadcast',$2,$1,$4) $$;`);
+    await sql(await readFile(new URL('./update-live-sync.sql', import.meta.url), 'utf8'));
+    const rowSchema = await readFile(new URL('./schema.sql', import.meta.url), 'utf8');
+    const jsonSchema = await readFile(
+      new URL('./rollback-row-storage.sql', import.meta.url),
+      'utf8',
+    );
+    const migrationBoard = await createBoard(creator);
+    await sql(jsonSchema);
+    const migratedCard = {
+      id: randomUUID(),
+      title: 'Accepted while migration waits',
+      description: '',
+      columnId: 'todo',
+      position: 1.25,
+      priority: 'medium',
+      assignee: '',
+      dueDate: '',
+      labels: [],
+      archived: false,
+    };
+    const migrationToken = randomUUID();
+    const migrationOperation = { type: 'create_card', card: migratedCard };
+    const [beforeCutover, cutover] = await race(
+      `${session(creator)} ${mutationOnce(migrationBoard.id, migrationToken, migrationOperation, migrationBoard.revision)}`,
+      rowSchema,
+    );
+    assert.equal(cutover.code, 0, cutover.stderr);
+    assert.deepEqual(
+      boardResult(
+        await sql(
+          `${session(creator)} ${mutation(migrationBoard.id, { type: 'update_board', patch: {} })} commit;`,
+        ),
+      ),
+      beforeCutover,
+    );
+    const [beforeRollback, rollbackResult] = await race(
+      `${session(creator)} ${mutation(migrationBoard.id, { type: 'update_card', id: migratedCard.id, patch: { description: 'Latest accepted row before rollback' } })}`,
+      jsonSchema,
+    );
+    assert.equal(rollbackResult.code, 0, rollbackResult.stderr);
+    assert.deepEqual(
+      boardResult(
+        await sql(
+          `${session(creator)} ${mutation(migrationBoard.id, { type: 'update_board', patch: {} })} commit;`,
+        ),
+      ),
+      beforeRollback,
+    );
+    await sql(rowSchema);
+    assert.deepEqual(
+      boardResult(
+        await sql(
+          `${session(creator)} ${mutationOnce(migrationBoard.id, migrationToken, migrationOperation, migrationBoard.revision)} commit;`,
+        ),
+      ),
+      beforeRollback,
+    );
+    console.log(
+      'PASS: upgrade and rollback wait for writers, retain latest accepted work, and preserve pre-cutover retry receipts.',
+    );
     const board = await createBoard(creator);
     await sql(
       `${session(collaborator)} select public.pinboard_join_board(${quote(board.invite_code)}); commit;`,
@@ -289,6 +362,32 @@ async function main() {
     assert.equal(independent.description, 'Independent note');
     assert.equal(independent.revision, firstPatch.revision + 1);
     console.log('PASS: concurrent field patches retain independent edits.');
+    assert.equal(
+      await sql(`select count(*) from realtime.messages
+      where private is not true or event <> 'board_changed'
+      or (select array_agg(key order by key) from jsonb_object_keys(payload) key) <> array['id','revision'];`),
+      '0',
+    );
+    console.log('PASS: concurrent writes emit only private board-ID/revision hints.');
+
+    const token = randomUUID();
+    const onceOperation = { type: 'update_board', patch: { title: 'Accepted once' } };
+    const [once, duplicate] = await race(
+      `${session(creator)} ${mutationOnce(board.id, token, onceOperation, independent.revision)}`,
+      `${session(creator)} ${mutationOnce(board.id, token, onceOperation, independent.revision)}`,
+    );
+    assert.equal(duplicate.code, 0, duplicate.stderr);
+    assert.equal(once.revision, independent.revision + 1);
+    assert.deepEqual(boardResult(duplicate.stdout), once);
+    const [laterTitle, delayedRetry] = await race(
+      `${session(collaborator)} ${mutation(board.id, { type: 'update_board', patch: { title: 'A later collaborator edit' } })}`,
+      `${session(creator)} ${mutationOnce(board.id, token, onceOperation, independent.revision)}`,
+    );
+    assert.equal(delayedRetry.code, 0, delayedRetry.stderr);
+    assert.deepEqual(boardResult(delayedRetry.stdout), laterTitle);
+    console.log(
+      'PASS: concurrent duplicate operations apply once, and delayed retries preserve later edits.',
+    );
 
     const firstField = { id: randomUUID(), title: 'Team', hidden: false };
     const secondField = { id: randomUUID(), title: 'Reference', hidden: false };
@@ -434,8 +533,8 @@ async function main() {
     assert.deepEqual(boardResult(columnRetry.stdout), deletedColumn);
     console.log('PASS: waiting creation retries cannot resurrect deleted cards or columns.');
 
-    await sql(`insert into public.pinboard_boards (id,invite_code,title,description,columns,created_by)
-      select gen_random_uuid(),replace(gen_random_uuid()::text,'-',''),'Limit fixture','',columns,${quote(limitedCreator)}::uuid
+    await sql(`insert into public.pinboard_boards (id,invite_code,title,description,created_by)
+      select gen_random_uuid(),replace(gen_random_uuid()::text,'-',''),'Limit fixture','',${quote(limitedCreator)}::uuid
       from public.pinboard_boards cross join generate_series(1,99) where id=${quote(board.id)}::uuid;`);
     const [lastBoard, excess] = await race(
       `${session(limitedCreator)} ${create(randomUUID(), '100th board')}`,

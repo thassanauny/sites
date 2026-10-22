@@ -1,6 +1,7 @@
 import { mergeCloudStore, restoreInvitation, type AppStore } from '../deviceStore'
 import { acknowledgeGroup, queueGroup } from './queue'
 import type { Group } from '../../domain/groups/types'
+import { mapConcurrent } from './concurrency'
 
 /** A shared group as the server holds it. */
 export interface CloudRecord {
@@ -35,7 +36,7 @@ export interface SyncTransport {
   versions: () => Promise<CloudVersion[]>
   load: (ids: readonly string[]) => Promise<CloudLoad>
   create: (group: Group) => Promise<CloudRecord>
-  save: (group: Group, revision: number) => Promise<CloudRecord>
+  save: (group: Group, revision: number, base: Group) => Promise<CloudRecord>
   join: (code: string) => Promise<CloudRecord>
 }
 
@@ -120,13 +121,13 @@ export async function syncOffline(device: SyncDevice, cloud: SyncTransport, unre
       failure ??= error
     }
   }
-  for (const id of device.read().outbox.map(item => item.group.id)) {
+  await mapConcurrent([...new Set(device.read().outbox.map(item => item.group.id))], async id => {
     // Bound retries if another device is continuously writing. The queue survives.
     for (let attempt = 0; attempt < 3 && device.online(); attempt++) {
       const sent = device.read().outbox.find(item => item.group.id === id)
       if (!sent) break
       try {
-        const record = sent.base === null ? await cloud.create(sent.group) : await cloud.save(sent.group, sent.revision)
+        const record = sent.base === null ? await cloud.create(sent.group) : await cloud.save(sent.group, sent.revision, sent.base)
         accessible.add(id)
         device.update(store => acknowledgeGroup(store, sent, record))
       } catch (error) {
@@ -144,7 +145,7 @@ export async function syncOffline(device: SyncDevice, cloud: SyncTransport, unre
         break
       }
     }
-  }
+  })
   if (failure) throw failure
   return outcome()
 }

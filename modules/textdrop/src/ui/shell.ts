@@ -40,6 +40,12 @@ export function shell(): string {
             <textarea id="editor" spellcheck="false" placeholder="Write or paste your text here…" aria-describedby="save-status"></textarea>
             <div class="editor-footer"><span id="save-status"></span><span id="text-count"></span><span id="save-announcement" class="sr-only" role="status" aria-live="polite"></span></div>
           </div>
+          <section id="conflict-review" class="dialog-stack" hidden aria-labelledby="conflict-title">
+            <h2 id="conflict-title">Shared text changed</h2>
+            <p>Your version is kept in the editor above. Compare it with the shared version below. Copy or download either version before choosing which text to keep.</p>
+            <label for="conflict-text">Shared version</label><textarea id="conflict-text" readonly rows="8" spellcheck="false"></textarea>
+            <div class="dialog-actions"><button type="button" class="button" id="use-shared">Use shared version</button><button type="button" class="button primary" id="keep-local">Save my version</button></div>
+          </section>
         </section>
         <div class="notice" id="notice" hidden><p id="notice-message" role="alert"></p><button class="button small-button" id="retry" hidden>Retry save</button><button class="button small-button" id="new-session" hidden>Start a new session</button></div>
       </main>
@@ -51,7 +57,7 @@ export function shell(): string {
       <div class="dialog-heading"><h2 id="help-title">Your text, within reach.</h2><button type="button" class="icon-button" id="help-close" aria-label="Close help">×</button></div>
       <div class="dialog-stack">
         <p>Create a snippet or open one with its invitation code. Anyone with the code can read and edit its text.</p>
-        <p>Changes save on this device as you type and sync automatically when connected. Open a snippet online once to edit it offline. If two people edit at once, the latest accepted save wins.</p>
+        <p>Changes save on this device as you type and sync automatically when connected. Open a snippet online once to edit it offline. Conflicting edits keep both versions for review before you choose which text to save.</p>
         <p>Unsaved text has local recovery when browser storage is available. Reopen the snippet, review recovered text and choose Retry save to publish it.</p>
         <p>Keep the invitation code before removing a snippet or clearing browser data. Confirm Open to restore a removed snippet to Home.</p>
       </div>
@@ -138,6 +144,10 @@ export function shellElements(root: HTMLElement) {
     copyText: get<HTMLButtonElement>('copy-text'),
     download: get<HTMLButtonElement>('download'),
     editor: get<HTMLTextAreaElement>('editor'),
+    conflictReview: get<HTMLElement>('conflict-review'),
+    conflictText: get<HTMLTextAreaElement>('conflict-text'),
+    useShared: get<HTMLButtonElement>('use-shared'),
+    keepLocal: get<HTMLButtonElement>('keep-local'),
     saveStatus: get<HTMLElement>('save-status'),
     textCount: get<HTMLElement>('text-count'),
     saveAnnouncement: get<HTMLElement>('save-announcement'),

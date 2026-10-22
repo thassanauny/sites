@@ -128,21 +128,69 @@ describe('shared group access', () => {
   it('passes the expected revision and reports current application conflicts distinctly', async () => {
     mock.rpc.mockResolvedValue({ data: null, error: { code: 'PT409', message: 'IOU_CONFLICT' } })
     const cloud = await import('./groups')
-    await expect(cloud.saveCloudGroup(group, 7)).rejects.toBeInstanceOf(cloud.CloudConflictError)
-    expect(mock.rpc).toHaveBeenCalledWith('iou_save_group', { p_payload: group, p_expected_version: 7 })
+    await expect(cloud.saveCloudGroup(group, 7, group)).rejects.toBeInstanceOf(cloud.CloudConflictError)
+    expect(mock.rpc).toHaveBeenCalledWith('iou_save_group_delta', {
+      p_group_id: group.id,
+      p_expected_version: 7,
+      p_delta: { metadata: expect.objectContaining({ id: group.id }), members: { upsert: [], remove: [] }, transactions: { upsert: [], remove: [] } },
+    })
+  })
+
+  it('uploads one changed transaction and accepts a compact checked receipt without downloading the ledger', async () => {
+    const base = {
+      ...group,
+      transactions: Array.from({ length: 1000 }, (_, index) => ({
+        id: `payment-${index}`,
+        type: 'payment' as const,
+        fromId: 'alex',
+        toId: 'sam',
+        amount: 100,
+        note: '',
+        date: '2026-10-07',
+        createdAt: group.createdAt,
+      })),
+    }
+    const edited = { ...base, transactions: base.transactions.map((item, index) => (index === 400 ? { ...item, note: 'Corrected note' } : item)) }
+    mock.rpc.mockResolvedValue({ data: { format: 1, id: group.id, version: '8' }, error: null })
+    const cloud = await import('./groups')
+    await expect(cloud.saveCloudGroup(edited, 7, base)).resolves.toEqual({ group: edited, revision: 8 })
+    const [name, args] = mock.rpc.mock.calls[0]
+    expect(name).toBe('iou_save_group_delta')
+    expect(args.p_delta.transactions).toEqual({ upsert: [edited.transactions[400]], remove: [] })
+    expect(args.p_delta.members).toEqual({ upsert: [], remove: [] })
+    expect(JSON.stringify(args).length).toBeLessThan(JSON.stringify(edited).length / 100)
+    expect(mock.from).not.toHaveBeenCalled()
+  })
+
+  it.each([null, { format: 1, id: 'other', version: 8 }, { format: 1, id: group.id, version: 9 }, { payload: group, version: 8 }])(
+    'refuses malformed or mismatched compact acknowledgements (%j)',
+    async data => {
+      mock.rpc.mockResolvedValue({ data, error: null })
+      const cloud = await import('./groups')
+      await expect(cloud.saveCloudGroup(group, 7, group)).rejects.toThrow('receipt')
+      expect(mock.rpc).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it('reports missing delta setup without sending a legacy whole-ledger fallback', async () => {
+    mock.rpc.mockResolvedValue({ data: null, error: { code: 'PGRST202', message: 'missing function' } })
+    const cloud = await import('./groups')
+    await expect(cloud.saveCloudGroup(group, 7, group)).rejects.toThrow('database setup')
+    expect(mock.rpc).toHaveBeenCalledTimes(1)
+    expect(mock.rpc.mock.calls[0][0]).toBe('iou_save_group_delta')
   })
 
   it('reports database serialization failures without treating them as application conflicts', async () => {
     mock.rpc.mockResolvedValue({ data: null, error: { code: '40001', message: 'could not serialize transaction' } })
     const cloud = await import('./groups')
-    const failure = await cloud.saveCloudGroup(group, 7).catch(error => error)
+    const failure = await cloud.saveCloudGroup(group, 7, group).catch(error => error)
     expect(failure).not.toBeInstanceOf(cloud.CloudConflictError)
     expect(failure.message).toMatch(/Could not save.*serialize transaction/)
   })
 
   it('rejects unsafe revisions before sending any update', async () => {
     const cloud = await import('./groups')
-    await expect(cloud.saveCloudGroup(group, Number.MAX_SAFE_INTEGER + 1)).rejects.toThrow('revision is invalid')
+    await expect(cloud.saveCloudGroup(group, Number.MAX_SAFE_INTEGER + 1, group)).rejects.toThrow('revision is invalid')
     expect(mock.rpc).not.toHaveBeenCalled()
   })
 
@@ -248,16 +296,35 @@ describe('shared group access', () => {
     expect(mock.inFilter).toHaveBeenCalledWith('id', [group.id])
   })
 
-  it('downloads a few groups at a time and stops at the first failing request', async () => {
+  it('downloads in bounded chunks and reports a failed batch after draining started requests', async () => {
     const ids = Array.from({ length: 25 }, (_, index) => `trip-${index}`)
     const cloud = await import('./groups')
     await cloud.loadCloudGroups(ids)
     expect(mock.inFilter.mock.calls.map(([, chunk]) => chunk.length)).toEqual([10, 10, 5])
     mock.inFilter.mockClear()
-    mock.inFilter.mockResolvedValueOnce({ data: [], error: null })
     mock.inFilter.mockResolvedValueOnce({ data: null, error: { message: 'Failed to fetch' } })
     await expect(cloud.loadCloudGroups(ids)).rejects.toThrow('Check your connection')
-    expect(mock.inFilter).toHaveBeenCalledTimes(2)
+    expect(mock.inFilter).toHaveBeenCalledTimes(3)
+  })
+
+  it('downloads three chunks concurrently and returns them in input order', async () => {
+    const ids = Array.from({ length: 41 }, (_, index) => `trip-${index}`)
+    const releases = new Map<string, () => void>()
+    mock.inFilter.mockImplementation(
+      (_column, chunk: string[]) =>
+        new Promise(resolve => {
+          releases.set(chunk[0], () => resolve({ data: chunk.map(id => ({ id, payload: { ...group, id }, version: 1 })), error: null }))
+        }),
+    )
+    const cloud = await import('./groups')
+    const loading = cloud.loadCloudGroups([...ids, ids[0]])
+    await vi.waitFor(() => expect(mock.inFilter).toHaveBeenCalledTimes(3))
+    releases.get('trip-20')!()
+    await vi.waitFor(() => expect(mock.inFilter).toHaveBeenCalledTimes(4))
+    releases.get('trip-30')!()
+    await vi.waitFor(() => expect(mock.inFilter).toHaveBeenCalledTimes(5))
+    for (const id of ['trip-40', 'trip-10', 'trip-0']) releases.get(id)!()
+    expect((await loading).records.map(record => record.group.id)).toEqual(ids)
   })
 
   it('does not contact the server when no group needs downloading', async () => {

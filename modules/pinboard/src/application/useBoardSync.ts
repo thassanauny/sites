@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Board, BoardSummary } from '../domain/boards/types';
 import { acceptBoard } from '../domain/boards/board';
 import { acceptSummary, summarizeBoard } from '../domain/boards/summary';
-import { cloudConfigured, loadBoardList, loadBoard } from '../infrastructure/cloud/boards';
+import {
+  cloudConfigured,
+  loadBoardList,
+  loadBoard,
+  subscribeBoardChanges,
+} from '../infrastructure/cloud/boards';
 import type { DeviceBoards } from '../infrastructure/storage/deviceBoards';
 import { message } from '../ui/message';
 
@@ -10,7 +15,8 @@ const POLL_MS = 5000;
 const MAX_POLL_MS = 60_000;
 
 /**
- * Loads the joined boards, keeps them fresh every few seconds and merges saves with refreshes.
+ * Loads joined boards and merges saves with refreshes. Reconciles every minute while live transport
+ * is healthy, or every few seconds while polling or retrying selected details.
  * After a failed refresh, background polls wait longer (10 s, 20 s ... up to a minute) until one succeeds.
  */
 export function useBoardSync({
@@ -47,7 +53,11 @@ export function useBoardSync({
   const [refreshing, setRefreshing] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [lastSync, setLastSync] = useState<Date>();
+  const [summaryRefresh, setSummaryRefresh] = useState(0);
+  const [liveHealthy, setLiveHealthy] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const refreshingRef = useRef(false);
+  const liveRefreshQueued = useRef(false);
   const writeVersion = useRef(0);
   const boardWrites = useRef(new Map<string, number>());
   /** Add or update a board from a save or join response; false when this device removed it meanwhile. */
@@ -73,7 +83,7 @@ export function useBoardSync({
     [deviceBoards],
   );
   const refresh = useCallback(
-    async (manual = false) => {
+    async (manual = false): Promise<void> => {
       if (manual) detailFailures.current.clear();
       try {
         syncRemovals();
@@ -90,6 +100,14 @@ export function useBoardSync({
       refreshingRef.current = true;
       const refreshVersion = writeVersion.current;
       setRefreshing(true);
+      const backOff = () => {
+        setRefreshFailed(true);
+        const failures = poll.current.failures + 1;
+        poll.current = {
+          failures,
+          notBefore: Date.now() + Math.min(POLL_MS * 2 ** failures, MAX_POLL_MS),
+        };
+      };
       try {
         const incoming = await loadBoardList(summariesRef.current);
         const removed = syncRemovals();
@@ -123,32 +141,54 @@ export function useBoardSync({
           );
           return next.length === current.length ? current : next;
         });
-        poll.current = { failures: 0, notBefore: 0 };
-        if (navigator.onLine && !incoming.some((board) => board.localPending || board.localCached))
-          setLastSync(new Date());
-        const cachedError = incoming.find((board) => board.localError)?.localError;
-        if (cachedError) onError(cachedError);
-        else if (manual) {
-          onError('');
-          onNotice('Boards are up to date');
-        } else onSynced();
+        // Another board's pending queue prevents a "synced" timestamp, but
+        // must not prevent the selected board's due detail retry.
+        setSummaryRefresh((value) => value + 1);
+        const boardError = incoming.find((board) => board.localError)?.localError;
+        if (incoming.some((board) => board.localCached)) {
+          // Cached fallbacks remain useful, but cannot acknowledge a successful
+          // remote read or put a healthy live channel back on its minute timer.
+          backOff();
+          if (boardError) onError(boardError);
+        } else {
+          poll.current = { failures: 0, notBefore: 0 };
+          setRefreshFailed(false);
+          if (navigator.onLine && !incoming.some((board) => board.localPending))
+            setLastSync(new Date());
+          if (boardError) onError(boardError);
+          else if (manual) {
+            onError('');
+            onNotice('Boards are up to date');
+          } else onSynced();
+        }
       } catch (failure) {
-        const failures = poll.current.failures + 1;
-        poll.current = {
-          failures,
-          notBefore: Date.now() + Math.min(POLL_MS * 2 ** failures, MAX_POLL_MS),
-        };
+        backOff();
         onError(message(failure));
       } finally {
         refreshingRef.current = false;
         setRefreshing(false);
         setLoaded(true);
+        if (liveRefreshQueued.current) {
+          liveRefreshQueued.current = false;
+          if (!document.hidden && navigator.onLine) void refresh();
+        }
       }
     },
     [syncRemovals, onError, onSynced, onNotice],
   );
   const selected = summaries.find((item) => item.invite_code === selectedCode);
   const held = boards.find((item) => item.invite_code === selectedCode);
+  const detailsPending = Boolean(
+    selected &&
+      (selected.localCached ||
+        !held ||
+        held.revision < selected.revision ||
+        Boolean(held.localPending) !== Boolean(selected.localPending)),
+  );
+  const reconciliationMs =
+    liveHealthy && !refreshFailed && !detailError && !loadingBoard && !detailsPending
+      ? 60_000
+      : POLL_MS;
   // biome-ignore lint/correctness/useExhaustiveDependencies: a successful poll retries a previously failed detail load even when its revision stayed unchanged.
   useEffect(() => {
     if (
@@ -179,8 +219,14 @@ export function useBoardSync({
     void request
       .then((incoming) => {
         if (!active) return;
-        if (incoming.revision < selected.revision && !incoming.localCached)
-          throw new Error('The board changed while loading. Refresh and try again.');
+        if (incoming.revision < selected.revision) {
+          // Keep an offline fallback readable, but do not acknowledge it as the
+          // newer selected revision or discard that revision's retry deadline.
+          if (incoming.localCached) upsert(incoming);
+          throw new Error(
+            incoming.localError || 'The board changed while loading. Refresh and try again.',
+          );
+        }
         detailFailures.current.delete(selected.id);
         upsert(incoming);
       })
@@ -203,12 +249,14 @@ export function useBoardSync({
     return () => {
       active = false;
     };
-  }, [selected, held, lastSync, upsert]);
+  }, [selected, held, summaryRefresh, upsert]);
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+  useEffect(() => {
     const tick = window.setInterval(() => {
       if (!document.hidden && Date.now() >= poll.current.notBefore) void refresh();
-    }, POLL_MS);
+    }, reconciliationMs);
     const focus = () => void refresh();
     const online = () => {
       setOffline(false);
@@ -226,7 +274,30 @@ export function useBoardSync({
       window.removeEventListener('online', online);
       window.removeEventListener('offline', disconnected);
     };
-  }, [refresh, onReconnect]);
+  }, [refresh, onReconnect, reconciliationMs]);
+  useEffect(() => {
+    let stop = () => {};
+    const watch = () => {
+      stop();
+      setLiveHealthy(false);
+      if (!document.hidden && navigator.onLine && cloudConfigured) {
+        stop = subscribeBoardChanges(() => {
+          if (refreshingRef.current) liveRefreshQueued.current = true;
+          else void refresh();
+        }, setLiveHealthy);
+      }
+    };
+    watch();
+    document.addEventListener('visibilitychange', watch);
+    window.addEventListener('online', watch);
+    window.addEventListener('offline', watch);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', watch);
+      window.removeEventListener('online', watch);
+      window.removeEventListener('offline', watch);
+    };
+  }, [refresh]);
   return {
     boards,
     summaries,

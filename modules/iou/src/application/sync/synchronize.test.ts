@@ -99,12 +99,13 @@ describe('automatic offline sync', () => {
     const base = group()
     const f = fixture(queueGroup({ ...emptyStore(), groups: [base], cloudRevisions: { trip: 1 } }, { ...base, transactions: [expense('dinner')], updatedAt: time(1) }), { group: base, revision: 1 })
     const save = f.cloud.save
-    f.cloud.save = vi.fn(async (payload, revision) => {
-      await save(payload, revision)
+    f.cloud.save = vi.fn(async (payload, revision, baseline) => {
+      await save(payload, revision, baseline)
       throw new Error('Response lost')
     })
     await expect(syncOffline(f.device, f.cloud)).rejects.toThrow('Response lost')
     expect(f.store().outbox).toHaveLength(1)
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ transactions: [expense('dinner')] }), 1, base)
     f.cloud.save = save
     await syncOffline(f.device, f.cloud)
     expect(f.store().outbox).toEqual([])
@@ -135,9 +136,9 @@ describe('automatic offline sync', () => {
       revision: 1,
     })
     const save = f.cloud.save
-    f.cloud.save = vi.fn(async (payload, revision) => {
+    f.cloud.save = vi.fn(async (payload, revision, baseline) => {
       if (revision === 1) f.setServer({ group: { ...base, name: 'Latest name', transactions: [expense('theirs')], updatedAt: time(3) }, revision: 2 })
-      return save(payload, revision)
+      return save(payload, revision, baseline)
     })
     await syncOffline(f.device, f.cloud)
     expect(f.server()?.group.name).toBe('Latest name')
@@ -149,14 +150,14 @@ describe('automatic offline sync', () => {
     const base = group()
     const f = fixture(queueGroup({ ...emptyStore(), groups: [base], cloudRevisions: { trip: 1 } }, { ...base, updatedAt: time(1), transactions: [expense('first')] }), { group: base, revision: 1 })
     const save = f.cloud.save
-    f.cloud.save = vi.fn(async (payload, revision) => {
+    f.cloud.save = vi.fn(async (payload, revision, baseline) => {
       if (revision === 1)
         f.device.update(store => ({
           ...queueGroup(store, { ...store.groups[0], updatedAt: time(2), transactions: [...store.groups[0].transactions, expense('second')] }),
           pinnedIds: ['trip'],
           travelMode: { enabled: true, defaultGroupId: 'trip' },
         }))
-      return save(payload, revision)
+      return save(payload, revision, baseline)
     })
     await syncOffline(f.device, f.cloud)
     expect(f.server()?.group.transactions).toHaveLength(2)
@@ -220,9 +221,9 @@ describe('automatic offline sync', () => {
     const base = group()
     const f = fixture(queueGroup({ ...emptyStore(), groups: [base], cloudRevisions: { trip: 1 } }, { ...base, name: 'Offline rename', updatedAt: time(1) }), { group: base, revision: 1 })
     const save = f.cloud.save
-    f.cloud.save = async (payload, revision) => {
+    f.cloud.save = async (payload, revision, baseline) => {
       f.device.update(store => removeGroupFromDevice(store, 'trip'))
-      return save(payload, revision)
+      return save(payload, revision, baseline)
     }
     await syncOffline(f.device, f.cloud)
     expect(f.server()?.group.name).toBe('Offline rename')
@@ -369,6 +370,39 @@ describe('refreshing only what changed', () => {
     return { device, cloud, server, unreadable, store: () => store, updates: () => updates }
   }
 
+  it('uploads independent groups concurrently, retains later edits and drains successes before reporting a failure', async () => {
+    const groups = ['a', 'b', 'c', 'd'].map(id => named(id))
+    const queued = groups.reduce((store, item) => queueGroup(store, { ...item, name: `Edited ${item.id}`, updatedAt: time(2) }), cached(...groups))
+    const f = shared(
+      queued,
+      groups.map(item => ({ group: item, revision: 1 })),
+    )
+    const releases = new Map<string, () => void>()
+    const started = new Set<string>()
+    const save = f.cloud.save
+    f.cloud.save = vi.fn(async (payload, revision, baseline) => {
+      if (!started.has(payload.id)) {
+        started.add(payload.id)
+        await new Promise<void>(resolve => releases.set(payload.id, resolve))
+      }
+      if (payload.id === 'c') throw new Error('Group c could not connect')
+      return save(payload, revision, baseline)
+    })
+    const syncing = syncOffline(f.device, f.cloud)
+    const checked = expect(syncing).rejects.toThrow('Group c could not connect')
+    await vi.waitFor(() => expect(f.cloud.save).toHaveBeenCalledTimes(3))
+    expect(started).toEqual(new Set(['a', 'b', 'c']))
+    f.device.update(store => queueGroup(store, { ...store.groups.find(item => item.id === 'a')!, description: 'Typed during upload', updatedAt: time(3) }))
+    releases.get('b')!()
+    await vi.waitFor(() => expect(started.has('d')).toBe(true))
+    for (const id of ['c', 'a', 'd']) releases.get(id)!()
+    await checked
+    expect(f.server.get('a')!.group).toMatchObject({ name: 'Edited a', description: 'Typed during upload' })
+    expect(f.server.get('b')!.group.name).toBe('Edited b')
+    expect(f.server.get('d')!.group.name).toBe('Edited d')
+    expect(f.store().outbox.map(item => item.group.id)).toEqual(['c'])
+  })
+
   it('asks only for revisions, and neither downloads nor saves anything, when nothing changed', async () => {
     const [a, b] = [named('a'), named('b')]
     const initial = cached(a, b)
@@ -433,10 +467,10 @@ describe('refreshing only what changed', () => {
       { group: b, revision: 1 },
     ])
     const save = f.cloud.save
-    f.cloud.save = vi.fn(async (payload, revision) => {
+    f.cloud.save = vi.fn(async (payload, revision, baseline) => {
       // Someone else saves group a between the revision check and this upload.
       if (revision === 1) f.server.set('a', { group: { ...a, description: 'Theirs', updatedAt: time(2) }, revision: 2 })
-      return save(payload, revision)
+      return save(payload, revision, baseline)
     })
     await syncOffline(f.device, f.cloud)
     expect(f.cloud.load).toHaveBeenCalledOnce()

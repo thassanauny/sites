@@ -100,6 +100,7 @@ describe('online board sharing', () => {
     expect(mock.orderIds).not.toHaveBeenCalled();
     expect(await cloud.loadBoard(board.id)).toEqual(board);
     expect(mock.inIds).toHaveBeenCalledExactlyOnceWith('id', [board.id]);
+    expect(mock.from).toHaveBeenCalledExactlyOnceWith('pinboard_board_documents');
   });
 
   it.each(['PGRST202', '42883'])(
@@ -602,8 +603,10 @@ describe('online board sharing', () => {
       patch: { title: 'Booked' },
     };
     await expect(cloud.mutateBoard(board.id, operation)).resolves.toEqual(board);
-    expect(mock.rpc).toHaveBeenCalledWith('pinboard_mutate_board', {
+    expect(mock.rpc).toHaveBeenCalledWith('pinboard_mutate_board_once', {
       p_board_id: board.id,
+      p_operation_id: expect.any(String),
+      p_base_revision: null,
       p_operation: operation,
     });
     expect(mock.rpc).toHaveBeenCalledTimes(1);
@@ -627,8 +630,10 @@ describe('online board sharing', () => {
       type: 'reorder_columns',
       columnIds,
     });
-    expect(mock.rpc).toHaveBeenCalledWith('pinboard_mutate_board', {
+    expect(mock.rpc).toHaveBeenCalledWith('pinboard_mutate_board_once', {
       p_board_id: board.id,
+      p_operation_id: expect.any(String),
+      p_base_revision: null,
       p_operation: { type: 'reorder_columns', columnIds: ['done', 'todo'] },
     });
     expect(mock.rpc).toHaveBeenCalledTimes(1);

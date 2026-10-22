@@ -7,6 +7,8 @@ import { CreateBoardDialog } from './dialogs/CreateBoardDialog';
 import { HelpDialog } from './dialogs/HelpDialog';
 import { JoinBoardDialog } from './dialogs/JoinBoardDialog';
 import { ShareDialog } from './dialogs/ShareDialog';
+import { PendingBoardDialog } from './dialogs/PendingBoardDialog';
+import type { PendingBoardReview } from '../../infrastructure/cloud/offlineBoards';
 
 export interface BoardDialogProps {
   modal: ModalState;
@@ -17,12 +19,14 @@ export interface BoardDialogProps {
   serverError: string;
   currentBoard?: Board;
   onClose: () => void;
-  onSave: (boardId: string, operation: Operation) => Promise<boolean>;
+  onSave: (boardId: string, operation: Operation, recovery?: Board) => Promise<boolean>;
   onCreate: (id: string, title: string, description: string) => Promise<boolean>;
   onJoin: (code: string) => Promise<boolean>;
   onRecover: (code: string) => Promise<boolean>;
   onRemove: (board: Board) => void;
   onNotice: (text: string) => void;
+  onReview: (id: string) => Promise<PendingBoardReview>;
+  onResolve: (review: PendingBoardReview, action: 'retry' | 'discard') => Promise<boolean>;
 }
 
 /** Shows the dialog the workspace asked for. */
@@ -40,9 +44,22 @@ export function BoardDialog({
   onRecover,
   onRemove,
   onNotice,
+  onReview,
+  onResolve,
 }: BoardDialogProps) {
   const shared = { busy, offline, serverError, onClose };
   switch (modal.type) {
+    case 'pending':
+      return (
+        <PendingBoardDialog
+          board={modal.board}
+          busy={busy}
+          serverError={serverError}
+          onClose={onClose}
+          onReview={onReview}
+          onResolve={onResolve}
+        />
+      );
     case 'help':
       return <HelpDialog busy={busy} onClose={onClose} />;
     case 'share':

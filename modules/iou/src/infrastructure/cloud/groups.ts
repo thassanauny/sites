@@ -1,9 +1,11 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createClient, type RealtimeChannel, type Session, type SupabaseClient } from '@supabase/supabase-js'
 import { CloudConflictError, type CloudLoad, type CloudRecord, type CloudVersion } from '../../application/sync/synchronize'
 import { isId, isInviteCode, normalizeInviteCode } from '../../domain/groups/identifiers'
 import type { Group } from '../../domain/groups/types'
 import { validateGroup } from '../../domain/ledger/calculations'
 import { fetchWithTimeout } from './network'
+import { mapConcurrent } from '../../application/sync/concurrency'
+import { groupDelta } from './groupDelta'
 
 export { CloudConflictError, type CloudLoad, type CloudRecord, type CloudVersion }
 
@@ -14,6 +16,9 @@ export const cloudConfigured = Boolean(supabaseUrl && supabaseKey)
 
 let client: SupabaseClient | undefined
 let authentication: Promise<void> | undefined
+// Supabase reuses a topic until its asynchronous leave completes. Share teardown
+// across watcher instances so visibility changes cannot resubscribe a leaving channel.
+let liveTeardown: Promise<void> = Promise.resolve()
 
 function getClient(): SupabaseClient {
   if (!cloudConfigured) {
@@ -105,6 +110,91 @@ export async function initializeCloud(): Promise<void> {
   await authentication
 }
 
+/** Optional metadata invalidations; polling and durable saves work without Realtime setup. */
+export function watchCloudGroups(changed: (version?: CloudVersion) => void, health: (healthy: boolean) => void = () => {}): () => void {
+  health(false)
+  let supabase: SupabaseClient
+  try {
+    supabase = getClient()
+  } catch {
+    return () => {}
+  }
+  let active = true
+  let generation = 0
+  let userId: string | undefined
+  let channel: RealtimeChannel | undefined
+  const remove = () => {
+    generation++
+    health(false)
+    const previous = channel
+    channel = undefined
+    if (previous) {
+      try {
+        liveTeardown = Promise.all([liveTeardown, supabase.removeChannel(previous)]).then(
+          () => {},
+          () => {},
+        )
+      } catch {
+        /* Compact polling still works if Realtime cleanup fails. */
+      }
+    }
+  }
+  const follow = (session: Session | null) => {
+    if (!active) return
+    const id = session?.user?.id
+    if (id === userId && channel) {
+      const expected = generation
+      if (session)
+        void supabase.realtime.setAuth(session.access_token).catch(() => {
+          if (active && generation === expected) health(false)
+        })
+      return
+    }
+    remove()
+    userId = id
+    if (!session || !id || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return
+    const expected = generation
+    void liveTeardown
+      .then(() => {
+        if (active && generation === expected) return supabase.realtime.setAuth(session.access_token)
+      })
+      .then(() => {
+        if (!active || generation !== expected) return
+        channel = supabase
+          .channel(`iou:user:${id.toLowerCase()}`, { config: { private: true } })
+          .on('broadcast', { event: 'changed' }, message => {
+            if (!active || generation !== expected) return
+            const payload = message.payload
+            if (payload && isId(payload.id) && Number.isSafeInteger(payload.revision) && payload.revision > 0) changed({ id: payload.id, revision: payload.revision })
+          })
+          .subscribe(status => {
+            // Initial subscribe and reconnect both need a heads check for missed changes.
+            if (!active || generation !== expected) return
+            health(status === 'SUBSCRIBED')
+            if (status === 'SUBSCRIBED') changed()
+          })
+      })
+      .catch(() => {})
+  }
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    queueMicrotask(() => follow(session))
+  })
+  const initialGeneration = generation
+  void initializeCloud()
+    .then(() => supabase.auth.getSession())
+    .then(({ data, error }) => {
+      if (!error && active && generation === initialGeneration) follow(data.session)
+    })
+    .catch(() => {})
+  return () => {
+    active = false
+    subscription.unsubscribe()
+    remove()
+  }
+}
+
 function readRevision(value: unknown): number {
   const revision = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value
   if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 1) {
@@ -149,10 +239,13 @@ export async function loadCloudVersions(): Promise<CloudVersion[]> {
 /** The named groups. One whose data cannot be read is reported, not thrown, so it cannot block the others. */
 export async function loadCloudGroups(ids: readonly string[]): Promise<CloudLoad> {
   await initializeCloud()
-  const wanted = ids.filter(isId)
-  const loaded: CloudLoad = { records: [], unreadable: [] }
+  const wanted = [...new Set(ids.filter(isId))]
+  const chunks: string[][] = []
   for (let start = 0; start < wanted.length; start += LOAD_CHUNK_SIZE) {
-    const chunk = wanted.slice(start, start + LOAD_CHUNK_SIZE)
+    chunks.push(wanted.slice(start, start + LOAD_CHUNK_SIZE))
+  }
+  const batches = await mapConcurrent(chunks, async chunk => {
+    const loaded: CloudLoad = { records: [], unreadable: [] }
     const { data, error } = await getClient().from('iou_groups').select('id,payload,version').order('id', { ascending: true }).in('id', chunk)
     if (error) throw serviceError(error, 'load your shared groups')
     if (!Array.isArray(data)) throw new Error('The server returned an invalid group list.')
@@ -166,8 +259,9 @@ export async function loadCloudGroups(ids: readonly string[]): Promise<CloudLoad
         loaded.unreadable.push(row.id)
       }
     }
-  }
-  return loaded
+    return loaded
+  })
+  return { records: batches.flatMap(batch => batch.records), unreadable: batches.flatMap(batch => batch.unreadable) }
 }
 
 export async function createCloudGroup(group: Group): Promise<CloudRecord> {
@@ -188,11 +282,16 @@ export async function joinCloudGroup(inviteCode: string): Promise<CloudRecord> {
   return readRecord(data)
 }
 
-export async function saveCloudGroup(group: Group, expectedRevision: number): Promise<CloudRecord> {
+export async function saveCloudGroup(group: Group, expectedRevision: number, base: Group): Promise<CloudRecord> {
   const payload = validateGroup(group)
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error('The group revision is invalid. Reload the group before editing it.')
   await initializeCloud()
-  const { data, error } = await getClient().rpc('iou_save_group', { p_payload: payload, p_expected_version: expectedRevision })
+  if (base.id !== payload.id) throw new Error('The group baseline does not match the saved group.')
+  const { data, error } = await getClient().rpc('iou_save_group_delta', { p_group_id: payload.id, p_expected_version: expectedRevision, p_delta: groupDelta(base, payload) })
   if (error) throw serviceError(error, 'save the shared group')
-  return readRecord(data)
+  if (data?.format !== 1 || data.id !== payload.id || readRevision(data.version) !== expectedRevision + 1)
+    throw new Error('The server returned an invalid save receipt. Your saved changes will retry automatically.')
+  // The checked revision guarantees that this exact submitted snapshot was accepted.
+  // Acknowledgement still merges any newer durable edits made during this request.
+  return { group: payload, revision: expectedRevision + 1 }
 }

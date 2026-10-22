@@ -1,7 +1,36 @@
 import type { Board } from "./types";
 import { boardContent } from "./codec";
+import { mergeBoardContent, mergeCloudBoard, sameBoardContent } from "./merge";
 
 export type WorkspaceData = { boards: Board[]; activeId: string };
+
+/** Merge another tab's durable snapshot; overlapping edits require explicit recovery. */
+export function mergeDeviceWorkspace(base: WorkspaceData, local: WorkspaceData, latest: WorkspaceData): WorkspaceData | undefined {
+  const original = new Map(base.boards.map(board => [board.id, board]));
+  const theirs = new Map(latest.boards.map(board => [board.id, board]));
+  const boards: Board[] = [];
+  for (const ours of local.boards) {
+    const other = theirs.get(ours.id);
+    const before = original.get(ours.id);
+    theirs.delete(ours.id);
+    if (!other) {
+      if (!before || !sameBoardContent(before, ours)) boards.push(ours);
+      continue;
+    }
+    const merged = sameBoardContent(ours, other) ? ours
+      : before ? mergeBoardContent(boardContent(before), ours, other) : undefined;
+    if (!merged) return;
+    const metadata = other.revision > ours.revision ? other : ours;
+    boards.push({ ...merged, revision: metadata.revision, cloudSavedContent: metadata.cloudSavedContent, inviteCode: metadata.inviteCode });
+  }
+  // A stale tab must retain boards added or edited elsewhere. Device removal is
+  // a separate durable preference and never deletes shared drafts.
+  boards.push(...[...theirs.values()].filter(board => {
+    const before = original.get(board.id);
+    return !before || board.revision > before.revision || !sameBoardContent(before, board);
+  }));
+  return { boards, activeId: boards.some(board => board.id === local.activeId) ? local.activeId : boards[0]?.id || "" };
+}
 
 /** Remote refreshes replace clean documents and retain every unsaved edit and local viewport. */
 export function mergeWorkspace(
@@ -22,11 +51,7 @@ export function mergeWorkspace(
     }
     const clean = local.cloudSavedContent === boardContent(local);
     if (cloud) {
-      merged.push(
-        clean && cloud.revision >= local.revision
-          ? { ...cloud, viewport: local.viewport }
-          : { ...local, inviteCode: cloud.inviteCode },
-      );
+      merged.push(mergeCloudBoard(local, cloud));
       remote.delete(local.id);
     } else if (!local.revision || !clean) merged.push(local);
   }
@@ -50,12 +75,7 @@ export function openWorkspaceBoard(
   replaceStarter: boolean,
 ): WorkspaceData {
   const local = previous.boards.find((item) => item.id === remote.id);
-  const chosen =
-    local &&
-    local.revision > 0 &&
-    boardContent(local) !== local.cloudSavedContent
-      ? { ...local, inviteCode: remote.inviteCode }
-      : remote;
+  const chosen = local && local.revision > 0 ? mergeCloudBoard(local, remote) : remote;
   return {
     boards: [
       chosen,

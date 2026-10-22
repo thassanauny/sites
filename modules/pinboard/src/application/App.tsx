@@ -52,6 +52,8 @@ export default function App() {
     dropCard,
     reorderCard,
     save,
+    reviewPendingBoard,
+    resolvePending,
   } = useWorkspace();
   const boardTitle = board?.title;
   useEffect(() => {
@@ -197,6 +199,16 @@ export default function App() {
         )}
       </main>
       <footer className="app-footer">
+        {board && (
+          <button
+            type="button"
+            className="text-button"
+            disabled={busy || Boolean(modal)}
+            onClick={() => setModal({ type: 'pending', board })}
+          >
+            Review device edits
+          </button>
+        )}
         <span className="footer-sync">
           {lastSync ? (
             <>
@@ -253,6 +265,8 @@ export default function App() {
           onRecover={recoverDraft}
           onRemove={removeDeviceBoard}
           onNotice={setNotice}
+          onReview={reviewPendingBoard}
+          onResolve={resolvePending}
         />
       )}
     </div>

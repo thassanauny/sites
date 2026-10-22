@@ -16,6 +16,7 @@ vi.mock('../infrastructure/cloud/groups', () => ({
   createCloudGroup: cloud.create,
   saveCloudGroup: cloud.save,
   joinCloudGroup: cloud.join,
+  watchCloudGroups: vi.fn(() => () => {}),
 }))
 vi.mock('virtual:pwa-register/react', () => ({ useRegisterSW: () => ({ needRefresh: [false, vi.fn()], offlineReady: [false, vi.fn()], updateServiceWorker: vi.fn() }) }))
 
@@ -264,8 +265,10 @@ describe('automatic sync', () => {
     expect(cloud.versions).toHaveBeenCalledTimes(1)
     await act(async () => finish([]))
     expect(host.querySelector('.connection')?.textContent).toContain('Connected')
-    await setVisibility('visible')
+    // Events received during the first request coalesce into one catch-up pass.
     expect(cloud.versions).toHaveBeenCalledTimes(2)
+    await setVisibility('visible')
+    expect(cloud.versions).toHaveBeenCalledTimes(3)
   })
 
   it('makes no network request while offline or while saved data needs recovery', async () => {

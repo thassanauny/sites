@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import type { Board, BoardSummary } from '../domain/boards/types';
+import type { Board, BoardSummary, Operation } from '../domain/boards/types';
 import { summarizeBoard } from '../domain/boards/summary';
 
 /** Fixture server snapshots; the application receives summaries and fetches details separately. */
@@ -12,7 +12,13 @@ export const cloud = {
   createBoard: vi.fn(),
   joinBoard: vi.fn(),
   mutateBoard: vi.fn(),
+  recoveryDraft: vi.fn<(board: Board) => void>(),
   startNewSession: vi.fn(),
+  subscribeBoardChanges: vi.fn<
+    (wake: () => void, health?: (healthy: boolean) => void) => () => void
+  >(() => () => {}),
+  reviewPendingBoard: vi.fn(),
+  resolvePendingBoard: vi.fn(),
 };
 
 export function resetCloudDocuments() {
@@ -39,6 +45,14 @@ export const cloudModule = {
   loadBoard: cloud.loadBoard,
   createBoard: cloud.createBoard,
   joinBoard: cloud.joinBoard,
-  mutateBoard: cloud.mutateBoard,
+  // Existing UI assertions inspect the wire operation; recovery never goes to RPCs.
+  mutateBoard: (id: string, operation: Operation, recovery?: Board) => {
+    if (recovery) cloud.recoveryDraft(recovery);
+    return cloud.mutateBoard(id, operation);
+  },
   startNewSession: cloud.startNewSession,
+  subscribeBoardChanges: (wake: () => void, health?: (healthy: boolean) => void) =>
+    cloud.subscribeBoardChanges(wake, health) ?? (() => {}),
+  reviewPendingBoard: cloud.reviewPendingBoard,
+  resolvePendingBoard: cloud.resolvePendingBoard,
 };

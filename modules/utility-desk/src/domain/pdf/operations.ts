@@ -62,20 +62,6 @@ export async function splitPages(bytes: Uint8Array, onPart: (part: Uint8Array, p
   throwIfAborted(signal);
 }
 
-export async function splitEachPage(bytes: Uint8Array, signal?: AbortSignal, onProgress?: (p: number) => void, selected?: number[]): Promise<Uint8Array[]> {
-  const out: Uint8Array[] = [];
-  await splitPages(
-    bytes,
-    (part) => {
-      out.push(part);
-    },
-    signal,
-    onProgress,
-    selected,
-  );
-  return out;
-}
-
 export type PageSizeName = 'A4' | 'Letter' | 'Fit';
 export type Fit = 'contain' | 'cover' | 'stretch' | 'original';
 export interface ImageToPdfOptions {

@@ -1,4 +1,5 @@
-import { withOfflineBoards } from './offlineBoards';
+import { BoardOperationError, BoardSyncUnavailableError, withOfflineBoards } from './offlineBoards';
+import { watchBoardChanges } from './liveBoards';
 import { createClient, navigatorLock, type SupabaseClient } from '@supabase/supabase-js';
 import type { Board, BoardHead, BoardSummary, Operation } from '../../domain/boards/types';
 import { readBoardSummary } from '../../domain/boards/summary';
@@ -86,19 +87,35 @@ function serviceError(error: ServiceError, action: string): Error {
   if (error.message === 'PINBOARD_INVALID_INVITE')
     return new Error('That invite code was not found. Check the code and try again.');
   if (error.message === 'PINBOARD_ACCESS_DENIED')
-    return new Error('You no longer have access to this board. Join again using its invite code.');
+    return new BoardOperationError(
+      'You no longer have access to this board. Join again using its invite code.',
+    );
   if (error.message === 'PINBOARD_BOARD_LIMIT')
-    return new Error('This session has reached the supported number of shared boards.');
+    return new BoardOperationError(
+      'This session has reached the supported number of shared boards.',
+    );
   if (error.message === 'PINBOARD_INVALID_BOARD' || error.message === 'PINBOARD_INVALID_OPERATION')
-    return new Error('The board action contains invalid data. Review the fields and try again.');
+    return new BoardOperationError(
+      'The board action contains invalid data. Review the fields and try again.',
+    );
   if (error.message === 'PINBOARD_BOARD_TOO_LARGE')
-    return new Error('This board is full. Delete some cards or shorten descriptions first.');
+    return new BoardOperationError(
+      'This board is full. Delete some cards or shorten descriptions first.',
+    );
   if (error.message === 'PINBOARD_COLUMN_NOT_FOUND')
-    return new Error('That column was removed. Refresh the board and choose another column.');
+    return new BoardOperationError(
+      'That column was removed. Refresh the board and choose another column.',
+    );
   if (error.message === 'PINBOARD_CARD_NOT_FOUND')
-    return new Error('That card was removed. Refresh the board to see the latest changes.');
+    return new BoardOperationError(
+      'That card was removed. Refresh the board to see the latest changes.',
+    );
   if (error.message === 'PINBOARD_ASSIGNEE_NOT_FOUND')
-    return new Error('That assignee was removed. Choose another name or Unassigned.');
+    return new BoardOperationError('That assignee was removed. Choose another name or Unassigned.');
+  if (error.message === 'PINBOARD_OPERATION_TOO_OLD')
+    return new BoardOperationError(
+      'This pending change is older than the safe retry window. Your draft is kept; review the latest board before saving again.',
+    );
   if (
     error.code === 'PGRST202' ||
     error.code === 'PGRST205' ||
@@ -107,21 +124,27 @@ function serviceError(error: ServiceError, action: string): Error {
     error.code === '42703' ||
     error.code === 'PGRST204'
   ) {
-    return new Error('Board sharing needs database setup. See apps/pinboard/supabase/README.md.');
+    return new BoardSyncUnavailableError(
+      'Board sharing needs database setup. See apps/pinboard/supabase/README.md.',
+    );
   }
   if (
     /anonymous.*(?:disabled|not allowed)|anonymous_provider_disabled/i.test(
       `${error.code ?? ''} ${error.message ?? ''}`,
     )
   ) {
-    return new Error('Enable anonymous sign-ins in Supabase Authentication to use shared boards.');
+    return new BoardSyncUnavailableError(
+      'Enable anonymous sign-ins in Supabase Authentication to use shared boards.',
+    );
   }
   if (
     error.message === 'PINBOARD_AUTH_REQUIRED' ||
     error.code === 'PGRST301' ||
     error.code === 'PGRST303'
   ) {
-    return new Error('Your board session could not be verified. Reload the app and try again.');
+    return new BoardSyncUnavailableError(
+      'Your board session could not be verified. Reload the app and try again.',
+    );
   }
   if (/took too long|timed? ?out|timeout|abort/i.test(error.message ?? '')) {
     return new Error('The request took too long. Check your connection and try again.');
@@ -244,7 +267,7 @@ async function remoteLoadBoard(id: string): Promise<Board> {
   ensureOnline();
   const { data, error } = await call('load your board', () =>
     getClient()
-      .from('pinboard_boards')
+      .from('pinboard_board_documents')
       .select(BOARD_COLUMNS)
       .in('id', [boardId])
       .order('id', { ascending: true }),
@@ -290,15 +313,23 @@ async function remoteJoinBoard(code: string): Promise<Board> {
   return board;
 }
 
-async function remoteMutateBoard(boardId: string, operation: Operation): Promise<Board> {
+async function remoteMutateBoard(
+  boardId: string,
+  operation: Operation,
+  operationId = crypto.randomUUID(),
+  baseRevision?: number,
+): Promise<Board> {
   const id = validateUuid(boardId, 'Board ID');
+  const token = validateUuid(operationId, 'Operation ID');
   const payload = validateOperation(operation);
   await initializeCloud();
   ensureOnline();
   const { data, error } = await call('save your changes', () =>
-    getClient().rpc('pinboard_mutate_board', {
+    getClient().rpc('pinboard_mutate_board_once', {
       p_board_id: id,
+      p_operation_id: token,
       p_operation: payload,
+      p_base_revision: baseRevision ?? null,
     }),
   );
   if (error) throw serviceError(error, 'save your changes');
@@ -309,6 +340,7 @@ async function remoteMutateBoard(boardId: string, operation: Operation): Promise
 }
 
 const offlineBoards = withOfflineBoards({
+  initialize: typeof window === 'undefined' ? undefined : initializeCloud,
   loadBoardList: remoteLoadBoardList,
   loadBoard: remoteLoadBoard,
   createBoard: remoteCreateBoard,
@@ -320,3 +352,25 @@ export const loadBoard = offlineBoards.loadBoard;
 export const createBoard = offlineBoards.createBoard;
 export const joinBoard = offlineBoards.joinBoard;
 export const mutateBoard = offlineBoards.mutateBoard;
+export const reviewPendingBoard = offlineBoards.reviewPendingBoard;
+export const resolvePendingBoard = offlineBoards.resolvePendingBoard;
+
+/** One private channel for the current identity; unsupported delivery falls back to polling. */
+export function subscribeBoardChanges(
+  wake: () => void,
+  health: (healthy: boolean) => void = () => {},
+): () => void {
+  health(false);
+  let stopped = false;
+  let stop = () => {};
+  void initializeCloud()
+    .then(() => {
+      if (!stopped) stop = watchBoardChanges(getClient(), wake, health);
+    })
+    .catch(() => {});
+  return () => {
+    stopped = true;
+    stop();
+    health(false);
+  };
+}

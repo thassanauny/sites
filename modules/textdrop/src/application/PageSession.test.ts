@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SessionDamagedError, type TextDropPage } from '../domain/snippets/model';
 import { PageSession } from './PageSession';
-import type { Cloud } from './ports';
+import type { Cloud, DraftRecovery } from './ports';
 
 const id = '11111111-1111-4111-8111-111111111111';
 const code = '0123456789abcdef0123456789abcdef';
@@ -34,6 +34,32 @@ afterEach(() => {
 });
 
 describe('online page session', () => {
+  it('keeps text and its recovery copy typed while accepting the shared conflict version', async () => {
+    vi.useFakeTimers();
+    const { cloud } = setup();
+    const shared = page('Other person’s text', 2);
+    cloud.joinPage = vi.fn(async () => ({ ...page('Queued text'), localPending: true, localConflict: shared }));
+    const accepted = deferred<TextDropPage>();
+    cloud.acceptSharedPage = vi.fn(() => accepted.promise);
+    cloud.saveCheckedPage = vi.fn(async (_id, text) => page(text, 3));
+    const recovery: DraftRecovery = { read: vi.fn(), write: vi.fn(), clear: vi.fn() };
+    const session = new PageSession(cloud, 50, 10_000, recovery);
+    await session.join(code);
+    const accepting = session.acceptShared();
+    session.edit('Newer text entered while choosing');
+    accepted.resolve(shared);
+    await accepting;
+    expect(session.state).toMatchObject({ page: shared, draft: 'Newer text entered while choosing', dirty: true });
+    expect(recovery.clear).not.toHaveBeenCalled();
+    expect(recovery.write).toHaveBeenLastCalledWith(expect.objectContaining({ id }), 'Newer text entered while choosing');
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(cloud.savePage).not.toHaveBeenCalled();
+    expect(cloud.saveCheckedPage).not.toHaveBeenCalled();
+    await session.save();
+    expect(cloud.saveCheckedPage).toHaveBeenCalledExactlyOnceWith(id, 'Newer text entered while choosing', { baseVersion: shared.version, baseText: shared.text, resolveConflict: false });
+    session.dispose();
+  });
+
   it('debounces edits and confirms text only after a successful save', async () => {
     vi.useFakeTimers();
     const { cloud, session } = setup();

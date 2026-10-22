@@ -1,9 +1,13 @@
+import { availableParallelism } from "node:os";
 import { defineConfig } from "@playwright/test";
+
+// Half the CPUs, between two and four: more workers did not make the suite faster. BROWSER_WORKERS overrides.
+const workers = Number(process.env.BROWSER_WORKERS) || Math.min(4, Math.max(2, Math.floor(availableParallelism() / 2)));
 
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: true,
-  workers: 2,
+  workers,
   use: {
     baseURL: process.env.BLUEPRINT_TEST_BASE_URL || "http://127.0.0.1:5193",
     viewport: { width: 1440, height: 960 },
@@ -16,7 +20,7 @@ export default defineConfig({
       : [
           {
             name: "cloud",
-            testMatch: "**/cloud.spec.ts",
+            testMatch: ["**/cloud.spec.ts", "**/collaborative.spec.ts"],
             use: { baseURL: "http://127.0.0.1:5194" },
           },
         ]),

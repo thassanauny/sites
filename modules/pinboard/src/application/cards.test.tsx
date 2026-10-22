@@ -43,6 +43,39 @@ const titlesIn = (name: string) =>
   [...column(name).querySelectorAll('.task-card h3')].map((item) => item.textContent);
 
 describe('Pinboard UI: cards and columns', () => {
+  it('passes exact editor text to local recovery while keeping the wire patch trimmed', async () => {
+    await mount([populated]);
+    await click('Edit Buy coffee');
+    await fill('Card title', '  Deleted-card draft  ');
+    await fill('Description optional', '  Keep exact text\nincluding spaces  ');
+    cloud.mutateBoard.mockRejectedValueOnce(new Error('That card was removed.'));
+    await click('Save');
+    expect(cloud.mutateBoard).toHaveBeenCalledWith(board.id, {
+      type: 'update_card',
+      id: card.id,
+      patch: { title: 'Deleted-card draft', description: 'Keep exact text\nincluding spaces' },
+    });
+    expect(cloud.recoveryDraft).toHaveBeenCalledExactlyOnceWith({
+      ...populated,
+      cards: [
+        {
+          ...card,
+          title: '  Deleted-card draft  ',
+          description: '  Keep exact text\nincluding spaces  ',
+        },
+        packBags,
+      ],
+    });
+    expect(field('Card title').value).toBe('  Deleted-card draft  ');
+    expect(button('Download card draft')).toBeDefined();
+    await click('Cancel');
+    await click('Discard draft');
+    await click('Edit Pack bags');
+    // Workspace errors outlive the editor that caused them. They must not
+    // classify a different, still-present card as deleted.
+    expect(document.querySelector('[aria-label="Deleted card recovery"]')).toBeNull();
+    expect(field('Card title').value).toBe('Pack bags');
+  });
   it.each(['before', 'after'] as const)(
     'reorders a card dropped %s another card and keeps it after refresh',
     async (edge) => {

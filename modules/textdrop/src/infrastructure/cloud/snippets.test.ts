@@ -342,3 +342,24 @@ describe('online snippet sharing', () => {
     expect((error as Error).message).not.toMatch(/upgrade|earlier installation/i);
   });
 });
+
+it('sends a checked baseline and stable operation ID, without a legacy save fallback', async () => {
+  const { createHash } = await import('node:crypto');
+  const shared = cloud();
+  const save = { baseVersion: 1, baseText: 'Original', operationId: '33333333-3333-4333-8333-333333333333' };
+  mock.rpc.mockResolvedValueOnce({ data: receipt({ ...page, version: 2 }), error: null });
+  expect(await shared.saveCheckedPage!(page.id, 'New text', save)).toMatchObject({ text: 'New text', version: 2 });
+  expect(mock.rpc).toHaveBeenCalledExactlyOnceWith('textdrop_save_checked', {
+    p_id: page.id,
+    p_text: 'New text',
+    p_expected: 1,
+    p_base_hash: createHash('sha256').update('Original').digest('hex'),
+    p_operation_id: save.operationId,
+  });
+  mock.rpc.mockResolvedValueOnce({ data: { conflict: { ...page, text: 'Other device', version: 3 } }, error: null });
+  await expect(shared.saveCheckedPage!(page.id, 'New text', save)).rejects.toMatchObject({ page: { text: 'Other device', version: 3 } });
+  mock.rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } });
+  await expect(shared.saveCheckedPage!(page.id, 'New text', save)).rejects.toThrow('database setup');
+  expect(mock.rpc).toHaveBeenCalledTimes(3);
+  expect(mock.rpc.mock.calls.every(([name]) => name === 'textdrop_save_checked')).toBe(true);
+});

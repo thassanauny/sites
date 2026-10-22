@@ -192,31 +192,30 @@ exception when others then return false;
 end;
 $$;
 
+-- Cards and columns are authoritative entities. Headers contain no document mirror.
 create table if not exists public.pinboard_boards (
   id uuid primary key,
   invite_code text not null unique check (invite_code ~ '^[a-f0-9]{32}$'),
   title text not null check (private.pinboard_valid_text(to_jsonb(title), 160)),
   description text not null default '' check (private.pinboard_valid_text(to_jsonb(description), 10000, false)),
-  columns jsonb not null,
-  cards jsonb not null default '[]'::jsonb,
   deleted_card_ids text[] not null default '{}'::text[],
   deleted_column_ids text[] not null default '{}'::text[],
   revision bigint not null default 1 check (revision between 1 and 9007199254740991),
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (private.pinboard_valid_state(columns, cards))
+  card_fields jsonb check (card_fields is null or private.pinboard_valid_card_fields(card_fields)),
+  operation_receipt_floor bigint not null default 0 check (operation_receipt_floor between 0 and 9007199254740991)
 );
-
--- Null keeps untouched boards and older RPC result shapes intact.
 alter table public.pinboard_boards add column if not exists card_fields jsonb
   check (card_fields is null or private.pinboard_valid_card_fields(card_fields));
-
--- Keep collection reads on small scalar/column data: no card JSON needs to be
--- fetched or expanded during a list or poll. PostgreSQL maintains this count.
-alter table public.pinboard_boards add column if not exists active_card_count integer
-  generated always as (jsonb_array_length(jsonb_path_query_array(cards,
-    '$[*] ? (!exists(@.archived) || @.archived == false)'))) stored;
+alter table public.pinboard_boards add column if not exists operation_receipt_floor bigint not null default 0
+  check (operation_receipt_floor between 0 and 9007199254740991);
+alter table public.pinboard_boards add column if not exists active_card_count integer not null default 0;
+alter table public.pinboard_boards add column if not exists card_count integer not null default 0;
+alter table public.pinboard_boards add column if not exists column_count integer not null default 0;
+alter table public.pinboard_boards add column if not exists content_bytes bigint not null default 8;
+alter table public.pinboard_boards add column if not exists next_card_ordinal bigint not null default 1;
 
 create table if not exists public.pinboard_board_access (
   board_id uuid not null references public.pinboard_boards(id) on delete cascade,
@@ -224,38 +223,368 @@ create table if not exists public.pinboard_board_access (
   joined_at timestamptz not null default now(),
   primary key (board_id, user_id)
 );
-
 create index if not exists pinboard_board_access_user_idx on public.pinboard_board_access (user_id, board_id);
 create index if not exists pinboard_boards_creator_idx on public.pinboard_boards (created_by);
 
+create or replace function private.pinboard_valid_card(p_card jsonb)
+returns boolean language sql immutable security invoker set search_path = '' as $$
+  -- Existing field/UTF-16 validation, applied to just the touched entity.
+  select private.pinboard_valid_state(jsonb_build_array(jsonb_build_object(
+    'id', p_card->'columnId', 'title', 'Column', 'color', 'slate')), jsonb_build_array(p_card));
+$$;
+create table if not exists public.pinboard_columns (
+  board_id uuid not null references public.pinboard_boards(id) on delete cascade,
+  id text generated always as (data->>'id') stored,
+  data jsonb not null check (private.pinboard_valid_state(jsonb_build_array(data), '[]'::jsonb)),
+  ordinal bigint not null,
+  primary key (board_id, id)
+);
+create index if not exists pinboard_columns_order_idx on public.pinboard_columns(board_id, ordinal);
+create table if not exists public.pinboard_cards (
+  board_id uuid not null references public.pinboard_boards(id) on delete cascade,
+  id uuid generated always as ((data->>'id')::uuid) stored,
+  column_id text generated always as (data->>'columnId') stored,
+  position numeric generated always as ((data->>'position')::numeric) stored,
+  data jsonb not null check (private.pinboard_valid_card(data)),
+  ordinal bigint not null,
+  primary key (board_id, id),
+  foreign key (board_id, column_id) references public.pinboard_columns(board_id, id)
+);
+create index if not exists pinboard_cards_position_idx on public.pinboard_cards(board_id, column_id, position, id);
+create index if not exists pinboard_cards_order_idx on public.pinboard_cards(board_id, ordinal);
+create table if not exists private.pinboard_row_storage_audit (
+  board_id uuid primary key references public.pinboard_boards(id) on delete cascade,
+  source_revision bigint not null,
+  source_hash bytea not null,
+  reconstructed_hash bytea not null check (source_hash = reconstructed_hash),
+  column_count integer not null,
+  card_count integer not null,
+  active_card_count integer not null,
+  migrated_at timestamptz not null default clock_timestamp()
+);
+revoke all on private.pinboard_row_storage_audit from public, anon, authenticated;
+
+-- The DDL lock prevents legacy writers/new boards from racing cutover. Each
+-- existing board is also locked in the same order used by normal mutations.
+do $$
+declare b record; constraint_name text; restored_columns jsonb; restored_cards jsonb;
+  source_document jsonb; restored_document jsonb; active_count integer;
+begin
+  if exists (select 1 from pg_attribute where attrelid='public.pinboard_boards'::regclass
+    and attname='cards' and not attisdropped) then
+    lock table public.pinboard_boards in access exclusive mode;
+    drop view if exists public.pinboard_board_summaries;
+    if exists (select 1 from pg_attribute where attrelid='public.pinboard_boards'::regclass
+      and attname='active_card_count' and attgenerated <> '') then
+      alter table public.pinboard_boards alter column active_card_count drop expression;
+    end if;
+    for b in select * from public.pinboard_boards order by id for update loop
+      if not private.pinboard_valid_state(b.columns,b.cards)
+        or (b.card_fields is not null and not private.pinboard_valid_card_fields(b.card_fields))
+        or exists (select 1 from jsonb_array_elements(b.cards) c,
+          lateral jsonb_object_keys(coalesce(c->'customFields','{}'::jsonb)) f(id)
+          where not exists (select 1 from jsonb_array_elements(coalesce(b.card_fields->'custom','[]'::jsonb)) d where d->>'id'=f.id))
+      then raise exception 'PINBOARD_ROW_BACKFILL_INVALID: %',b.id; end if;
+      if exists(select 1 from public.pinboard_columns where board_id=b.id)
+        or exists(select 1 from public.pinboard_cards where board_id=b.id)
+      then raise exception 'PINBOARD_ROW_BACKFILL_NOT_EMPTY: %',b.id; end if;
+      insert into public.pinboard_columns(board_id,data,ordinal)
+        select b.id,value,ordinality from jsonb_array_elements(b.columns) with ordinality;
+      insert into public.pinboard_cards(board_id,data,ordinal)
+        select b.id,value,ordinality from jsonb_array_elements(b.cards) with ordinality;
+      select coalesce(jsonb_agg(data order by ordinal),'[]'::jsonb) into restored_columns
+        from public.pinboard_columns where board_id=b.id;
+      select coalesce(jsonb_agg(data order by ordinal),'[]'::jsonb),
+        count(*) filter(where not coalesce((data->>'archived')::boolean,false))
+        into restored_cards,active_count from public.pinboard_cards where board_id=b.id;
+      source_document:=jsonb_build_object('columns',b.columns,'cards',b.cards,'card_fields',b.card_fields);
+      restored_document:=jsonb_build_object('columns',restored_columns,'cards',restored_cards,'card_fields',b.card_fields);
+      if restored_document is distinct from source_document
+        or jsonb_array_length(restored_cards)<>jsonb_array_length(b.cards)
+        or jsonb_array_length(restored_columns)<>jsonb_array_length(b.columns)
+        or active_count<>(select count(*) from jsonb_array_elements(b.cards) c
+          where not coalesce((c->>'archived')::boolean,false))
+      then raise exception 'PINBOARD_ROW_BACKFILL_MISMATCH: %',b.id; end if;
+      insert into private.pinboard_row_storage_audit(board_id,source_revision,source_hash,reconstructed_hash,column_count,card_count,active_card_count)
+        values(b.id,b.revision,sha256(convert_to(source_document::text,'UTF8')),
+          sha256(convert_to(restored_document::text,'UTF8')),jsonb_array_length(b.columns),jsonb_array_length(b.cards),active_count)
+        on conflict(board_id) do update set source_revision=excluded.source_revision,source_hash=excluded.source_hash,
+          reconstructed_hash=excluded.reconstructed_hash,column_count=excluded.column_count,card_count=excluded.card_count,
+          active_card_count=excluded.active_card_count,migrated_at=clock_timestamp();
+      update public.pinboard_boards set card_count=jsonb_array_length(b.cards),column_count=jsonb_array_length(b.columns),
+        active_card_count=active_count,next_card_ordinal=jsonb_array_length(b.cards)+1,
+        content_bytes=octet_length(b.columns::text)+octet_length(b.cards::text)+octet_length(coalesce(b.card_fields,'null'::jsonb)::text)
+        where id=b.id;
+    end loop;
+    for constraint_name in select conname from pg_constraint where conrelid='public.pinboard_boards'::regclass
+      and contype='c' and pg_get_constraintdef(oid) like '%pinboard_valid_state%'
+    loop execute format('alter table public.pinboard_boards drop constraint %I',constraint_name); end loop;
+    alter table public.pinboard_boards drop column cards, drop column columns;
+  end if;
+end;
+$$;
+
 alter table public.pinboard_boards enable row level security;
 alter table public.pinboard_board_access enable row level security;
-revoke all on public.pinboard_boards, public.pinboard_board_access from public, anon, authenticated;
--- Members read board rows only through these columns: `created_by` and the deletion
--- receipts stay server-side. The client's explicit column list matches this one.
-grant select (id, invite_code, title, description, columns, cards, revision, created_at, updated_at, card_fields, active_card_count)
+alter table public.pinboard_columns enable row level security;
+alter table public.pinboard_cards enable row level security;
+revoke all on public.pinboard_boards,public.pinboard_board_access,public.pinboard_columns,public.pinboard_cards from public,anon,authenticated;
+grant select(id,invite_code,title,description,revision,created_at,updated_at,card_fields,active_card_count)
   on public.pinboard_boards to authenticated;
-grant select on public.pinboard_board_access to authenticated;
-
+grant select on public.pinboard_board_access,public.pinboard_columns,public.pinboard_cards to authenticated;
 drop policy if exists pinboard_read_own_access on public.pinboard_board_access;
-create policy pinboard_read_own_access on public.pinboard_board_access
-  for select to authenticated using (user_id = (select auth.uid()));
+create policy pinboard_read_own_access on public.pinboard_board_access for select to authenticated using(user_id=(select auth.uid()));
 drop policy if exists pinboard_read_joined_boards on public.pinboard_boards;
-create policy pinboard_read_joined_boards on public.pinboard_boards
-  for select to authenticated using (exists (
-    select 1 from public.pinboard_board_access access
-    where access.board_id = pinboard_boards.id and access.user_id = (select auth.uid())
-  ));
+create policy pinboard_read_joined_boards on public.pinboard_boards for select to authenticated using(exists(
+  select 1 from public.pinboard_board_access a where a.board_id=pinboard_boards.id and a.user_id=(select auth.uid())));
+drop policy if exists pinboard_read_joined_columns on public.pinboard_columns;
+create policy pinboard_read_joined_columns on public.pinboard_columns for select to authenticated using(exists(
+  select 1 from public.pinboard_board_access a where a.board_id=pinboard_columns.board_id and a.user_id=(select auth.uid())));
+drop policy if exists pinboard_read_joined_cards on public.pinboard_cards;
+create policy pinboard_read_joined_cards on public.pinboard_cards for select to authenticated using(exists(
+  select 1 from public.pinboard_board_access a where a.board_id=pinboard_cards.board_id and a.user_id=(select auth.uid())));
 
--- Security-invoker preserves the same membership RLS as the base table.
-create or replace view public.pinboard_board_summaries with (security_invoker = true) as
-  select id, invite_code, title, left(description, 240) as description, columns,
-    active_card_count, revision, created_at, updated_at from public.pinboard_boards;
-revoke all on public.pinboard_board_summaries from public, anon, authenticated;
+create or replace view public.pinboard_board_documents with(security_invoker=true) as
+  select b.id,b.invite_code,b.title,b.description,
+    (select coalesce(jsonb_agg(c.data order by c.ordinal),'[]'::jsonb) from public.pinboard_columns c where c.board_id=b.id) as columns,
+    (select coalesce(jsonb_agg(c.data order by c.ordinal),'[]'::jsonb) from public.pinboard_cards c where c.board_id=b.id) as cards,
+    b.revision,b.created_at,b.updated_at,b.card_fields from public.pinboard_boards b;
+revoke all on public.pinboard_board_documents from public,anon,authenticated;
+grant select on public.pinboard_board_documents to authenticated;
+create or replace view public.pinboard_board_summaries with(security_invoker=true) as
+  select b.id,b.invite_code,b.title,left(b.description,240) as description,
+    (select coalesce(jsonb_agg(c.data order by c.ordinal),'[]'::jsonb) from public.pinboard_columns c where c.board_id=b.id) as columns,
+    b.active_card_count,b.revision,b.created_at,b.updated_at from public.pinboard_boards b;
+revoke all on public.pinboard_board_summaries from public,anon,authenticated;
 grant select on public.pinboard_board_summaries to authenticated;
 
--- One request/snapshot for the full identity list plus only changed summaries.
--- This invoker function retains the view's membership RLS and never reads cards.
+create or replace function private.pinboard_board_json(p_board public.pinboard_boards)
+returns jsonb language sql stable security invoker set search_path='' as $$
+  select jsonb_build_object('id',p_board.id,'invite_code',p_board.invite_code,'title',p_board.title,'description',p_board.description,
+    'columns',(select coalesce(jsonb_agg(data order by ordinal),'[]'::jsonb) from public.pinboard_columns where board_id=p_board.id),
+    'cards',(select coalesce(jsonb_agg(data order by ordinal),'[]'::jsonb) from public.pinboard_cards where board_id=p_board.id),
+    'revision',p_board.revision,'created_at',p_board.created_at,'updated_at',p_board.updated_at)
+    || case when p_board.card_fields is null then '{}'::jsonb else jsonb_build_object('card_fields',p_board.card_fields) end;
+$$;
+
+create or replace function private.pinboard_create_board(p_id uuid,p_title text,p_description text)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare caller uuid:=auth.uid(); invite text; b public.pinboard_boards%rowtype;
+  initial_columns jsonb:='[{"id":"todo","title":"To do","color":"slate"},{"id":"doing","title":"In progress","color":"amber"},{"id":"done","title":"Done","color":"emerald"}]'::jsonb;
+begin
+  if caller is null then raise exception 'PINBOARD_AUTH_REQUIRED' using errcode='42501'; end if;
+  if p_id is null or not coalesce(private.pinboard_valid_text(to_jsonb(p_title),160),false)
+    or not coalesce(private.pinboard_valid_text(to_jsonb(p_description),10000,false),false)
+    then raise exception 'PINBOARD_INVALID_BOARD' using errcode='22023'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(caller::text,9184));
+  select * into b from public.pinboard_boards where id=p_id;
+  if found then
+    if b.created_by=caller and exists(select 1 from public.pinboard_board_access where board_id=b.id and user_id=caller)
+      then return private.pinboard_board_json(b); end if;
+    raise exception 'PINBOARD_INVALID_BOARD' using errcode='22023';
+  end if;
+  if (select count(*) from public.pinboard_boards where created_by=caller)>=100
+    or (select count(*) from public.pinboard_board_access where user_id=caller)>=1000
+    then raise exception 'PINBOARD_BOARD_LIMIT' using errcode='P0001'; end if;
+  loop
+    invite:=replace(gen_random_uuid()::text,'-','');
+    begin
+      insert into public.pinboard_boards(id,invite_code,title,description,created_by,column_count,content_bytes)
+        values(p_id,invite,p_title,p_description,caller,3,octet_length(initial_columns::text)+6) returning * into b;
+      exit;
+    exception when unique_violation then
+      if exists(select 1 from public.pinboard_boards where id=p_id) then raise exception 'PINBOARD_INVALID_BOARD' using errcode='22023'; end if;
+    end;
+  end loop;
+  insert into public.pinboard_columns(board_id,data,ordinal) select b.id,value,ordinality from jsonb_array_elements(initial_columns) with ordinality;
+  insert into public.pinboard_board_access(board_id,user_id) values(b.id,caller);
+  return private.pinboard_board_json(b);
+end;
+$$;
+
+create or replace function private.pinboard_mutate_board(p_board_id uuid,p_operation jsonb)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare
+  caller uuid:=auth.uid(); b public.pinboard_boards%rowtype;
+  kind text:=p_operation->>'type'; patch jsonb:=p_operation->'patch'; entity text:=p_operation->>'id';
+  previous jsonb; replacement jsonb; fields jsonb; new_title text; new_description text;
+  card_total integer; column_total integer; active_total integer; bytes bigint; next_ordinal bigint;
+  deleted_cards text[]; deleted_columns text[]; changed boolean:=false;
+  supplied jsonb; ordered text[]:='{}'::text[]; column_row record; card_row record; rank integer:=0; append_from numeric; moved integer:=0;
+begin
+  if caller is null then raise exception 'PINBOARD_AUTH_REQUIRED' using errcode='42501'; end if;
+  if not exists(select 1 from public.pinboard_board_access where board_id=p_board_id and user_id=caller)
+    then raise exception 'PINBOARD_ACCESS_DENIED' using errcode='42501'; end if;
+  select * into b from public.pinboard_boards where id=p_board_id for update;
+  if not found then raise exception 'PINBOARD_ACCESS_DENIED' using errcode='42501'; end if;
+  if jsonb_typeof(p_operation) is distinct from 'object' or jsonb_typeof(p_operation->'type') is distinct from 'string'
+    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+  fields:=b.card_fields; new_title:=b.title; new_description:=b.description;
+  card_total:=b.card_count; column_total:=b.column_count; active_total:=b.active_card_count;
+  bytes:=b.content_bytes; next_ordinal:=b.next_card_ordinal;
+  deleted_cards:=b.deleted_card_ids; deleted_columns:=b.deleted_column_ids;
+  if kind='update_board' then
+    if not private.pinboard_has_keys(p_operation,array['type','patch']) or not private.pinboard_allowed_keys(patch,array['title','description','card_fields'])
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    if patch?'title' then
+      if not private.pinboard_valid_text(patch->'title',160) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+      new_title:=patch->>'title';
+    end if;
+    if patch?'description' then
+      if not private.pinboard_valid_text(patch->'description',10000,false) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+      new_description:=patch->>'description';
+    end if;
+    if patch?'card_fields' then
+      if not private.pinboard_valid_card_fields(patch->'card_fields') then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+      select jsonb_set(patch->'card_fields','{custom}',(patch->'card_fields'->'custom')||coalesce(jsonb_agg(current_fields.value order by current_fields.ordinality)
+        filter(where not exists(select 1 from jsonb_array_elements(patch->'card_fields'->'custom') s where s->>'id'=current_fields.value->>'id')),'[]'::jsonb))
+        into fields from jsonb_array_elements(coalesce(fields->'custom','[]'::jsonb)) with ordinality as current_fields;
+      if b.card_fields?'assignees' then fields:=jsonb_set(fields,'{assignees}',b.card_fields->'assignees'); else fields:=fields-'assignees'; end if;
+      if not private.pinboard_valid_card_fields(fields) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    end if;
+  elsif kind in ('add_assignee','delete_assignee') then
+    if not private.pinboard_has_keys(p_operation,array['type','name']) or not private.pinboard_valid_text(p_operation->'name',80)
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    fields:=coalesce(fields,'{"hidden":[],"custom":[]}'::jsonb);
+    if not(fields?'assignees') then
+      fields:=jsonb_set(fields,'{assignees}',(select coalesce(jsonb_agg(to_jsonb(name) order by name),'[]'::jsonb)
+        from(select distinct data->>'assignee' name from public.pinboard_cards where board_id=b.id and data->>'assignee'<>'') names));
+    end if;
+    if kind='add_assignee' then
+      if not(fields->'assignees' @> jsonb_build_array(p_operation->'name')) then fields:=jsonb_set(fields,'{assignees}',fields->'assignees'||jsonb_build_array(p_operation->'name')); end if;
+    else
+      fields:=jsonb_set(fields,'{assignees}',(select coalesce(jsonb_agg(value order by ordinality),'[]'::jsonb)
+        from jsonb_array_elements(fields->'assignees') with ordinality where value<>p_operation->'name'));
+      for card_row in select id,data from public.pinboard_cards where board_id=b.id and data->>'assignee'=p_operation->>'name' loop
+        replacement:=jsonb_set(card_row.data,'{assignee}','""'::jsonb);
+        bytes:=bytes+octet_length(replacement::text)-octet_length(card_row.data::text);
+        update public.pinboard_cards set data=replacement where board_id=b.id and id=card_row.id;
+        changed:=true;
+      end loop;
+    end if;
+    if not private.pinboard_valid_card_fields(fields) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+  elsif kind='add_column' then
+    replacement:=p_operation->'column';
+    if not private.pinboard_has_keys(p_operation,array['type','column']) or not private.pinboard_valid_state(jsonb_build_array(replacement),'[]'::jsonb)
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    if replacement->>'id'=any(deleted_columns) or exists(select 1 from public.pinboard_columns where board_id=b.id and id=replacement->>'id')
+      then return private.pinboard_board_json(b); end if;
+    insert into public.pinboard_columns(board_id,data,ordinal) values(b.id,replacement,(select coalesce(max(ordinal),0)+1 from public.pinboard_columns where board_id=b.id));
+    bytes:=bytes+octet_length(replacement::text)+2; column_total:=column_total+1; changed:=true;
+  elsif kind='reorder_columns' then
+    if not private.pinboard_has_keys(p_operation,array['type','columnIds']) or jsonb_typeof(p_operation->'columnIds') is distinct from 'array'
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    if jsonb_array_length(p_operation->'columnIds') not between 1 and 20 then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    for supplied in select value from jsonb_array_elements(p_operation->'columnIds') loop
+      if not coalesce(private.pinboard_valid_column_id(supplied),false) or (supplied#>>'{}')=any(ordered)
+        then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+      ordered:=array_append(ordered,supplied#>>'{}');
+    end loop;
+    -- Compare relative order, so an unchanged order after deletions remains a no-op.
+    if (select array_agg(id order by coalesce(array_position(ordered,id),21),ordinal) from public.pinboard_columns where board_id=b.id)
+      is distinct from (select array_agg(id order by ordinal) from public.pinboard_columns where board_id=b.id) then
+      for column_row in select id from public.pinboard_columns where board_id=b.id order by coalesce(array_position(ordered,id),21),ordinal loop
+        rank:=rank+1; update public.pinboard_columns set ordinal=rank where board_id=b.id and id=column_row.id;
+      end loop;
+      changed:=true;
+    end if;
+  elsif kind='update_column' then
+    if not private.pinboard_has_keys(p_operation,array['type','id','patch']) or not coalesce(private.pinboard_valid_column_id(p_operation->'id'),false)
+      or not private.pinboard_allowed_keys(patch,array['title','color']) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    select data into previous from public.pinboard_columns where board_id=b.id and id=entity;
+    if not found then raise exception 'PINBOARD_COLUMN_NOT_FOUND' using errcode='P0001'; end if;
+    replacement:=previous||patch;
+    if not private.pinboard_valid_state(jsonb_build_array(replacement),'[]'::jsonb) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    if replacement is distinct from previous then
+      update public.pinboard_columns set data=replacement where board_id=b.id and id=entity;
+      bytes:=bytes+octet_length(replacement::text)-octet_length(previous::text); changed:=true;
+    end if;
+  elsif kind='delete_column' then
+    if not private.pinboard_has_keys(p_operation,array['type','id','targetColumnId']) or not coalesce(private.pinboard_valid_column_id(p_operation->'id'),false)
+      or not coalesce(private.pinboard_valid_column_id(p_operation->'targetColumnId'),false) or entity=p_operation->>'targetColumnId' or column_total<=1
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    select data into previous from public.pinboard_columns where board_id=b.id and id=entity;
+    if not found or not exists(select 1 from public.pinboard_columns where board_id=b.id and id=p_operation->>'targetColumnId')
+      then raise exception 'PINBOARD_COLUMN_NOT_FOUND' using errcode='P0001'; end if;
+    select coalesce(max(position),0) into append_from from public.pinboard_cards where board_id=b.id and column_id=p_operation->>'targetColumnId';
+    for card_row in select id,data from public.pinboard_cards where board_id=b.id and column_id=entity order by position,id loop
+      moved:=moved+1; replacement:=jsonb_set(jsonb_set(card_row.data,'{columnId}',p_operation->'targetColumnId'),'{position}',to_jsonb(least(append_from+1024*moved,1000000000000::numeric)));
+      update public.pinboard_cards set data=replacement where board_id=b.id and id=card_row.id;
+      bytes:=bytes+octet_length(replacement::text)-octet_length(card_row.data::text);
+    end loop;
+    delete from public.pinboard_columns where board_id=b.id and id=entity;
+    bytes:=bytes-octet_length(previous::text)-2; column_total:=column_total-1;
+    deleted_columns:=(array_append(deleted_columns,entity))[greatest(1,cardinality(deleted_columns)+1-199):]; changed:=true;
+  elsif kind='create_card' then
+    replacement:=p_operation->'card';
+    if not private.pinboard_has_keys(p_operation,array['type','card']) or not coalesce(private.pinboard_valid_uuid(replacement->'id'),false)
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    if replacement->>'id'=any(deleted_cards) or exists(select 1 from public.pinboard_cards where board_id=b.id and id=(replacement->>'id')::uuid)
+      then return private.pinboard_board_json(b); end if;
+  elsif kind in ('update_card','move_card') then
+    if kind='update_card' then
+      if not private.pinboard_has_keys(p_operation,array['type','id','patch']) or not private.pinboard_allowed_keys(patch,array['title','description','columnId','position','priority','assignee','dueDate','labels','customFields','archived'])
+        then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    else
+      if not private.pinboard_has_keys(p_operation,array['type','id','columnId','position']) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+      patch:=jsonb_build_object('columnId',p_operation->'columnId','position',p_operation->'position');
+    end if;
+    if not coalesce(private.pinboard_valid_uuid(p_operation->'id'),false) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    select data into previous from public.pinboard_cards where board_id=b.id and id=entity::uuid;
+    if not found then raise exception 'PINBOARD_CARD_NOT_FOUND' using errcode='P0001'; end if;
+    if coalesce(private.pinboard_valid_column_id(patch->'columnId'),false) and not exists(select 1 from public.pinboard_columns where board_id=b.id and id=patch->>'columnId')
+      then raise exception 'PINBOARD_COLUMN_NOT_FOUND' using errcode='P0001'; end if;
+    if patch?'customFields' then
+      if not private.pinboard_valid_custom_values(patch->'customFields') then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+      patch:=jsonb_set(patch,'{customFields}',coalesce(previous->'customFields','{}'::jsonb)||(patch->'customFields'));
+    end if;
+    replacement:=previous||patch;
+  elsif kind='delete_card' then
+    if not private.pinboard_has_keys(p_operation,array['type','id']) or not coalesce(private.pinboard_valid_uuid(p_operation->'id'),false)
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    delete from public.pinboard_cards where board_id=b.id and id=entity::uuid returning data into previous;
+    if found then
+      bytes:=bytes-octet_length(previous::text)-case when card_total>1 then 2 else 0 end;
+      card_total:=card_total-1; active_total:=active_total-case when coalesce((previous->>'archived')::boolean,false) then 0 else 1 end;
+      deleted_cards:=(array_append(deleted_cards,entity))[greatest(1,cardinality(deleted_cards)+1-999):]; changed:=true;
+    end if;
+  else raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+
+  if kind in ('create_card','update_card','move_card') then
+    if not private.pinboard_valid_card(replacement) or not exists(select 1 from public.pinboard_columns where board_id=b.id and id=replacement->>'columnId')
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    if fields?'assignees' and replacement->>'assignee'<>'' and (kind='create_card' or patch?'assignee')
+      and not(fields->'assignees' @> jsonb_build_array(replacement->'assignee'))
+      then raise exception 'PINBOARD_ASSIGNEE_NOT_FOUND' using errcode='P0001'; end if;
+    if exists(select 1 from jsonb_object_keys(coalesce(replacement->'customFields','{}'::jsonb)) f(id)
+      where not exists(select 1 from jsonb_array_elements(coalesce(fields->'custom','[]'::jsonb)) d where d->>'id'=f.id))
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+    if kind='create_card' then
+      insert into public.pinboard_cards(board_id,data,ordinal) values(b.id,replacement,next_ordinal);
+      next_ordinal:=next_ordinal+1;
+      bytes:=bytes+octet_length(replacement::text)+case when card_total>0 then 2 else 0 end;
+      card_total:=card_total+1; active_total:=active_total+case when coalesce((replacement->>'archived')::boolean,false) then 0 else 1 end; changed:=true;
+    elsif replacement is distinct from previous then
+      update public.pinboard_cards set data=replacement where board_id=b.id and id=entity::uuid;
+      bytes:=bytes+octet_length(replacement::text)-octet_length(previous::text);
+      active_total:=active_total+case when coalesce((previous->>'archived')::boolean,false) then 0 else -1 end
+        +case when coalesce((replacement->>'archived')::boolean,false) then 0 else 1 end; changed:=true;
+    end if;
+  end if;
+  bytes:=bytes+octet_length(coalesce(fields,'null'::jsonb)::text)-octet_length(coalesce(b.card_fields,'null'::jsonb)::text);
+  if card_total>2000 or column_total not between 1 and 20 then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
+  if bytes>2000000 and bytes>b.content_bytes then raise exception 'PINBOARD_BOARD_TOO_LARGE' using errcode='P0001'; end if;
+  if changed or new_title is distinct from b.title or new_description is distinct from b.description or fields is distinct from b.card_fields then
+    if b.revision=9007199254740991 then raise exception 'PINBOARD_BOARD_LIMIT' using errcode='P0001'; end if;
+    update public.pinboard_boards set title=new_title,description=new_description,card_fields=fields,
+      deleted_card_ids=deleted_cards,deleted_column_ids=deleted_columns,card_count=card_total,column_count=column_total,
+      active_card_count=active_total,content_bytes=bytes,next_card_ordinal=next_ordinal,
+      revision=revision+1,updated_at=clock_timestamp() where id=b.id returning * into b;
+  end if;
+  return private.pinboard_board_json(b);
+end;
+$$;
+
 create or replace function public.pinboard_sync_summaries(p_known jsonb default '{}'::jsonb)
 returns jsonb language plpgsql stable security invoker set search_path = '' as $$
 declare heads jsonb; changed jsonb;
@@ -272,67 +601,6 @@ end;
 $$;
 revoke all on function public.pinboard_sync_summaries(jsonb) from public, anon, authenticated;
 grant execute on function public.pinboard_sync_summaries(jsonb) to authenticated;
-
--- An explicit list: adding a table column never changes what clients receive.
--- Stable, not immutable: timestamps are rendered in the session time zone.
-create or replace function private.pinboard_board_json(p_board public.pinboard_boards)
-returns jsonb language sql stable security invoker set search_path = '' as $$
-  select jsonb_build_object(
-    'id', p_board.id,
-    'invite_code', p_board.invite_code,
-    'title', p_board.title,
-    'description', p_board.description,
-    'columns', p_board.columns,
-    'cards', p_board.cards,
-    'revision', p_board.revision,
-    'created_at', p_board.created_at,
-    'updated_at', p_board.updated_at
-  ) || case when p_board.card_fields is null then '{}'::jsonb
-    else jsonb_build_object('card_fields', p_board.card_fields) end;
-$$;
-
-create or replace function private.pinboard_create_board(p_id uuid, p_title text, p_description text)
-returns jsonb language plpgsql security definer set search_path = '' as $$
-declare
-  caller uuid := auth.uid();
-  invite text;
-  board_row public.pinboard_boards%rowtype;
-begin
-  if caller is null then raise exception 'PINBOARD_AUTH_REQUIRED' using errcode = '42501'; end if;
-  if p_id is null or not coalesce(private.pinboard_valid_text(to_jsonb(p_title), 160), false)
-    or not coalesce(private.pinboard_valid_text(to_jsonb(p_description), 10000, false), false)
-  then raise exception 'PINBOARD_INVALID_BOARD' using errcode = '22023'; end if;
-  -- Serialize a session's create/join limits, including concurrent requests.
-  perform pg_advisory_xact_lock(hashtextextended(caller::text, 9184));
-  select * into board_row from public.pinboard_boards where id = p_id;
-  if found then
-    if board_row.created_by = caller and exists (
-      select 1 from public.pinboard_board_access where board_id = board_row.id and user_id = caller
-    ) then return private.pinboard_board_json(board_row); end if;
-    raise exception 'PINBOARD_INVALID_BOARD' using errcode = '22023';
-  end if;
-  if (select count(*) from public.pinboard_boards where created_by = caller) >= 100
-    or (select count(*) from public.pinboard_board_access where user_id = caller) >= 1000
-  then raise exception 'PINBOARD_BOARD_LIMIT' using errcode = 'P0001'; end if;
-  loop
-    invite := replace(gen_random_uuid()::text, '-', '');
-    begin
-      insert into public.pinboard_boards (id, invite_code, title, description, columns, created_by)
-      values (p_id, invite, p_title, p_description,
-        '[{"id":"todo","title":"To do","color":"slate"},{"id":"doing","title":"In progress","color":"amber"},{"id":"done","title":"Done","color":"emerald"}]'::jsonb,
-        caller) returning * into board_row;
-      exit;
-    exception when unique_violation then
-      -- Retry a code collision; another creator's existing ID must remain inaccessible.
-      if exists (select 1 from public.pinboard_boards where id = p_id) then
-        raise exception 'PINBOARD_INVALID_BOARD' using errcode = '22023';
-      end if;
-    end;
-  end loop;
-  insert into public.pinboard_board_access (board_id, user_id) values (board_row.id, caller);
-  return private.pinboard_board_json(board_row);
-end;
-$$;
 
 create or replace function private.pinboard_join_board(p_code text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
@@ -356,257 +624,6 @@ begin
 end;
 $$;
 
-create or replace function private.pinboard_mutate_board(p_board_id uuid, p_operation jsonb)
-returns jsonb language plpgsql security definer set search_path = '' as $$
-declare
-  caller uuid := auth.uid();
-  board_row public.pinboard_boards%rowtype;
-  new_columns jsonb;
-  new_cards jsonb;
-  new_deleted_card_ids text[];
-  new_deleted_column_ids text[];
-  new_title text;
-  new_description text;
-  new_card_fields jsonb;
-  operation_type text;
-  target_index integer;
-  patch jsonb;
-  entity_id text;
-  order_id jsonb;
-  ordered_ids text[] := '{}'::text[];
-  append_from numeric;
-begin
-  if caller is null then raise exception 'PINBOARD_AUTH_REQUIRED' using errcode = '42501'; end if;
-  if not exists (select 1 from public.pinboard_board_access where board_id = p_board_id and user_id = caller)
-    then raise exception 'PINBOARD_ACCESS_DENIED' using errcode = '42501'; end if;
-  -- Apply each operation to the CURRENT row after locking it. A later accepted
-  -- patch wins only for its fields; independent changes and deletions survive.
-  select * into board_row from public.pinboard_boards where id = p_board_id for update;
-  if not found then raise exception 'PINBOARD_ACCESS_DENIED' using errcode = '42501'; end if;
-  if jsonb_typeof(p_operation) is distinct from 'object'
-    or jsonb_typeof(p_operation->'type') is distinct from 'string'
-  then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-  operation_type := p_operation->>'type';
-  new_columns := board_row.columns;
-  new_cards := board_row.cards;
-  new_deleted_card_ids := board_row.deleted_card_ids;
-  new_deleted_column_ids := board_row.deleted_column_ids;
-  new_title := board_row.title;
-  new_description := board_row.description;
-  new_card_fields := board_row.card_fields;
-  patch := p_operation->'patch';
-  entity_id := p_operation->>'id';
-
-  if operation_type = 'update_board' then
-    if not private.pinboard_has_keys(p_operation, array['type','patch'])
-      or not private.pinboard_allowed_keys(patch, array['title','description','card_fields'])
-    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    if patch ? 'title' then
-      if not private.pinboard_valid_text(patch->'title', 160) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-      new_title := patch->>'title';
-    end if;
-    if patch ? 'description' then
-      if not private.pinboard_valid_text(patch->'description', 10000, false) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-      new_description := patch->>'description';
-    end if;
-    if patch ? 'card_fields' then
-      if not private.pinboard_valid_card_fields(patch->'card_fields')
-        then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-      -- A stale settings editor cannot remove fields another member added.
-      select jsonb_set(patch->'card_fields', '{custom}', (patch->'card_fields'->'custom') ||
-        coalesce(jsonb_agg(current_fields.value order by current_fields.ordinality) filter (where not exists (
-          select 1 from jsonb_array_elements(patch->'card_fields'->'custom') supplied
-          where supplied->>'id' = current_fields.value->>'id'
-        )), '[]'::jsonb)) into new_card_fields
-        from jsonb_array_elements(coalesce(new_card_fields->'custom', '[]'::jsonb)) with ordinality as current_fields;
-      -- Only dedicated name operations change this list, so stale settings cannot revive a deletion.
-      if board_row.card_fields ? 'assignees' then
-        new_card_fields := jsonb_set(new_card_fields, '{assignees}', board_row.card_fields->'assignees');
-      else
-        new_card_fields := new_card_fields - 'assignees';
-      end if;
-      if not private.pinboard_valid_card_fields(new_card_fields)
-        then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    end if;
-  elsif operation_type in ('add_assignee', 'delete_assignee') then
-    if not private.pinboard_has_keys(p_operation, array['type','name'])
-      or not private.pinboard_valid_text(p_operation->'name', 80)
-    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    new_card_fields := coalesce(new_card_fields, '{"hidden":[],"custom":[]}'::jsonb);
-    if not (new_card_fields ? 'assignees') then
-      new_card_fields := jsonb_set(new_card_fields, '{assignees}', (
-        select coalesce(jsonb_agg(to_jsonb(name) order by name), '[]'::jsonb) from (
-          select distinct value->>'assignee' as name from jsonb_array_elements(new_cards)
-          where value->>'assignee' <> ''
-        ) names
-      ));
-    end if;
-    if operation_type = 'add_assignee' then
-      if not (new_card_fields->'assignees' @> jsonb_build_array(p_operation->'name')) then
-        new_card_fields := jsonb_set(new_card_fields, '{assignees}',
-          (new_card_fields->'assignees') || jsonb_build_array(p_operation->'name'));
-      end if;
-    else
-      new_card_fields := jsonb_set(new_card_fields, '{assignees}', (
-        select coalesce(jsonb_agg(value order by ordinality), '[]'::jsonb)
-        from jsonb_array_elements(new_card_fields->'assignees') with ordinality
-        where value <> p_operation->'name'
-      ));
-      select coalesce(jsonb_agg(case when value->>'assignee' = p_operation->>'name'
-        then jsonb_set(value, '{assignee}', '""'::jsonb) else value end order by ordinality), '[]'::jsonb)
-        into new_cards from jsonb_array_elements(new_cards) with ordinality;
-    end if;
-    if not private.pinboard_valid_card_fields(new_card_fields)
-      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-  elsif operation_type = 'add_column' then
-    if not private.pinboard_has_keys(p_operation, array['type','column'])
-      or not private.pinboard_valid_state(jsonb_build_array(p_operation->'column'), '[]'::jsonb)
-    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    -- Stable create IDs stay consumed after deletion, preserving later edits.
-    if (p_operation->'column'->>'id') = any(new_deleted_column_ids)
-      or exists (select 1 from jsonb_array_elements(new_columns) where value->>'id' = p_operation->'column'->>'id')
-      then return private.pinboard_board_json(board_row); end if;
-    new_columns := new_columns || jsonb_build_array(p_operation->'column');
-  elsif operation_type = 'reorder_columns' then
-    if not private.pinboard_has_keys(p_operation, array['type','columnIds'])
-      or jsonb_typeof(p_operation->'columnIds') is distinct from 'array'
-    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    if jsonb_array_length(p_operation->'columnIds') not between 1 and 20
-      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    for order_id in select value from jsonb_array_elements(p_operation->'columnIds') loop
-      if not coalesce(private.pinboard_valid_column_id(order_id), false)
-        or (order_id #>> '{}') = any(ordered_ids)
-      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-      ordered_ids := array_append(ordered_ids, order_id #>> '{}');
-    end loop;
-    -- Order CURRENT objects by stable IDs, retaining their latest metadata.
-    -- Deleted IDs are harmless; columns added since the editor's snapshot
-    -- stay present at the end in their current relative order.
-    select jsonb_agg(value order by coalesce(array_position(ordered_ids, value->>'id'), 21), ordinality)
-      into new_columns from jsonb_array_elements(new_columns) with ordinality;
-  elsif operation_type = 'update_column' then
-    if not private.pinboard_has_keys(p_operation, array['type','id','patch'])
-      or not coalesce(private.pinboard_valid_column_id(p_operation->'id'), false)
-      or not private.pinboard_allowed_keys(patch, array['title','color'])
-    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    select ordinality::integer - 1 into target_index
-      from jsonb_array_elements(new_columns) with ordinality where value->>'id' = entity_id;
-    if not found then raise exception 'PINBOARD_COLUMN_NOT_FOUND' using errcode = 'P0001'; end if;
-    new_columns := jsonb_set(new_columns, array[target_index::text], (new_columns->target_index) || patch);
-  elsif operation_type = 'delete_column' then
-    if not private.pinboard_has_keys(p_operation, array['type','id','targetColumnId'])
-      or not coalesce(private.pinboard_valid_column_id(p_operation->'id'), false)
-      or not coalesce(private.pinboard_valid_column_id(p_operation->'targetColumnId'), false)
-      or entity_id = p_operation->>'targetColumnId' or jsonb_array_length(new_columns) <= 1
-    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    if not exists (select 1 from jsonb_array_elements(new_columns) where value->>'id' = entity_id)
-      or not exists (select 1 from jsonb_array_elements(new_columns) where value->>'id' = p_operation->>'targetColumnId')
-    then raise exception 'PINBOARD_COLUMN_NOT_FOUND' using errcode = 'P0001'; end if;
-    -- Receipts are a bounded FIFO: the newest 200 stay, so a retry of a very old creation can recreate it.
-    new_deleted_column_ids := (array_append(new_deleted_column_ids, entity_id))[
-      greatest(1, cardinality(new_deleted_column_ids) + 1 - 199):];
-    select coalesce(jsonb_agg(value order by ordinality), '[]'::jsonb) into new_columns
-      from jsonb_array_elements(new_columns) with ordinality where value->>'id' <> entity_id;
-    -- The removed column's cards follow the destination's own cards, keeping their
-    -- relative order, instead of interleaving with them by coincidence.
-    select coalesce(max((value->>'position')::numeric), 0) into append_from
-      from jsonb_array_elements(new_cards) where value->>'columnId' = p_operation->>'targetColumnId';
-    select coalesce(jsonb_agg(case when moved.value->>'columnId' = entity_id
-      then jsonb_set(jsonb_set(moved.value, '{columnId}', p_operation->'targetColumnId'),
-        '{position}', to_jsonb(least(append_from + 1024 * moved.place, 1000000000000::numeric)))
-      else moved.value end order by moved.ordinality), '[]'::jsonb)
-      into new_cards
-      from (
-        select value, ordinality,
-          row_number() over (partition by value->>'columnId' order by (value->>'position')::numeric, value->>'id') as place
-        from jsonb_array_elements(new_cards) with ordinality
-      ) as moved;
-  elsif operation_type = 'create_card' then
-    if not private.pinboard_has_keys(p_operation, array['type','card'])
-      or not coalesce(private.pinboard_valid_uuid(p_operation->'card'->'id'), false)
-    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    -- A retry remains a no-op after another member deletes the created card.
-    if (p_operation->'card'->>'id') = any(new_deleted_card_ids)
-      or exists (select 1 from jsonb_array_elements(new_cards) where value->>'id' = p_operation->'card'->>'id')
-      then return private.pinboard_board_json(board_row); end if;
-    new_cards := new_cards || jsonb_build_array(p_operation->'card');
-  elsif operation_type in ('update_card','move_card') then
-    if operation_type = 'update_card' then
-      if not private.pinboard_has_keys(p_operation, array['type','id','patch'])
-        or not private.pinboard_allowed_keys(patch, array['title','description','columnId','position','priority','assignee','dueDate','labels','customFields','archived'])
-      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    else
-      if not private.pinboard_has_keys(p_operation, array['type','id','columnId','position'])
-        then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-      patch := jsonb_build_object('columnId', p_operation->'columnId', 'position', p_operation->'position');
-    end if;
-    if not coalesce(private.pinboard_valid_uuid(p_operation->'id'), false)
-      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    select ordinality::integer - 1 into target_index
-      from jsonb_array_elements(new_cards) with ordinality where value->>'id' = entity_id;
-    -- A stale editor must never recreate a card another person deleted.
-    if not found then raise exception 'PINBOARD_CARD_NOT_FOUND' using errcode = 'P0001'; end if;
-    -- A well-formed destination that another member just removed has its own error.
-    if coalesce(private.pinboard_valid_column_id(patch->'columnId'), false)
-      and not exists (select 1 from jsonb_array_elements(new_columns) where value->>'id' = patch->>'columnId')
-    then raise exception 'PINBOARD_COLUMN_NOT_FOUND' using errcode = 'P0001'; end if;
-    if patch ? 'customFields' then
-      if not private.pinboard_valid_custom_values(patch->'customFields')
-        then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-      -- Custom values are independent fields, so concurrent edits to different IDs survive.
-      patch := jsonb_set(patch, '{customFields}',
-        coalesce(new_cards->target_index->'customFields', '{}'::jsonb) || (patch->'customFields'));
-    end if;
-    new_cards := jsonb_set(new_cards, array[target_index::text], (new_cards->target_index) || patch);
-  elsif operation_type = 'delete_card' then
-    if not private.pinboard_has_keys(p_operation, array['type','id'])
-      or not coalesce(private.pinboard_valid_uuid(p_operation->'id'), false)
-    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-    if exists (select 1 from jsonb_array_elements(new_cards) where value->>'id' = entity_id) then
-      -- The newest 1,000 receipts stay; older ones are dropped so every update stays small.
-      new_deleted_card_ids := (array_append(new_deleted_card_ids, entity_id))[
-        greatest(1, cardinality(new_deleted_card_ids) + 1 - 999):];
-    end if;
-    select coalesce(jsonb_agg(value order by ordinality), '[]'::jsonb) into new_cards
-      from jsonb_array_elements(new_cards) with ordinality where value->>'id' <> entity_id;
-  else
-    raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023';
-  end if;
-
-  if not private.pinboard_valid_state(new_columns, new_cards)
-    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-  if new_card_fields ? 'assignees' and (
-    (operation_type = 'create_card' and p_operation->'card'->>'assignee' <> ''
-      and not (new_card_fields->'assignees' @> jsonb_build_array(p_operation->'card'->'assignee')))
-    or (operation_type = 'update_card' and patch ? 'assignee' and patch->>'assignee' <> ''
-      and not (new_card_fields->'assignees' @> jsonb_build_array(patch->'assignee')))
-  ) then raise exception 'PINBOARD_ASSIGNEE_NOT_FOUND' using errcode = 'P0001'; end if;
-  if exists (
-    select 1 from jsonb_array_elements(new_cards) card,
-      lateral jsonb_object_keys(coalesce(card->'customFields', '{}'::jsonb)) as values_by_field(field_id)
-    where not exists (select 1 from jsonb_array_elements(coalesce(new_card_fields->'custom', '[]'::jsonb)) field
-      where field->>'id' = values_by_field.field_id)
-  ) then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-  -- A board may not grow past about 2 MB of columns and cards; shrinking edits always pass,
-  -- so an older, larger board can still be cleaned up.
-  if octet_length(new_columns::text) + octet_length(new_cards::text) + octet_length(coalesce(new_card_fields, 'null'::jsonb)::text) > 2000000
-    and octet_length(new_columns::text) + octet_length(new_cards::text) + octet_length(coalesce(new_card_fields, 'null'::jsonb)::text)
-      > octet_length(board_row.columns::text) + octet_length(board_row.cards::text) + octet_length(coalesce(board_row.card_fields, 'null'::jsonb)::text)
-  then raise exception 'PINBOARD_BOARD_TOO_LARGE' using errcode = 'P0001'; end if;
-  if new_columns is distinct from board_row.columns or new_cards is distinct from board_row.cards
-    or new_title is distinct from board_row.title or new_description is distinct from board_row.description
-    or new_card_fields is distinct from board_row.card_fields
-  then
-    if board_row.revision = 9007199254740991 then raise exception 'PINBOARD_BOARD_LIMIT' using errcode = 'P0001'; end if;
-    update public.pinboard_boards set columns = new_columns, cards = new_cards,
-      deleted_card_ids = new_deleted_card_ids, deleted_column_ids = new_deleted_column_ids,
-      title = new_title, description = new_description, card_fields = new_card_fields, revision = revision + 1, updated_at = clock_timestamp()
-      where id = board_row.id returning * into board_row;
-  end if;
-  return private.pinboard_board_json(board_row);
-end;
-$$;
-
 -- Only invoker entry points are exposed through the Data API. Privileged work
 -- stays in private functions that verify the caller and their board membership.
 create or replace function public.pinboard_create_board(p_id uuid, p_title text, p_description text)
@@ -622,10 +639,97 @@ returns jsonb language sql security invoker set search_path = '' as $$
   select private.pinboard_mutate_board(p_board_id, p_operation);
 $$;
 
+-- Small durable receipts make a lost-response retry return CURRENT state without
+-- replaying its old patch over another member's accepted edit. Payload hashes
+-- prevent accidental token reuse without retaining complete board/card content.
+alter table public.pinboard_boards add column if not exists operation_receipt_floor bigint not null default 0
+  check (operation_receipt_floor between 0 and 9007199254740991);
+create table if not exists private.pinboard_operation_receipts (
+  board_id uuid not null references public.pinboard_boards(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  operation_id uuid not null,
+  operation_hash bytea not null,
+  accepted_revision bigint not null,
+  receipt_id bigint generated always as identity,
+  primary key (board_id, user_id, operation_id)
+);
+create index if not exists pinboard_operation_receipts_recent_idx
+  on private.pinboard_operation_receipts (board_id, receipt_id desc);
+revoke all on private.pinboard_operation_receipts from public, anon, authenticated;
+revoke all on sequence private.pinboard_operation_receipts_receipt_id_seq from public, anon, authenticated;
+
+create or replace function private.pinboard_mutate_board_once(p_board_id uuid, p_operation_id uuid, p_operation jsonb, p_base_revision bigint default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  caller uuid := auth.uid();
+  board_row public.pinboard_boards%rowtype;
+  expected_hash bytea;
+  expired_revision bigint;
+  result jsonb;
+begin
+  if caller is null then raise exception 'PINBOARD_AUTH_REQUIRED' using errcode = '42501'; end if;
+  if not exists (select 1 from public.pinboard_board_access where board_id = p_board_id and user_id = caller)
+    then raise exception 'PINBOARD_ACCESS_DENIED' using errcode = '42501'; end if;
+  if p_operation_id is null or p_operation is null
+    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
+  -- Share the legacy mutation's board lock: duplicate uploads, older clients
+  -- and independent members all observe the same committed acceptance order.
+  select * into board_row from public.pinboard_boards where id = p_board_id for update;
+  if not found then raise exception 'PINBOARD_ACCESS_DENIED' using errcode = '42501'; end if;
+  select operation_hash into expected_hash from private.pinboard_operation_receipts
+    where board_id = p_board_id and user_id = caller and operation_id = p_operation_id;
+  if found then
+    if expected_hash is distinct from sha256(convert_to(p_operation::text, 'UTF8'))
+      then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
+    return private.pinboard_board_json(board_row);
+  end if;
+  if p_base_revision is not null and (p_base_revision < 1 or p_base_revision > board_row.revision)
+    then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
+  -- Evicted IDs must NEVER become fresh writes. A stale/legacy queue keeps its
+  -- draft for review rather than replaying a possibly accepted old operation.
+  if board_row.operation_receipt_floor > 0
+    and (p_base_revision is null or p_base_revision <= board_row.operation_receipt_floor)
+    then raise exception 'PINBOARD_OPERATION_TOO_OLD' using errcode = 'P0001'; end if;
+  result := private.pinboard_mutate_board(p_board_id, p_operation);
+  insert into private.pinboard_operation_receipts (board_id, user_id, operation_id, operation_hash, accepted_revision)
+    values (p_board_id, caller, p_operation_id, sha256(convert_to(p_operation::text, 'UTF8')), (result->>'revision')::bigint);
+  -- The most recent 1,000 accepted operation IDs per board remain retryable.
+  select max(accepted_revision) into expired_revision from (
+    select accepted_revision from private.pinboard_operation_receipts
+      where board_id = p_board_id order by receipt_id desc offset 1000
+  ) expired;
+  if expired_revision is not null then
+    update public.pinboard_boards set operation_receipt_floor = greatest(operation_receipt_floor, expired_revision)
+      where id = p_board_id;
+    -- A long run of accepted no-ops can fill the window without changing the
+    -- document revision. Advance once so a freshly loaded board stays editable.
+    if expired_revision >= (result->>'revision')::bigint then
+      if expired_revision = 9007199254740991
+        then raise exception 'PINBOARD_BOARD_LIMIT' using errcode = 'P0001'; end if;
+      update public.pinboard_boards set revision = revision + 1, updated_at = clock_timestamp()
+        where id = p_board_id returning * into board_row;
+      result := private.pinboard_board_json(board_row);
+    end if;
+  end if;
+  delete from private.pinboard_operation_receipts where board_id = p_board_id
+    and receipt_id <= (select receipt_id from private.pinboard_operation_receipts
+      where board_id = p_board_id order by receipt_id desc offset 1000 limit 1);
+  return result;
+end;
+$$;
+create or replace function public.pinboard_mutate_board_once(p_board_id uuid, p_operation_id uuid, p_operation jsonb, p_base_revision bigint default null)
+returns jsonb language sql security invoker set search_path = '' as $$
+  select private.pinboard_mutate_board_once(p_board_id, p_operation_id, p_operation, p_base_revision);
+$$;
+revoke all on function private.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint),
+  public.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint) from public, anon, authenticated;
+grant execute on function private.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint),
+  public.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint) to authenticated;
+
 revoke all on function private.pinboard_has_keys(jsonb,text[]), private.pinboard_allowed_keys(jsonb,text[]),
   private.pinboard_valid_text(jsonb,integer,boolean), private.pinboard_valid_uuid(jsonb),
   private.pinboard_valid_column_id(jsonb), private.pinboard_valid_date(jsonb),
-  private.pinboard_valid_position(jsonb), private.pinboard_valid_state(jsonb,jsonb),
+  private.pinboard_valid_position(jsonb), private.pinboard_valid_state(jsonb,jsonb), private.pinboard_valid_card(jsonb),
   private.pinboard_valid_card_fields(jsonb), private.pinboard_valid_custom_values(jsonb),
   private.pinboard_board_json(public.pinboard_boards), private.pinboard_create_board(uuid,text,text),
   private.pinboard_join_board(text), private.pinboard_mutate_board(uuid,jsonb)

@@ -7,7 +7,10 @@ import {
   joinBoard,
   mutateBoard,
   startNewSession,
+  reviewPendingBoard,
+  resolvePendingBoard,
 } from '../infrastructure/cloud/boards';
+import type { PendingBoardReview } from '../infrastructure/cloud/offlineBoards';
 import { DEVICE_BOARDS_PREFIX } from '../infrastructure/storage/deviceBoards';
 import { message } from '../ui/message';
 import { useBoardSync } from './useBoardSync';
@@ -117,6 +120,7 @@ export function useWorkspace() {
       !selectedCode ||
       board ||
       knownSelected ||
+      modal ||
       offline ||
       failedLink.current === selectedCode
     )
@@ -127,6 +131,7 @@ export function useWorkspace() {
     selectedCode,
     board,
     knownSelected,
+    modal,
     loaded,
     removalsReady,
     offline,
@@ -248,8 +253,21 @@ export function useWorkspace() {
     [markRemoved, setBoards, setModal, setError, navigate],
   );
   const save = useCallback(
-    (id: string, operation: Operation) =>
-      action(() => mutateBoard(id, operation), 'Saved to your board'),
+    (id: string, operation: Operation, recovery?: Board) =>
+      action(
+        () => (recovery ? mutateBoard(id, operation, recovery) : mutateBoard(id, operation)),
+        'Saved to your board',
+      ),
+    [action],
+  );
+  const resolvePending = useCallback(
+    (review: PendingBoardReview, choice: 'retry' | 'discard') =>
+      action(
+        () => resolvePendingBoard(review, choice),
+        choice === 'retry'
+          ? 'Reviewed edits synced'
+          : 'Shared board restored. Your local draft is backed up.',
+      ),
     [action],
   );
   /** Retry a board link that failed and reload the boards. */
@@ -409,5 +427,7 @@ export function useWorkspace() {
     dropCard,
     reorderCard,
     save,
+    reviewPendingBoard,
+    resolvePending,
   };
 }

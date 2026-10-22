@@ -30,7 +30,7 @@ export function BoardSettingsDialog({
   onClose: () => void;
   onRemove?: () => Promise<void>;
   onDetailsChange?: (patch: Partial<Pick<Board, "title" | "description" | "iconStyle" | "colorIntensity">>, remember?: boolean) => void;
-  onSave?: () => void;
+  onSave?: () => Promise<void>;
   readOnly?: boolean;
 }) {
   const [confirmForce, setConfirmForce] = useState(false);
@@ -40,6 +40,7 @@ export function BoardSettingsDialog({
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [localSaved, setLocalSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
   const saveStarted = useRef(false);
   const iconPreviewId = useId();
@@ -54,16 +55,15 @@ export function BoardSettingsDialog({
   const connectionPreview = diagramAppearance(draft.colorIntensity).connection;
   const selectedIconSet = componentIconSets.find(({ id }) => id === draft.iconStyle) ?? componentIconSets[0];
   useEffect(() => {
-    if (!saving) { saveStarted.current = false; return; }
+    if (!saving) { saveStarted.current = false; setLocalSaved(false); return; }
     if (!saveStarted.current) {
       saveStarted.current = true;
-      try { onSave?.(); }
-      catch (error) {
+      void Promise.resolve().then(() => onSave?.()).then(() => setLocalSaved(true), error => {
         setSaveError(error instanceof Error ? error.message : "Could not save changes. Try again.");
         setSaving(false);
-        return;
-      }
+      });
     }
+    if (!localSaved) return;
     if (cloud.boardConflict || cloud.status === "error") {
       setSaveError(cloud.boardConflict
         ? "Your changes are kept on this device. Resolve the cloud conflict before saving online."
@@ -73,7 +73,7 @@ export function BoardSettingsDialog({
       setSaving(false);
       onClose();
     }
-  }, [saving, onSave, board, cloud.boardConflict, cloud.status, cloud.error, auth.user, onClose]);
+  }, [saving, localSaved, onSave, board, cloud.boardConflict, cloud.status, cloud.error, auth.user, onClose]);
   const close = () => {
     if (removing || forcing) return;
     const active = document.activeElement;

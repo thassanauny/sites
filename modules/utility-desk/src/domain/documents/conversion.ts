@@ -165,10 +165,6 @@ export function htmlToMarkdown(html: string): string {
     .trim()}\n`;
 }
 
-export function markdownToText(md: string): string {
-  return htmlToText(markdownToHtml(md));
-}
-
 export function wrapHtml(body: string, title: string): string {
   return `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head>\n<body>\n${body}\n</body></html>\n`;
 }

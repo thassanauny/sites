@@ -7,10 +7,11 @@ import { MAX_GROUP_BYTES } from '../groups/size'
 // The database re-checks every ledger with its own copy of these rules (supabase/schema.sql). Nothing here runs
 // the SQL; this keeps the limits and field lists written in both places from drifting apart unnoticed.
 const schema = readFileSync(new URL('../../../supabase/schema.sql', import.meta.url), 'utf8')
-const validator = schema.slice(schema.indexOf('function private.iou_valid_group'))
+const validator = schema.match(/function private\.iou_valid_group\([\s\S]*?\$\$;/)![0]
+const deltaValidator = schema.match(/function private\.iou_valid_transaction\([\s\S]*?\$\$;/)![0]
 
-function keyLists(): string[][] {
-  return [...schema.matchAll(/iou_has_keys\([^,]+,\s*array\[([^\]]+)\]\)/g)].map(match => [...match[1].matchAll(/'([^']+)'/g)].map(item => item[1]))
+function keyLists(source = validator): string[][] {
+  return [...source.matchAll(/iou_has_keys\([^,]+,\s*array\[([^\]]+)\]\)/g)].map(match => [...match[1].matchAll(/'([^']+)'/g)].map(item => item[1]))
 }
 
 describe('schema.sql and the client agree', () => {
@@ -21,6 +22,10 @@ describe('schema.sql and the client agree', () => {
       ['id', 'type', 'description', 'amount', 'paidBy', 'shares', 'category', 'date', 'createdAt'],
       ['id', 'type', 'fromId', 'toId', 'amount', 'note', 'date', 'createdAt'],
     ])
+  })
+
+  it('on the changed-transaction fields checked by the delta writer', () => {
+    expect(keyLists(deltaValidator)).toEqual(keyLists().slice(2))
   })
 
   it('on the limits', () => {

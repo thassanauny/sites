@@ -10,6 +10,7 @@ import {
 } from '../../../domain/boards/fields';
 import { Dialog } from '../../../ui/Dialog';
 import { message } from '../../../ui/message';
+import { downloadBoardDraft } from './PendingBoardDialog';
 import {
   DescriptionField,
   DiscardDraft,
@@ -43,7 +44,7 @@ export function CardDialog({
   removed: boolean;
   serverError: string;
   onClose: () => void;
-  onSave: (boardId: string, operation: Operation) => Promise<boolean>;
+  onSave: (boardId: string, operation: Operation, recovery?: Board) => Promise<boolean>;
   onRecover: (code: string) => Promise<boolean>;
   onNotice: (text: string) => void;
 }) {
@@ -64,6 +65,7 @@ export function CardDialog({
     recovery.setValue((current) => ({ ...current, description }));
   const setCard = (card: Card) => recovery.setValue((current) => ({ ...current, card }));
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const { localError, setLocalError, copy } = useDialogMessages(onNotice);
   const liveBoard = currentBoard ?? board;
   const fields = cardFields(liveBoard);
@@ -76,6 +78,17 @@ export function CardDialog({
       ? [...new Set(card.labels.map((label) => label.trim()).filter(Boolean))]
       : card.labels,
   };
+  // Recovery is local-only and keeps exactly what was typed, before save trimming.
+  const editorDraft = {
+    ...board,
+    cards: board.cards.map((item) =>
+      item.id === card.id ? { ...card, title, description } : item,
+    ),
+  };
+  const cardRemoved =
+    !isNew &&
+    (!liveBoard.cards.some((item) => item.id === card.id) ||
+      (saveFailed && serverError.includes('That card was removed')));
   const patch = cardPatch(baseline, edited);
   const discard = useDraftClose(removed || Object.keys(patch).length > 0, closeModal);
   const locked = busy || offline || removed;
@@ -99,11 +112,16 @@ export function CardDialog({
       const saved = isNew
         ? await onSave(board.id, { type: 'create_card', card: edited })
         : Object.keys(patch).length === 0 ||
-          (await onSave(board.id, {
-            type: 'update_card',
-            id: card.id,
-            patch,
-          }));
+          (await onSave(
+            board.id,
+            {
+              type: 'update_card',
+              id: card.id,
+              patch,
+            },
+            editorDraft,
+          ));
+      setSaveFailed(!saved);
       if (saved) {
         recovery.clear();
         closeModal();
@@ -123,13 +141,22 @@ export function CardDialog({
     if (locked || isNew) return;
     setLocalError('');
     try {
-      if (
-        await onSave(board.id, {
+      const saved = await onSave(
+        board.id,
+        {
           type: 'update_card',
           id: initial.id,
           patch: { ...patch, archived: true },
-        })
-      ) {
+        },
+        {
+          ...editorDraft,
+          cards: editorDraft.cards.map((item) =>
+            item.id === card.id ? { ...item, archived: true } : item,
+          ),
+        },
+      );
+      setSaveFailed(!saved);
+      if (saved) {
         recovery.clear();
         closeModal();
       }
@@ -191,6 +218,21 @@ export function CardDialog({
             <p className="soft-note">
               Recovered unsaved draft from this device. Review it before saving.
             </p>
+          )}
+          {cardRemoved && (
+            <section className="draft-recovery" aria-label="Deleted card recovery">
+              <p>
+                This card was removed. Save keeps a device backup for Review device edits; it cannot
+                restore the shared card.
+              </p>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => downloadBoardDraft(editorDraft)}
+              >
+                Download card draft
+              </button>
+            </section>
           )}
           <TitleField
             label="Card title"

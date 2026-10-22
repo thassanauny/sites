@@ -14,6 +14,10 @@
 .hero-actions { flex-shrink: 0; gap: 9px; margin-bottom: 7px; }
 .hero-actions .button { justify-content: center; min-height: 48px; border-radius: 12px; padding: 12px 19px; }
 .editor-card, .device-row { border-color: var(--ea-line); border-radius: 20px; background-color: var(--ea-surface); }
+#conflict-review { margin-top: 18px; padding: 20px; border: 1px solid var(--ea-line); border-radius: 20px; background: var(--ea-surface); }
+#conflict-review h2 { margin: 0; font-size: 20px; }
+#conflict-text { min-height: 140px; height: 22dvh; border: 1px solid var(--ea-line); border-radius: 10px; }
+.workspace:has(#conflict-review:not([hidden])) #editor { min-height: 160px; height: 25dvh; }
 .device-snippets { margin-top: 47px; padding-top: 0; border-top: 0; }
 .device-heading h2 { font-size: 14px; font-weight: 550; letter-spacing: 0; color: var(--ea-ink); }
 .device-count { border-radius: 6px; padding: 3px 7px; font-size: 10px; background: #eaf1e9; color: var(--ea-muted); }

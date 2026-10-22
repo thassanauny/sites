@@ -4,7 +4,7 @@ NPM ?= npm
 # Capture overrides before assigning defaults, including exported environment values.
 PORT_OPTION := $(if $(filter undefined,$(origin PORT)),,--strictPort)
 
-.PHONY: help node-check setup build run dev preview test test-postgres typecheck lint format check
+.PHONY: help node-check setup build run dev preview test test-browser test-postgres typecheck lint format check
 
 help:
 	@printf '%s\n' \
@@ -17,6 +17,7 @@ help:
 	  'Port override: append PORT=9000 to run, dev, or preview.' \
 	  'Default ports advance when busy; explicit PORT stays fixed. Use the printed URL.' \
 	  'make test       Run UI/client/config behavior and embedded Postgres tests' \
+	  'make test-browser  Two-profile collaboration checks; install Chromium with npm exec playwright -- install chromium' \
 	  'make test-postgres  Optional concurrency checks; requires running Docker and a local PostgreSQL 17 image' \
 	  '                   POSTGRES_IMAGE environment override; default postgres:17-alpine, no image download' \
 	  'make typecheck  Check TypeScript' \
@@ -37,7 +38,8 @@ setup: node-check
 	    [ ! -x node_modules/.bin/tsc ] || \
 	    [ ! -x node_modules/.bin/biome ] || \
 	    [ ! -x node_modules/.bin/vite ] || \
-	    [ ! -x node_modules/.bin/vitest ]; then \
+	    [ ! -x node_modules/.bin/vitest ] || \
+	    [ ! -x node_modules/.bin/playwright ]; then \
 	  "$(NPM)" ci --include=dev; \
 	fi
 
@@ -56,6 +58,9 @@ preview: build
 
 test: setup
 	"$(NPM)" test
+
+test-browser: setup
+	"$(NPM)" exec playwright -- test
 
 test-postgres: setup
 	"$(NODE)" supabase/postgres-check.mjs

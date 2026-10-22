@@ -8,6 +8,17 @@ export interface TextDropPage {
   name?: string | null;
   /** A durable local edit that has not yet been acknowledged by the server. */
   localPending?: boolean;
+  /** Both versions remain on this device until the user resolves a conflicting queued edit. */
+  localConflict?: TextDropPage;
+}
+
+export class TextConflictError extends Error {
+  readonly page: TextDropPage;
+  constructor(page: TextDropPage) {
+    super('Shared text changed on another device. Your text is kept on this device. Compare both versions before saving.');
+    this.name = 'TextConflictError';
+    this.page = page;
+  }
 }
 
 /** The saved browser session is unreadable or conflicts with itself; "Start a new session" is the way out. */

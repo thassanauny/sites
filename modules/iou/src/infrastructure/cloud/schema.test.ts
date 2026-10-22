@@ -72,11 +72,11 @@ describe('iou initial schema executed in embedded PostgreSQL', () => {
   it('installs RLS and restricts direct writes and privileged functions', async () => {
     await database.exec('reset role')
     const tables = await database.query<{ relname: string; relrowsecurity: boolean }>(
-      "select relname, relrowsecurity from pg_class where relname in ('iou_groups','iou_group_access') order by relname",
+      "select relname, relrowsecurity from pg_class where relname in ('iou_group_headers','iou_group_access') order by relname",
     )
     expect(tables.rows).toEqual([
       { relname: 'iou_group_access', relrowsecurity: true },
-      { relname: 'iou_groups', relrowsecurity: true },
+      { relname: 'iou_group_headers', relrowsecurity: true },
     ])
     const grants = await database.query<{ allowed: boolean }>(`select
       has_function_privilege('anon','public.iou_create_group(jsonb)','execute') or
@@ -220,10 +220,19 @@ describe('iou initial schema executed in embedded PostgreSQL', () => {
     await database.exec('reset role')
     await database.query('insert into auth.users(id) values ($1)', [reader])
     await database.query(
-      `insert into public.iou_groups(id,invite_code,payload)
-      select 'bulk-' || n, md5('bulk-' || n), $1::jsonb || jsonb_build_object('id','bulk-' || n,'inviteCode',md5('bulk-' || n))
+      `insert into public.iou_group_headers(id,invite_code,metadata,member_count,transaction_count,member_bytes,transaction_bytes,payload_bytes)
+      select 'bulk-' || n, md5('bulk-' || n), $1::jsonb || jsonb_build_object('id','bulk-' || n,'inviteCode',md5('bulk-' || n)),0,0,0,0,0
       from generate_series(1,1100) n`,
-      [JSON.stringify(group())],
+      [JSON.stringify((({ members: _members, transactions: _transactions, ...metadata }) => metadata)(group()))],
+    )
+    // Administrator fixture bypasses per-identity create/join quotas, while each
+    // normalized ledger still satisfies the production row/counter invariants.
+    await database.query(
+      `select private.iou_apply_delta(id,jsonb_build_object('metadata',metadata,
+        'members',jsonb_build_object('upsert',$1::jsonb,'remove','[]'::jsonb),
+        'transactions',jsonb_build_object('upsert','[]'::jsonb,'remove','[]'::jsonb)))
+        from public.iou_group_headers where id like 'bulk-%'`,
+      [JSON.stringify(group().members)],
     )
     await database.query("insert into public.iou_group_access(group_id,user_id) select id,$1::uuid from public.iou_groups where id like 'bulk-%'", [reader])
     await identity(reader)
@@ -231,5 +240,50 @@ describe('iou initial schema executed in embedded PostgreSQL', () => {
     expect(reply.rows).toHaveLength(1)
     expect(reply.rows[0]!.result.heads).toHaveLength(1100)
     expect(reply.rows[0]!.result.heads.every(({ version }) => version === 1)).toBe(true)
+  })
+
+  it('installs optional private invalidations repeatedly without changing data or allowing client publishing', async () => {
+    await database.exec('reset role')
+    const migration = await readFile(new URL('../../../supabase/update-live-sync.sql', import.meta.url), 'utf8')
+    await expect(database.exec(migration)).rejects.toThrow('requires existing Supabase Realtime')
+    await database.exec('rollback')
+    await database.exec(`create schema realtime;
+      create table realtime.messages(payload jsonb, event text, topic text, private boolean, extension text);
+      alter table realtime.messages enable row level security;
+      grant usage on schema realtime to authenticated;
+      grant select on realtime.messages to authenticated;
+      create function realtime.topic() returns text language sql stable as $$ select current_setting('realtime.topic', true) $$;
+      create function realtime.send(payload jsonb, event text, topic text, private boolean) returns void language sql as $$
+        insert into realtime.messages values(payload,event,topic,private,'broadcast');
+      $$;`)
+    const before = (await database.query('select * from public.iou_groups order by id')).rows
+    await database.exec(migration)
+    await database.exec(migration)
+    expect((await database.query('select * from public.iou_groups order by id')).rows).toEqual(before)
+    await identity(creator)
+    const record = await create()
+    await identity(collaborator)
+    await database.query('select public.iou_join_group($1)', [record.payload.inviteCode])
+    await database.exec('reset role; truncate realtime.messages')
+    await identity(creator)
+    const updated = await save(record, { name: 'Live update' })
+    await database.exec('reset role')
+    const messages = (await database.query<{ payload: unknown; topic: string; private: boolean; event: string }>('select payload,topic,private,event from realtime.messages order by topic')).rows
+    expect(messages).toHaveLength(2)
+    expect(messages.map(row => row.topic).sort()).toEqual([creator, collaborator].map(id => `iou:user:${id}`).sort())
+    expect(messages.every(row => row.private && row.event === 'changed')).toBe(true)
+    expect(messages.map(row => row.payload)).toEqual([0, 1].map(() => ({ id: record.payload.id, revision: updated.version })))
+    await identity(creator)
+    await database.query("select set_config('realtime.topic',$1,false)", [`iou:user:${creator}`])
+    expect((await database.query('select * from realtime.messages')).rows).toHaveLength(1)
+    await database.query("select set_config('realtime.topic',$1,false)", [`iou:user:${stranger}`])
+    expect((await database.query('select * from realtime.messages')).rows).toEqual([])
+    expect((await database.query("select has_table_privilege('authenticated','realtime.messages','insert') as publish")).rows).toEqual([{ publish: false }])
+    await database.exec('reset role')
+    await database.exec(
+      `create or replace function realtime.send(payload jsonb, event text, topic text, private boolean) returns void language plpgsql as $$ begin raise exception 'realtime unavailable'; end $$;`,
+    )
+    await identity(creator)
+    expect((await save(updated, { description: 'Durable despite notification failure' })).version).toBe(updated.version + 1)
   })
 })

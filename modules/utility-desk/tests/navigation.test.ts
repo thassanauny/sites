@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TOOLS } from '../src/application/registry';
 import { version } from '../package.json';
+import { ACTIVITY_KEY, store } from '../src/infrastructure/storage';
 
 const expectedSections = [
   ['Media, documents & images', ['media-converter', 'document-converter', 'image-workshop', 'crop-image', 'compress-image']],
@@ -87,6 +88,25 @@ describe('routes outside the tool list', () => {
 
   it('shows the package version in the footer', () => {
     expect(document.querySelector('footer')?.textContent).toContain(`Utility Desk · ${version}`);
+  });
+
+  it('keeps exactly one activity listener on Home and none after navigating away', async () => {
+    const reads = vi.spyOn(store, 'getActivity');
+    try {
+      for (let visit = 0; visit < 2; visit++) {
+        await route('#/split-pdf', 'Split PDF · Utility Desk');
+        await vi.waitFor(() => expect(document.querySelector('#main h1')?.textContent).toBe('Split PDF'));
+        reads.mockClear();
+        window.dispatchEvent(new StorageEvent('storage', { key: ACTIVITY_KEY, storageArea: localStorage }));
+        expect(reads).not.toHaveBeenCalled();
+        await route('#/', 'Utility Desk');
+        reads.mockClear();
+        window.dispatchEvent(new StorageEvent('storage', { key: ACTIVITY_KEY, storageArea: localStorage }));
+        expect(reads).toHaveBeenCalledOnce();
+      }
+    } finally {
+      reads.mockRestore();
+    }
   });
 
   it('ignores files dropped on the page outside a drop zone', () => {

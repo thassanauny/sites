@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { writeSharedBuildReport, checkSharedBuild } from './check-shared-build.mjs';
 import { SHARED_APPS } from './catalog.mjs';
 import {
-  appendMakeTarget, copySnapshot, helperName, isShipped, placeholderEnvironment, prepareManagedApp, readAppVersion,
+  appendMakeTarget, copySnapshot, helperName, isShipped, placeholderEnvironment, prepareManagedApp, prepareManagedAppAsync, readAppVersion,
   resolveSettings, shipHelper, stat, toolPath, validateManagedDestination,
 } from './snapshot-lib.mjs';
 
@@ -14,11 +14,11 @@ const checkerName = 'scripts/check-shared-build.mjs';
 const schemaFiles = ['tsconfig.app.json', 'tsconfig.node.json', 'biome.json', 'build-config.test.ts', 'supabase/schema.sql'];
 const iconAssets = ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
 const apps = {
-  textdrop: { assets: new Set(['logo.svg', ...iconAssets]), files: [...schemaFiles, 'supabase/update-poll-and-grants.sql', 'supabase/update-save-receipt.sql', 'supabase/update-shared-names.sql'], folders: ['src', 'public', 'tests'] },
-  pinboard: { assets: new Set(['favicon.svg', ...iconAssets]), files: [...schemaFiles, 'supabase/schema.test.mjs', 'supabase/postgres-check.mjs'], folders: ['src', 'public'] },
+  textdrop: { assets: new Set(['logo.svg', ...iconAssets]), files: [...schemaFiles, 'playwright.config.ts', 'supabase/update-poll-and-grants.sql', 'supabase/update-save-receipt.sql', 'supabase/update-shared-names.sql', 'supabase/update-checked-saves.sql', 'supabase/update-live-sync.sql', 'supabase/postgres-check.mjs'], folders: ['src', 'public', 'tests'] },
+  pinboard: { assets: new Set(['favicon.svg', ...iconAssets]), files: [...schemaFiles, 'playwright.config.ts', 'supabase/schema.test.mjs', 'supabase/row-storage.test.mjs', 'supabase/postgres-check.mjs', 'supabase/live-sync.test.mjs', 'supabase/update-live-sync.sql', 'supabase/rollback-row-storage.sql'], folders: ['src', 'public', 'tests'] },
   blueprint: {
     assets: new Set([...iconAssets, 'favicon.svg', '.nojekyll', 'licenses/Manrope.txt', 'licenses/DM-Sans.txt', 'licenses/React-Flow.txt']),
-    files: ['playwright.config.ts', 'supabase/rename-to-blueprint.sql', 'supabase/migrations/001_blueprint_boards.sql', 'supabase/migrations/002_board_invitations.sql', 'supabase/migrations/003_shared_editing.sql', 'supabase/migrations/004_incremental_sync.sql'],
+    files: ['supabase/update-live-sync.sql', 'playwright.config.ts', 'supabase/rename-to-blueprint.sql', 'supabase/migrations/001_blueprint_boards.sql', 'supabase/migrations/002_board_invitations.sql', 'supabase/migrations/003_shared_editing.sql', 'supabase/migrations/004_incremental_sync.sql'],
     folders: ['src', 'public', 'tests'], fonts: true,
   },
 };
@@ -93,6 +93,11 @@ function specFor(name) {
 /** Stage, check, build and replace only one owned static app; no publication. */
 export function prepareSharedApp(name, origin, target, run = execFileSync, options) {
   return prepareManagedApp(specFor(name), origin, target, run, options);
+}
+
+/** Like prepareSharedApp, but awaits `run` so other apps can prepare meanwhile. */
+export function prepareSharedAppAsync(name, origin, target, run, options) {
+  return prepareManagedAppAsync(specFor(name), origin, target, run, options);
 }
 
 

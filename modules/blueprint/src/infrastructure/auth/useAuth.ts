@@ -60,21 +60,27 @@ export function useAuth() {
   useEffect(() => {
     if (!supabase) return;
     let active = true;
+    let sessionChanged = false;
     setChecking(true);
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active && session?.user) setUser(session.user);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      // INITIAL_SESSION may be empty while startup is creating an anonymous session.
+      if (event !== "INITIAL_SESSION") sessionChanged = true;
+      setUser(session?.user ?? null);
+      if (session?.user) setAuthError("");
+      else if (event === "SIGNED_OUT") setAuthError("Your device session ended. Retry to reconnect, or rejoin using your invitation.");
     });
     ensureSession()
       .then((value) => {
-        if (active) {
+        if (active && !sessionChanged) {
           setUser(value);
           setAuthError("");
         }
       })
       .catch((error) => {
-        if (active)
+        if (active && !sessionChanged)
           setAuthError(
             error instanceof Error
               ? error.message
