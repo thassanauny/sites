@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Cloud } from './ports';
+import type { RemoteCloud } from './ports';
 import { withSyncTime } from './syncTime';
 
 describe('confirmed remote sync times', () => {
   it('timestamps unchanged polls, preserves the time after failure and unsubscribes', async () => {
-    const remote = { pollPage: vi.fn().mockResolvedValue(null) } as unknown as Cloud;
+    const remote = { pollPage: vi.fn().mockResolvedValue(null) } as unknown as RemoteCloud;
     const cloud = withSyncTime(remote);
     const listener = vi.fn();
     const stop = cloud.subscribeSync!(listener);
@@ -23,7 +23,7 @@ describe('confirmed remote sync times', () => {
     expect(next.mock.calls[0]![0].getTime()).toBeGreaterThanOrEqual(at.getTime());
   });
   it('never advances after rejected remote requests or an empty names lookup', async () => {
-    const remote = { pollPage: vi.fn().mockRejectedValue(new Error('Network unavailable')), listNames: vi.fn().mockResolvedValue([]) } as unknown as Cloud;
+    const remote = { pollPage: vi.fn().mockRejectedValue(new Error('Network unavailable')), listNames: vi.fn().mockResolvedValue([]) } as unknown as RemoteCloud;
     const cloud = withSyncTime(remote);
     const listener = vi.fn();
     cloud.subscribeSync!(listener);

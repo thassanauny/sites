@@ -6,7 +6,7 @@ import { HomeView } from '../features/boards/HomeView';
 import { WorkspaceHeader } from '../features/boards/WorkspaceHeader';
 import { Sidebar } from '../features/boards/Sidebar';
 import { cloudConfigured } from '../infrastructure/cloud/boards';
-import { SESSION_CORRUPT_MESSAGE } from '../infrastructure/auth/migrateSession';
+import { SESSION_CORRUPT_MESSAGE } from '../infrastructure/auth/session';
 import { useWorkspace } from './useWorkspace';
 import { useBoardFilters } from './useBoardFilters';
 import { version } from '../../package.json';

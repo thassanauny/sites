@@ -39,26 +39,15 @@ export class Store {
   }
 
   getDraft(tool: string): Record<string, string> {
-    this.removeSavedDraft(tool);
     return { ...this.drafts.get(tool) };
   }
   setDraft(tool: string, draft: Record<string, string>) {
-    this.removeSavedDraft(tool);
     this.drafts.set(tool, { ...draft });
   }
   clearDraft(tool?: string) {
     if (tool) {
       this.drafts.delete(tool);
-      this.removeSavedDraft(tool);
     } else this.drafts.clear();
-  }
-  /** Earlier versions kept tool drafts in localStorage. Deleting that copy keeps values typed into a tool from lingering in the browser. */
-  private removeSavedDraft(tool: string) {
-    try {
-      this.kv?.removeItem(`${PREFIX}draft:${tool}`);
-    } catch {
-      /* ignore */
-    }
   }
 
   getActivity(): Activity[] {

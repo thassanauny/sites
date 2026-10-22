@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RecoveryDrafts } from './recoveryDrafts';
-const page = { id: '00000000-0000-4000-8000-000000000001', code: 'a'.repeat(32), text: 'Shared', version: 1, updatedAt: '2026-10-18T00:00:00Z' };
+const page = { id: '00000000-0000-4000-8000-000000000001', code: 'a'.repeat(32), text: 'Shared', name: null, version: 1, updatedAt: '2026-10-18T00:00:00Z' };
 beforeEach(() => localStorage.clear());
 describe('recovery copy isolation', () => {
   it('retains another editor’s unsaved text when a recovered copy is accepted', () => {

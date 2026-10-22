@@ -1,7 +1,6 @@
 -- Pinboard: run in the shared Supabase project's SQL editor as administrator.
--- Repeating this transaction is safe. It creates missing objects and refreshes
--- functions, policies and grants without changing boards, invitations, access rows,
--- or iou/TextDrop tables, functions and policies.
+-- Fresh install or refresh of the current row schema. Existing boards,
+-- invitations, memberships and receipts remain unchanged.
 -- Keep private OUT of the Data API's exposed schemas.
 begin;
 
@@ -192,6 +191,14 @@ exception when others then return false;
 end;
 $$;
 
+-- Reject unsupported document installations before touching their data.
+do $$ begin
+  if exists(select 1 from pg_attribute where attrelid=to_regclass('public.pinboard_boards')
+    and attname in ('cards','columns') and not attisdropped) then
+    raise exception 'Pinboard requires the current row-storage installation';
+  end if;
+end $$;
+
 -- Cards and columns are authoritative entities. Headers contain no document mirror.
 create table if not exists public.pinboard_boards (
   id uuid primary key,
@@ -205,18 +212,13 @@ create table if not exists public.pinboard_boards (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   card_fields jsonb check (card_fields is null or private.pinboard_valid_card_fields(card_fields)),
-  operation_receipt_floor bigint not null default 0 check (operation_receipt_floor between 0 and 9007199254740991)
+  operation_receipt_floor bigint not null default 0 check (operation_receipt_floor between 0 and 9007199254740991),
+  active_card_count integer not null default 0,
+  card_count integer not null default 0,
+  column_count integer not null default 0,
+  content_bytes bigint not null default 8,
+  next_card_ordinal bigint not null default 1
 );
-alter table public.pinboard_boards add column if not exists card_fields jsonb
-  check (card_fields is null or private.pinboard_valid_card_fields(card_fields));
-alter table public.pinboard_boards add column if not exists operation_receipt_floor bigint not null default 0
-  check (operation_receipt_floor between 0 and 9007199254740991);
-alter table public.pinboard_boards add column if not exists active_card_count integer not null default 0;
-alter table public.pinboard_boards add column if not exists card_count integer not null default 0;
-alter table public.pinboard_boards add column if not exists column_count integer not null default 0;
-alter table public.pinboard_boards add column if not exists content_bytes bigint not null default 8;
-alter table public.pinboard_boards add column if not exists next_card_ordinal bigint not null default 1;
-
 create table if not exists public.pinboard_board_access (
   board_id uuid not null references public.pinboard_boards(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -252,77 +254,8 @@ create table if not exists public.pinboard_cards (
 );
 create index if not exists pinboard_cards_position_idx on public.pinboard_cards(board_id, column_id, position, id);
 create index if not exists pinboard_cards_order_idx on public.pinboard_cards(board_id, ordinal);
-create table if not exists private.pinboard_row_storage_audit (
-  board_id uuid primary key references public.pinboard_boards(id) on delete cascade,
-  source_revision bigint not null,
-  source_hash bytea not null,
-  reconstructed_hash bytea not null check (source_hash = reconstructed_hash),
-  column_count integer not null,
-  card_count integer not null,
-  active_card_count integer not null,
-  migrated_at timestamptz not null default clock_timestamp()
-);
-revoke all on private.pinboard_row_storage_audit from public, anon, authenticated;
-
--- The DDL lock prevents legacy writers/new boards from racing cutover. Each
--- existing board is also locked in the same order used by normal mutations.
-do $$
-declare b record; constraint_name text; restored_columns jsonb; restored_cards jsonb;
-  source_document jsonb; restored_document jsonb; active_count integer;
-begin
-  if exists (select 1 from pg_attribute where attrelid='public.pinboard_boards'::regclass
-    and attname='cards' and not attisdropped) then
-    lock table public.pinboard_boards in access exclusive mode;
-    drop view if exists public.pinboard_board_summaries;
-    if exists (select 1 from pg_attribute where attrelid='public.pinboard_boards'::regclass
-      and attname='active_card_count' and attgenerated <> '') then
-      alter table public.pinboard_boards alter column active_card_count drop expression;
-    end if;
-    for b in select * from public.pinboard_boards order by id for update loop
-      if not private.pinboard_valid_state(b.columns,b.cards)
-        or (b.card_fields is not null and not private.pinboard_valid_card_fields(b.card_fields))
-        or exists (select 1 from jsonb_array_elements(b.cards) c,
-          lateral jsonb_object_keys(coalesce(c->'customFields','{}'::jsonb)) f(id)
-          where not exists (select 1 from jsonb_array_elements(coalesce(b.card_fields->'custom','[]'::jsonb)) d where d->>'id'=f.id))
-      then raise exception 'PINBOARD_ROW_BACKFILL_INVALID: %',b.id; end if;
-      if exists(select 1 from public.pinboard_columns where board_id=b.id)
-        or exists(select 1 from public.pinboard_cards where board_id=b.id)
-      then raise exception 'PINBOARD_ROW_BACKFILL_NOT_EMPTY: %',b.id; end if;
-      insert into public.pinboard_columns(board_id,data,ordinal)
-        select b.id,value,ordinality from jsonb_array_elements(b.columns) with ordinality;
-      insert into public.pinboard_cards(board_id,data,ordinal)
-        select b.id,value,ordinality from jsonb_array_elements(b.cards) with ordinality;
-      select coalesce(jsonb_agg(data order by ordinal),'[]'::jsonb) into restored_columns
-        from public.pinboard_columns where board_id=b.id;
-      select coalesce(jsonb_agg(data order by ordinal),'[]'::jsonb),
-        count(*) filter(where not coalesce((data->>'archived')::boolean,false))
-        into restored_cards,active_count from public.pinboard_cards where board_id=b.id;
-      source_document:=jsonb_build_object('columns',b.columns,'cards',b.cards,'card_fields',b.card_fields);
-      restored_document:=jsonb_build_object('columns',restored_columns,'cards',restored_cards,'card_fields',b.card_fields);
-      if restored_document is distinct from source_document
-        or jsonb_array_length(restored_cards)<>jsonb_array_length(b.cards)
-        or jsonb_array_length(restored_columns)<>jsonb_array_length(b.columns)
-        or active_count<>(select count(*) from jsonb_array_elements(b.cards) c
-          where not coalesce((c->>'archived')::boolean,false))
-      then raise exception 'PINBOARD_ROW_BACKFILL_MISMATCH: %',b.id; end if;
-      insert into private.pinboard_row_storage_audit(board_id,source_revision,source_hash,reconstructed_hash,column_count,card_count,active_card_count)
-        values(b.id,b.revision,sha256(convert_to(source_document::text,'UTF8')),
-          sha256(convert_to(restored_document::text,'UTF8')),jsonb_array_length(b.columns),jsonb_array_length(b.cards),active_count)
-        on conflict(board_id) do update set source_revision=excluded.source_revision,source_hash=excluded.source_hash,
-          reconstructed_hash=excluded.reconstructed_hash,column_count=excluded.column_count,card_count=excluded.card_count,
-          active_card_count=excluded.active_card_count,migrated_at=clock_timestamp();
-      update public.pinboard_boards set card_count=jsonb_array_length(b.cards),column_count=jsonb_array_length(b.columns),
-        active_card_count=active_count,next_card_ordinal=jsonb_array_length(b.cards)+1,
-        content_bytes=octet_length(b.columns::text)+octet_length(b.cards::text)+octet_length(coalesce(b.card_fields,'null'::jsonb)::text)
-        where id=b.id;
-    end loop;
-    for constraint_name in select conname from pg_constraint where conrelid='public.pinboard_boards'::regclass
-      and contype='c' and pg_get_constraintdef(oid) like '%pinboard_valid_state%'
-    loop execute format('alter table public.pinboard_boards drop constraint %I',constraint_name); end loop;
-    alter table public.pinboard_boards drop column cards, drop column columns;
-  end if;
-end;
-$$;
+-- The completed JSON backfill audit is no longer needed by the current schema.
+drop table if exists private.pinboard_row_storage_audit;
 
 alter table public.pinboard_boards enable row level security;
 alter table public.pinboard_board_access enable row level security;
@@ -402,7 +335,7 @@ begin
 end;
 $$;
 
-create or replace function private.pinboard_mutate_board(p_board_id uuid,p_operation jsonb)
+create or replace function private.pinboard_apply_operation(p_board_id uuid,p_operation jsonb)
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare
   caller uuid:=auth.uid(); b public.pinboard_boards%rowtype;
@@ -634,16 +567,9 @@ create or replace function public.pinboard_join_board(p_code text)
 returns jsonb language sql security invoker set search_path = '' as $$
   select private.pinboard_join_board(p_code);
 $$;
-create or replace function public.pinboard_mutate_board(p_board_id uuid, p_operation jsonb)
-returns jsonb language sql security invoker set search_path = '' as $$
-  select private.pinboard_mutate_board(p_board_id, p_operation);
-$$;
-
 -- Small durable receipts make a lost-response retry return CURRENT state without
 -- replaying its old patch over another member's accepted edit. Payload hashes
 -- prevent accidental token reuse without retaining complete board/card content.
-alter table public.pinboard_boards add column if not exists operation_receipt_floor bigint not null default 0
-  check (operation_receipt_floor between 0 and 9007199254740991);
 create table if not exists private.pinboard_operation_receipts (
   board_id uuid not null references public.pinboard_boards(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -672,8 +598,7 @@ begin
     then raise exception 'PINBOARD_ACCESS_DENIED' using errcode = '42501'; end if;
   if p_operation_id is null or p_operation is null
     then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-  -- Share the legacy mutation's board lock: duplicate uploads, older clients
-  -- and independent members all observe the same committed acceptance order.
+  -- Duplicate uploads and independent members share one committed acceptance order.
   select * into board_row from public.pinboard_boards where id = p_board_id for update;
   if not found then raise exception 'PINBOARD_ACCESS_DENIED' using errcode = '42501'; end if;
   select operation_hash into expected_hash from private.pinboard_operation_receipts
@@ -685,12 +610,12 @@ begin
   end if;
   if p_base_revision is not null and (p_base_revision < 1 or p_base_revision > board_row.revision)
     then raise exception 'PINBOARD_INVALID_OPERATION' using errcode = '22023'; end if;
-  -- Evicted IDs must NEVER become fresh writes. A stale/legacy queue keeps its
+  -- Evicted IDs must NEVER become fresh writes. A stale queue keeps its
   -- draft for review rather than replaying a possibly accepted old operation.
   if board_row.operation_receipt_floor > 0
     and (p_base_revision is null or p_base_revision <= board_row.operation_receipt_floor)
     then raise exception 'PINBOARD_OPERATION_TOO_OLD' using errcode = 'P0001'; end if;
-  result := private.pinboard_mutate_board(p_board_id, p_operation);
+  result := private.pinboard_apply_operation(p_board_id, p_operation);
   insert into private.pinboard_operation_receipts (board_id, user_id, operation_id, operation_hash, accepted_revision)
     values (p_board_id, caller, p_operation_id, sha256(convert_to(p_operation::text, 'UTF8')), (result->>'revision')::bigint);
   -- The most recent 1,000 accepted operation IDs per board remain retryable.
@@ -732,15 +657,16 @@ revoke all on function private.pinboard_has_keys(jsonb,text[]), private.pinboard
   private.pinboard_valid_position(jsonb), private.pinboard_valid_state(jsonb,jsonb), private.pinboard_valid_card(jsonb),
   private.pinboard_valid_card_fields(jsonb), private.pinboard_valid_custom_values(jsonb),
   private.pinboard_board_json(public.pinboard_boards), private.pinboard_create_board(uuid,text,text),
-  private.pinboard_join_board(text), private.pinboard_mutate_board(uuid,jsonb)
+  private.pinboard_join_board(text), private.pinboard_apply_operation(uuid,jsonb)
   from public, anon, authenticated;
-revoke all on function public.pinboard_create_board(uuid,text,text), public.pinboard_join_board(text),
-  public.pinboard_mutate_board(uuid,jsonb) from public, anon, authenticated;
+revoke all on function public.pinboard_create_board(uuid,text,text), public.pinboard_join_board(text) from public, anon, authenticated;
 grant usage on schema private to authenticated;
-grant execute on function private.pinboard_create_board(uuid,text,text), private.pinboard_join_board(text),
-  private.pinboard_mutate_board(uuid,jsonb) to authenticated;
-grant execute on function public.pinboard_create_board(uuid,text,text), public.pinboard_join_board(text),
-  public.pinboard_mutate_board(uuid,jsonb) to authenticated;
+grant execute on function private.pinboard_create_board(uuid,text,text), private.pinboard_join_board(text) to authenticated;
+grant execute on function public.pinboard_create_board(uuid,text,text), public.pinboard_join_board(text) to authenticated;
+
+-- Retire unchecked entry points after replacing their only current caller.
+drop function if exists public.pinboard_mutate_board(uuid,jsonb);
+drop function if exists private.pinboard_mutate_board(uuid,jsonb);
 
 -- Refresh PostgREST's cached table and RPC names after commit.
 notify pgrst, 'reload schema';

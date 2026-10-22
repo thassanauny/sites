@@ -80,7 +80,7 @@ const psqlArgs = [
 const session = (user) => `begin; set local statement_timeout = '10s';
   select set_config('request.jwt.claim.sub', ${quote(user)}, true); set local role authenticated;`;
 const mutation = (boardId, operation) =>
-  `select public.pinboard_mutate_board(${quote(boardId)}::uuid, ${json(operation)});`;
+  `select public.pinboard_mutate_board_once(${quote(boardId)}::uuid, ${quote(randomUUID())}::uuid, ${json(operation)}, (select revision from public.pinboard_boards where id=${quote(boardId)}::uuid));`;
 const mutationOnce = (boardId, token, operation, baseRevision) =>
   `select public.pinboard_mutate_board_once(${quote(boardId)}::uuid, ${quote(token)}::uuid, ${json(operation)}, ${Number(baseRevision)});`;
 const create = (id, title = 'Concurrent board') =>
@@ -288,65 +288,6 @@ async function main() {
       create function realtime.send(payload jsonb,event text,topic text,private boolean) returns void
         language sql as $$ insert into realtime.messages values($3,'broadcast',$2,$1,$4) $$;`);
     await sql(await readFile(new URL('./update-live-sync.sql', import.meta.url), 'utf8'));
-    const rowSchema = await readFile(new URL('./schema.sql', import.meta.url), 'utf8');
-    const jsonSchema = await readFile(
-      new URL('./rollback-row-storage.sql', import.meta.url),
-      'utf8',
-    );
-    const migrationBoard = await createBoard(creator);
-    await sql(jsonSchema);
-    const migratedCard = {
-      id: randomUUID(),
-      title: 'Accepted while migration waits',
-      description: '',
-      columnId: 'todo',
-      position: 1.25,
-      priority: 'medium',
-      assignee: '',
-      dueDate: '',
-      labels: [],
-      archived: false,
-    };
-    const migrationToken = randomUUID();
-    const migrationOperation = { type: 'create_card', card: migratedCard };
-    const [beforeCutover, cutover] = await race(
-      `${session(creator)} ${mutationOnce(migrationBoard.id, migrationToken, migrationOperation, migrationBoard.revision)}`,
-      rowSchema,
-    );
-    assert.equal(cutover.code, 0, cutover.stderr);
-    assert.deepEqual(
-      boardResult(
-        await sql(
-          `${session(creator)} ${mutation(migrationBoard.id, { type: 'update_board', patch: {} })} commit;`,
-        ),
-      ),
-      beforeCutover,
-    );
-    const [beforeRollback, rollbackResult] = await race(
-      `${session(creator)} ${mutation(migrationBoard.id, { type: 'update_card', id: migratedCard.id, patch: { description: 'Latest accepted row before rollback' } })}`,
-      jsonSchema,
-    );
-    assert.equal(rollbackResult.code, 0, rollbackResult.stderr);
-    assert.deepEqual(
-      boardResult(
-        await sql(
-          `${session(creator)} ${mutation(migrationBoard.id, { type: 'update_board', patch: {} })} commit;`,
-        ),
-      ),
-      beforeRollback,
-    );
-    await sql(rowSchema);
-    assert.deepEqual(
-      boardResult(
-        await sql(
-          `${session(creator)} ${mutationOnce(migrationBoard.id, migrationToken, migrationOperation, migrationBoard.revision)} commit;`,
-        ),
-      ),
-      beforeRollback,
-    );
-    console.log(
-      'PASS: upgrade and rollback wait for writers, retain latest accepted work, and preserve pre-cutover retry receipts.',
-    );
     const board = await createBoard(creator);
     await sql(
       `${session(collaborator)} select public.pinboard_join_board(${quote(board.invite_code)}); commit;`,

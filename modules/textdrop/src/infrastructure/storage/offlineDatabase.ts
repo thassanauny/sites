@@ -14,9 +14,9 @@ export class OfflineDatabase<T> {
       opened = new Promise((resolve, reject) => {
         const request = indexedDB.open(`${this.name}:${owner}`, 2);
         request.onupgradeneeded = () => {
-          const store = request.result.objectStoreNames.contains('records') ? request.transaction!.objectStore('records') : request.result.createObjectStore('records', { keyPath: 'id' });
-          if (!store.indexNames.contains('pending')) store.createIndex('pending', 'queued');
-          if (!store.indexNames.contains('pageId')) store.createIndex('pageId', 'value.page.id', { unique: true });
+          const store = request.result.createObjectStore('records', { keyPath: 'id' });
+          store.createIndex('pending', 'queued');
+          store.createIndex('pageId', 'value.page.id', { unique: true });
         };
         request.onerror = () => reject(request.error ?? new Error('Local saving is unavailable.'));
         request.onblocked = () => reject(new Error('Close older app tabs to enable local saving.'));

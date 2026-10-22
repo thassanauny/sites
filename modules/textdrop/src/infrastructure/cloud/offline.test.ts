@@ -2,15 +2,15 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OfflineDatabase } from '../storage/offlineDatabase';
 import { withOfflinePages, type SavedPage } from './offline';
-import type { Cloud } from '../../application/ports';
+import type { Cloud, RemoteCloud } from '../../application/ports';
 import { TextConflictError, type TextDropPage } from '../../domain/snippets/model';
 
-const page: TextDropPage = { id: '22222222-2222-4222-8222-222222222222', code: 'a'.repeat(32), text: 'Original', version: 1, updatedAt: '2026-10-18T00:00:00Z' };
+const page: TextDropPage = { id: '22222222-2222-4222-8222-222222222222', code: 'a'.repeat(32), text: 'Original', name: null, version: 1, updatedAt: '2026-10-18T00:00:00Z' };
 let online = true;
 let identity = 'first';
 let database: OfflineDatabase<SavedPage>;
 let current: TextDropPage;
-let remote: Cloud;
+let remote: Cloud & RemoteCloud;
 beforeEach(() => {
   online = true;
   identity = 'first';
@@ -39,6 +39,9 @@ beforeEach(() => {
     }),
     startNewSession: vi.fn(async () => {}),
     saveCheckedPage: (id, text) => remote.savePage(id, text),
+    renamePage: vi.fn(async (_id, name) => ({ ...current, name })),
+    renameCheckedPage: (id, name) => remote.renamePage!(id, name),
+    listNames: vi.fn(async () => []),
   };
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -210,6 +213,28 @@ it('keeps refreshed names available offline without advancing the cached text ve
 });
 
 describe('checked queued text', () => {
+  it.each(['baseVersion', 'baseText'] as const)('keeps a damaged current queue without inventing its missing %s', async field => {
+    const cloud = withOfflinePages(remote, database);
+    await cloud.joinPage(page.code);
+    online = false;
+    await cloud.saveCheckedPage(page.id, 'Queued text', { baseVersion: page.version, baseText: page.text });
+    const original = (await database.read(page.code))!;
+    const damaged = structuredClone(original);
+    delete (damaged.pending as unknown as Record<string, unknown>)[field];
+    await database.change(page.code, () => ({ value: damaged, queued: true }));
+    remote.saveCheckedPage = vi.fn(async () => {
+      throw new Error('Invalid checked editing baseline');
+    });
+    online = true;
+    await expect(cloud.syncPending!()).rejects.toThrow('Invalid checked editing baseline');
+    expect(remote.saveCheckedPage).toHaveBeenCalledExactlyOnceWith(page.id, 'Queued text', {
+      baseVersion: field === 'baseVersion' ? undefined : page.version,
+      baseText: field === 'baseText' ? undefined : page.text,
+      operationId: original.pending!.id,
+    });
+    expect(await database.read(page.code)).toEqual(damaged);
+    expect(current.text).toBe(page.text);
+  });
   it('retains both versions across reload and requires an explicit resolution', async () => {
     const cloud = withOfflinePages(remote, database);
     await cloud.joinPage(page.code);
@@ -297,7 +322,7 @@ it.each(['save', 'rename', 'accept'] as const)('refuses %s across a saved-identi
   const first = await database.read(page.code);
   identity = 'second';
   await database.change(page.code, () => ({
-    value: { page, pending: { id: crypto.randomUUID(), text: 'Second identity draft', at: 1 }, conflict: { ...page, text: 'Shared', version: 2 } },
+    value: { page, pending: { id: crypto.randomUUID(), text: 'Second identity draft', at: 1, baseVersion: page.version, baseText: page.text }, conflict: { ...page, text: 'Shared', version: 2 } },
     queued: true,
   }));
   const second = await database.read(page.code);

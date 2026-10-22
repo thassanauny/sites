@@ -207,7 +207,7 @@ export async function mockCloud(
   let rejectForce = false;
   let sessionCreates = 0;
   let joins = 0;
-  let legacySchema = false;
+  let invalidProtocol = false;
   let loseCreateReply = false;
   let loseSaveReply = false;
   const polls: Record<string, number>[] = [];
@@ -235,8 +235,8 @@ export async function mockCloud(
       polls.push(args.p_known ?? {});
       downloaded.push(visible.filter(row => args.p_known?.[row.id] !== row.revision).map(row => row.id));
       await route.fulfill({
-        json: legacySchema
-          ? visible
+        json: invalidProtocol
+          ? { sharing_version: -1 }
           : {
               sharing_version: 2,
               heads: visible.map((row) => ({
@@ -326,8 +326,8 @@ export async function mockCloud(
     downloaded,
     loseNextSaveReply: () => { loseSaveReply = true; },
     loseNextCreateReply: () => { loseCreateReply = true; },
-    useLegacySchema: () => {
-      legacySchema = true;
+    returnInvalidProtocol: () => {
+      invalidProtocol = true;
     },
     rejectForce: () => { rejectForce = true; },
     conflict: () => {

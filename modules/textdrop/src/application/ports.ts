@@ -29,7 +29,7 @@ export interface Cloud {
   pollPage(id: string, knownVersion: number): Promise<TextDropPage | null>;
   savePage(id: string, text: string): Promise<TextDropPage>;
   /** Checked writes retain their editing baseline and reuse a durable operation ID on retries. */
-  saveCheckedPage?(id: string, text: string, save: TextSave): Promise<TextDropPage>;
+  saveCheckedPage(id: string, text: string, save: TextSave): Promise<TextDropPage>;
   acceptSharedPage?(id: string, localText: string): Promise<TextDropPage>;
   /** Sets a damaged saved session aside so the next request signs in again. Valid sessions are never touched. */
   startNewSession(): Promise<void>;
@@ -42,7 +42,6 @@ export interface DeviceList {
   snapshot(code: string): string | null;
   isRemoved(code: string): boolean;
   remember(code: string, expected?: string | null): DeviceSnippet[];
-  rename(code: string, name: string): DeviceSnippet[];
   sharedName?(code: string, name: string | null, version: number, pending?: boolean): DeviceSnippet[];
   remove(code: string): DeviceSnippet[];
   /** Whether a `storage` event key shows that another tab changed the list. */
@@ -55,3 +54,9 @@ export interface DraftRecovery {
   write(page: TextDropPage, text: string): void;
   clear(page: TextDropPage): void;
 }
+
+/** Current network protocol; local save/rename conveniences belong to the offline adapter. */
+export type RemoteCloud = Omit<Cloud, 'savePage' | 'renamePage'> & {
+  renameCheckedPage(id: string, name: string | null, cached: TextDropPage): Promise<TextDropPage>;
+  listNames(codes: string[]): Promise<{ code: string; name: string | null; version: number }[]>;
+};

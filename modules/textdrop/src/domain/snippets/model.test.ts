@@ -4,6 +4,7 @@ import { MAX_TEXT_BYTES, countLines, exceedsLimit, exportFileName, normalizeCode
 const page = {
   id: '22222222-2222-4222-8222-222222222222',
   code: 'a'.repeat(32),
+  name: null,
   text: 'A shared note\nবাংলা 😀',
   version: 1,
   updatedAt: '2026-10-10T01:02:03.123456+00:00',
@@ -99,6 +100,7 @@ describe('snippet data and limits', () => {
       { version: 0 },
       { version: Number.MAX_SAFE_INTEGER + 1 },
       { version: '1' },
+      { name: undefined },
       { updatedAt: '2026-02-30T01:02:03Z' },
       { updatedAt: '2026-10-10' },
       { updatedAt: '2026-10-10T24:00:00Z' },

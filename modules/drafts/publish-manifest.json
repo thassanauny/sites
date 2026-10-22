@@ -16,8 +16,8 @@
     "styles.css": "a77725548498d3ed5b1ab06deb71aa94a20b56bcd66806ade0db07f300ac3e80"
   },
   "sourceFiles": {
-    "scripts/prepare-site.mjs": "2b06f1c08564fe36abdb30f9fb607da249eb562df9ffd91af60465f89f59be71",
-    "scripts/snapshot-lib.mjs": "4a2cf7a469a70041156d89cf5d93f3414b39865c77921e4cc7b8659349d1c930",
+    "scripts/prepare-site.mjs": "44ce66e327c68a847b17f45ad7059cf6c8b817132b90a5a2a0e5a4a731b60b7b",
+    "scripts/snapshot-lib.mjs": "e98ce665f7e4e2060ce00f21ac9470ca3f805b926f965f0405e4f25a2198000c",
     "site/assets/drafts-icon.png": "d4e6af5fba91fb4387cfbdc15853e5b55f266ab0d79c86201b38145af69a4e0e",
     "site/assets/drafts-screenshot.png": "9aeb713895926cd9a4b128c1a6bbeb64b84471f3bf03cda10b40d03f97df9543",
     "site/index.html": "6668db9200903b709b0ef981e537cdd5b134df270d16c54bb4d61bb9718e6d21",

@@ -124,7 +124,7 @@ export function BoardSettingsDialog({
           <strong>Enable Supabase sharing</strong>
           <p>
             Blueprint uses the collection’s shared public Supabase settings. Apply
-            the app’s database migrations to enable sharing.
+            the app’s current database schema to enable sharing.
           </p>
           <p>
             Standalone configuration uses <code>VITE_SUPABASE_URL</code> and{" "}

@@ -72,10 +72,10 @@ test('broadcasts contain only changed board IDs/revisions on existing member top
   await database.query('select public.pinboard_join_board($1)', [board.invite_code]);
   await database.exec('truncate realtime.messages');
   const saved = (
-    await database.query('select public.pinboard_mutate_board($1,$2::jsonb) as board', [
-      id,
-      JSON.stringify({ type: 'update_board', patch: { title: 'Changed privately' } }),
-    ])
+    await database.query(
+      'select public.pinboard_mutate_board_once($1,gen_random_uuid(),$2::jsonb,(select revision from public.pinboard_boards where id=$1)) as board',
+      [id, JSON.stringify({ type: 'update_board', patch: { title: 'Changed privately' } })],
+    )
   ).rows[0].board;
   const hints = (await database.query('select * from realtime.messages order by topic')).rows;
   assert.equal(hints.length, 2);
@@ -117,24 +117,27 @@ test('moving multiple child rows notifies once per member and receipt replays do
   await database.query("select set_config('request.jwt.claim.sub',$1,false)", [member]);
   await database.query('select public.pinboard_join_board($1)', [board.invite_code]);
   for (let n = 0; n < 4; n++) {
-    await database.query('select public.pinboard_mutate_board($1,$2::jsonb)', [
-      id,
-      JSON.stringify({
-        type: 'create_card',
-        card: {
-          id: randomUUID(),
-          title: `Row ${n}`,
-          description: '',
-          columnId: 'doing',
-          position: n,
-          priority: 'medium',
-          assignee: '',
-          dueDate: '',
-          labels: [],
-          archived: n % 2 === 0,
-        },
-      }),
-    ]);
+    await database.query(
+      'select public.pinboard_mutate_board_once($1,gen_random_uuid(),$2::jsonb,(select revision from public.pinboard_boards where id=$1))',
+      [
+        id,
+        JSON.stringify({
+          type: 'create_card',
+          card: {
+            id: randomUUID(),
+            title: `Row ${n}`,
+            description: '',
+            columnId: 'doing',
+            position: n,
+            priority: 'medium',
+            assignee: '',
+            dueDate: '',
+            labels: [],
+            archived: n % 2 === 0,
+          },
+        }),
+      ],
+    );
   }
   await database.exec('truncate realtime.messages');
   const token = randomUUID();
@@ -173,10 +176,16 @@ test('failed notifications do not fail a durable mutation or membership join', a
     await database.query("select public.pinboard_create_board($1,'Still saved','') as board", [id])
   ).rows[0].board;
   const saved = (
-    await database.query('select public.pinboard_mutate_board($1,$2::jsonb) as board', [
-      id,
-      JSON.stringify({ type: 'update_board', patch: { title: 'Notification failed, data saved' } }),
-    ])
+    await database.query(
+      'select public.pinboard_mutate_board_once($1,gen_random_uuid(),$2::jsonb,(select revision from public.pinboard_boards where id=$1)) as board',
+      [
+        id,
+        JSON.stringify({
+          type: 'update_board',
+          patch: { title: 'Notification failed, data saved' },
+        }),
+      ],
+    )
   ).rows[0].board;
   assert.equal(saved.title, 'Notification failed, data saved');
   await database.query("select set_config('request.jwt.claim.sub',$1,false)", [member]);

@@ -209,12 +209,11 @@ export function readAppVersion(directory, name) {
 
 /**
  * Read-only check of one app's output and source folders in the Sites checkout, before any build.
- * `spec`: label, app, site, source, required { files, sourceFiles }, bootstrap (an empty destination may
- * be adopted) and legacy (an unversioned manifest, written before source hashes existed, verifies
- * only the site output).
+ * `spec`: label, app, site, source, required { files, sourceFiles }.
+ * An empty destination may be initialized.
  */
 export function validateManagedDestination(target, spec) {
-  const { label, app, site: siteName, source: sourceName, bootstrap = true, legacy = false } = spec;
+  const { label, app, site: siteName, source: sourceName } = spec;
   const { files: requiredFiles = [], sourceFiles: requiredSourceFiles = [] } = spec.required ?? {};
   if (!regular(target, 'directory')) throw new Error('Choose the existing shared Sites checkout.');
   target = realpathSync(target);
@@ -229,7 +228,6 @@ export function validateManagedDestination(target, spec) {
   const sourceFiles = collect(source);
   const marker = join(source, manifestName);
   if (!stat(marker)) {
-    if (!bootstrap) throw new Error('Missing ' + label + ' ownership manifest.');
     if ((stat(site) && readdirSync(site).length) || (stat(source) && readdirSync(source).length)) throw new Error('Missing ' + label + ' ownership manifest; refusing unowned contents.');
     return target;
   }
@@ -238,20 +236,17 @@ export function validateManagedDestination(target, spec) {
   try { manifest = JSON.parse(readFileSync(marker, 'utf8')); }
   catch { throw invalid(); }
   if (manifest?.app !== app || manifest.site !== siteName) throw invalid();
-  const owned = manifest.format !== undefined || !legacy;
-  if (owned) {
-    if (manifest.format !== 1 || manifest.source !== sourceName || typeof manifest.version !== 'string' || !manifest.version
-      || !hashMap(manifest.files) || !hashMap(manifest.sourceFiles)
-      || requiredFiles.some(name => !manifest.files[name]) || requiredSourceFiles.some(name => !manifest.sourceFiles[name])
-      || manifest.sourceFiles[manifestName]) throw invalid();
-  } else if (manifest.files !== undefined && !hashMap(manifest.files)) throw invalid();
-  const files = manifest.files ?? {};
+  if (manifest.format !== 1 || manifest.source !== sourceName || typeof manifest.version !== 'string' || !manifest.version
+    || !hashMap(manifest.files) || !hashMap(manifest.sourceFiles)
+    || requiredFiles.some(name => !manifest.files[name]) || requiredSourceFiles.some(name => !manifest.sourceFiles[name])
+    || manifest.sourceFiles[manifestName]) throw invalid();
+  const files = manifest.files;
   delete sourceFiles[manifestName];
-  if (!matches(siteFiles, files) || (owned && !matches(sourceFiles, manifest.sourceFiles))) {
+  if (!matches(siteFiles, files) || !matches(sourceFiles, manifest.sourceFiles)) {
     throw new Error('Unowned or modified ' + label + ' files; preserve those changes before preparing again.');
   }
   ownedDirectories(site, files, label);
-  if (owned) ownedDirectories(source, manifest.sourceFiles, label);
+  ownedDirectories(source, manifest.sourceFiles, label);
   return target;
 }
 
@@ -391,7 +386,7 @@ const verifiedEnvironment = /^(?:VITE_|BASE_PATH$|NODE|NPM$|npm_config_|PATH$|PA
 /** Private attestations bind successful checks to exact public inputs, build-relevant environment and runtime/tool versions. */
 function verifiedBuild(origin, sourceFiles, env) {
   if (stat(join(origin, manifestName))) return undefined;
-  const enabled = env.WEBSITE_BUILD_CACHE !== '0' && env.WEBSITE_DEPENDENCY_CACHE !== '0';
+  const enabled = env.WEBSITE_BUILD_CACHE !== '0';
   const environment = Object.entries(env).filter(([name]) => verifiedEnvironment.test(name)).sort();
   const key = digest(JSON.stringify({
     format: 1, sourceFiles, environment, npm: npmContext(env),

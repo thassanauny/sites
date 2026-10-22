@@ -224,7 +224,7 @@ describe('online board sharing', () => {
     expect(mock.signInAnonymously).toHaveBeenCalledTimes(2);
   });
 
-  it('moves the stored identity before creating the Supabase client without writing board data', async () => {
+  it('validates the current identity before creating the Supabase client without rewriting it', async () => {
     vi.stubGlobal('navigator', {
       onLine: true,
       locks: {
@@ -238,7 +238,7 @@ describe('online board sharing', () => {
       refresh_token: 'previous-refresh',
       expires_at: 4_000_000_000,
     });
-    const values = new Map([['kanban-auth', session]]);
+    const values = new Map([['pinboard-auth', session]]);
     const storage = {
       getItem: vi.fn((key: string) => values.get(key) ?? null),
       setItem: vi.fn((key: string, value: string) => {
@@ -251,7 +251,6 @@ describe('online board sharing', () => {
     vi.stubGlobal('window', { localStorage: storage });
     mock.createClient.mockImplementationOnce(() => {
       expect(values.get('pinboard-auth')).toBe(session);
-      expect(values.get('kanban-auth')).toBe(session);
       return {
         auth: {
           getSession: mock.getSession,
@@ -263,11 +262,11 @@ describe('online board sharing', () => {
     });
     const cloud = await import('./boards');
     await expect(cloud.loadBoardList()).resolves.toEqual([]);
-    expect(storage.setItem.mock.calls).toEqual([['pinboard-auth', session]]);
+    expect(storage.setItem).not.toHaveBeenCalled();
     expect(mock.signInAnonymously).not.toHaveBeenCalled();
   });
 
-  it('explicitly coordinates ordinary auth writers with the migration Web Lock', async () => {
+  it('coordinates ordinary auth writers with the current session Web Lock', async () => {
     vi.stubGlobal('navigator', { onLine: true, locks: { request: vi.fn() } });
     const cloud = await import('./boards');
     await cloud.initializeCloud();
@@ -302,12 +301,12 @@ describe('online board sharing', () => {
     expect(mock.createClient).toHaveBeenCalledTimes(1);
   });
 
-  it('retains malformed migrated credentials without initializing or replacing the identity', async () => {
+  it('retains malformed current credentials without initializing or replacing the identity', async () => {
     const raw = JSON.stringify({
       access_token: 'old-token',
       refresh_token: 'old-refresh',
     });
-    const values = new Map([['kanban-auth', raw]]);
+    const values = new Map([['pinboard-auth', raw]]);
     const storage = {
       getItem: vi.fn((key: string) => values.get(key) ?? null),
       setItem: vi.fn(),
@@ -316,7 +315,7 @@ describe('online board sharing', () => {
     vi.stubGlobal('window', { localStorage: storage });
     const cloud = await import('./boards');
     await expect(cloud.initializeCloud()).rejects.toThrow('original credentials are preserved');
-    expect(values.get('kanban-auth')).toBe(raw);
+    expect(values.get('pinboard-auth')).toBe(raw);
     expect(mock.createClient).not.toHaveBeenCalled();
     expect(mock.signInAnonymously).not.toHaveBeenCalled();
     expect(storage.removeItem).not.toHaveBeenCalled();

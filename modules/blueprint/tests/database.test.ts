@@ -4,9 +4,9 @@ import { readFile } from "node:fs/promises";
 const creator = "11111111-1111-4111-8111-111111111111";
 const member = "22222222-2222-4222-8222-222222222222";
 const outsider = "33333333-3333-4333-8333-333333333333";
-const legacy = "44444444-4444-4444-8444-444444444444";
+const existingId = "44444444-4444-4444-8444-444444444444";
 let db: PGlite;
-let legacyInvite: string;
+let existingInvite: string;
 type Result = {
   id: string;
   invite_code: string;
@@ -49,40 +49,16 @@ beforeAll(async () => {
     create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
     grant usage on schema auth,public to authenticated,anon;
     insert into auth.users values('${creator}'),('${member}'),('${outsider}');`);
-  const migration = (name: string) =>
-    readFile(
-      new URL("../supabase/migrations/" + name, import.meta.url),
-      "utf8",
-    );
-  await db.exec(await migration("001_blueprint_boards.sql"));
+  const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
+  await db.exec(schema);
   await asUser(creator);
-  await db.query(
-    "insert into blueprint_boards(id,user_id,title) values($1,$2,$3)",
-    [legacy, creator, "Existing board"],
-  );
-  await db.exec("reset role");
-  await db.exec(await migration("002_board_invitations.sql"));
-  legacyInvite = (
-    await db.query<{ invite_code: string }>(
-      "select invite_code from private.blueprint_board_access where board_id=$1",
-      [legacy],
-    )
-  ).rows[0].invite_code;
+  const existing = await call('public.blueprint_create_board($1,$2,$3::jsonb)', [existingId, 'Existing board', doc]);
+  existingInvite = existing.invite_code;
   await asUser(member);
-  await call("public.blueprint_join_board($1)", [legacyInvite]);
-  // A genuine old viewer cannot write before the upgrade.
-  expect((await write({ id: legacy } as Result)).rows).toEqual([]);
-  await db.exec("reset role");
-  await expect(
-    db.exec(await migration("004_incremental_sync.sql")),
-  ).rejects.toThrow("Apply 003_shared_editing.sql before");
-  await db.exec("rollback");
-  const shared = await migration("003_shared_editing.sql");
-  await db.exec(shared);
-  await db.exec(shared);
-  const incremental = await migration("004_incremental_sync.sql");
-  await db.exec(incremental);
-  await db.exec(incremental);
+  await call('public.blueprint_join_board($1)', [existingInvite]);
+  await db.exec('reset role');
+  await db.exec(schema);
+  await db.exec(schema);
 }, 30000);
 afterAll(async () => {
   await db?.close();
@@ -125,26 +101,26 @@ describe("shared invitation permissions", () => {
       call("public.blueprint_sync_boards($1::jsonb)", ["{}"]),
     ).rejects.toThrow(/permission denied/);
   });
-  it("replays safely and preserves boards, documents, revisions, invitations and old memberships", async () => {
+  it("replays safely and preserves boards, documents, revisions, invitations and memberships", async () => {
     await asUser(member);
     const listed = await call<{ sharing_version: number; boards: Result[] }>(
       "public.blueprint_sync_boards('{}'::jsonb)",
     );
     expect(listed.sharing_version).toBe(2);
     expect(await call("to_regprocedure('public.blueprint_list_boards()')::text")).toBeNull();
-    const board = listed.boards.find((board) => board.id === legacy)!;
+    const board = listed.boards.find((board) => board.id === existingId)!;
     expect(board.title).toBe("Existing board");
     expect(board.revision).toBe(1);
-    expect(board.invite_code).toBe(legacyInvite);
+    expect(board.invite_code).toBe(existingInvite);
     const saved = await db.query<{ document: unknown }>(
       "select document from blueprint_boards where id=$1",
-      [legacy],
+      [existingId],
     );
     expect(saved.rows[0].document).toEqual(JSON.parse(doc));
     expect((await write(board)).rows).toEqual([{ revision: 2 }]);
     await asUser(creator);
     expect(
-      (await db.query("select id from blueprint_boards where id=$1", [legacy]))
+      (await db.query("select id from blueprint_boards where id=$1", [existingId]))
         .rows,
     ).toHaveLength(1);
   });
@@ -268,18 +244,7 @@ describe("shared invitation permissions", () => {
     await join(board);
     await db.exec("reset role");
     await db.query("delete from auth.users where id=$1", [temporaryCreator]);
-    await db.exec(
-      await readFile(
-        new URL(
-          "../supabase/migrations/003_shared_editing.sql",
-          import.meta.url,
-        ),
-        "utf8",
-      ),
-    );
-    await db.exec(
-      await readFile(new URL("../supabase/migrations/004_incremental_sync.sql", import.meta.url), "utf8"),
-    );
+    await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
     await asUser(member);
     const listed = await call<{ boards: Result[] }>(
       "public.blueprint_sync_boards('{}'::jsonb)",
@@ -326,7 +291,7 @@ describe("shared invitation permissions", () => {
       /device session/,
     );
     await expect(
-      call("public.blueprint_join_board($1)", [legacyInvite]),
+      call("public.blueprint_join_board($1)", [existingInvite]),
     ).rejects.toThrow(/device session/);
   });
   it("compares revisions so stale document saves cannot overwrite accepted changes", async () => {

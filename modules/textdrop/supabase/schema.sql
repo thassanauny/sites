@@ -1,39 +1,48 @@
--- TextDrop: run once in the existing IOU project's Supabase SQL editor as administrator.
--- This additive transaction leaves IOU and Pinboard objects unchanged.
+-- TextDrop current schema: fresh installation or repeatable refresh as administrator.
+-- Preserves current pages, invitations, memberships, versions and retry receipts.
 -- Keep private OUT of the Data API's exposed schemas.
 begin;
-
 create schema if not exists private;
+drop function if exists public.textdrop_load_page(uuid);
+drop function if exists public.textdrop_save_page(uuid,text);
+drop function if exists public.textdrop_save_page_receipt(uuid,text);
+drop function if exists public.textdrop_rename_page(uuid,text);
+drop function if exists private.textdrop_load_page(uuid);
+drop function if exists private.textdrop_save_page(uuid,text);
+drop function if exists private.textdrop_rename_page(uuid,text);
 
-create table public.textdrop_pages (
+create table if not exists public.textdrop_pages (
   id uuid primary key,
   code text not null unique check (code ~ '^[a-f0-9]{32}$'),
   content text not null default '' check (octet_length(content) <= 1048576),
+  name text check (name is null or (char_length(name) between 1 and 80 and name = btrim(name) and name !~ '[[:cntrl:]]')),
+  mutation_floor bigint not null default 0,
   version bigint not null default 1 check (version between 1 and 9007199254740991),
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create table public.textdrop_page_access (
+create table if not exists public.textdrop_page_access (
   page_id uuid not null references public.textdrop_pages(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   joined_at timestamptz not null default now(),
   primary key (page_id, user_id)
 );
 
-create index textdrop_page_access_user_idx on public.textdrop_page_access (user_id, page_id);
-create index textdrop_pages_creator_idx on public.textdrop_pages (created_by);
+create index if not exists textdrop_page_access_user_idx on public.textdrop_page_access (user_id, page_id);
+create index if not exists textdrop_pages_creator_idx on public.textdrop_pages (created_by);
 
 alter table public.textdrop_pages enable row level security;
 alter table public.textdrop_page_access enable row level security;
 revoke all on public.textdrop_pages, public.textdrop_page_access from public, anon, authenticated;
 -- RLS stays enabled with no policies: the app uses the RPCs below only, so there is no direct read.
 
+
 create or replace function private.textdrop_page_json(p_page public.textdrop_pages)
 returns jsonb language sql immutable security invoker set search_path = '' as $$
   select jsonb_build_object('id', p_page.id, 'code', p_page.code, 'text', p_page.content,
-    'version', p_page.version, 'updatedAt', p_page.updated_at);
+    'name', p_page.name, 'version', p_page.version, 'updatedAt', p_page.updated_at);
 $$;
 
 create or replace function private.textdrop_create_page(p_id uuid)
@@ -74,7 +83,6 @@ begin
   return private.textdrop_page_json(page_row);
 end;
 $$;
-
 create or replace function private.textdrop_join_page(p_code text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
@@ -96,47 +104,6 @@ begin
   return private.textdrop_page_json(page_row);
 end;
 $$;
-
-create or replace function private.textdrop_load_page(p_id uuid)
-returns jsonb language plpgsql security definer set search_path = '' as $$
-declare
-  caller uuid := auth.uid();
-  page_row public.textdrop_pages%rowtype;
-begin
-  if caller is null then raise exception 'TEXTDROP_AUTH_REQUIRED' using errcode = '42501'; end if;
-  if not exists (select 1 from public.textdrop_page_access where page_id = p_id and user_id = caller)
-    then raise exception 'TEXTDROP_ACCESS_DENIED' using errcode = '42501'; end if;
-  select * into page_row from public.textdrop_pages where id = p_id;
-  if not found then raise exception 'TEXTDROP_ACCESS_DENIED' using errcode = '42501'; end if;
-  return private.textdrop_page_json(page_row);
-end;
-$$;
-
-create or replace function private.textdrop_save_page(p_id uuid, p_text text)
-returns jsonb language plpgsql security definer set search_path = '' as $$
-declare
-  caller uuid := auth.uid();
-  page_row public.textdrop_pages%rowtype;
-begin
-  if caller is null then raise exception 'TEXTDROP_AUTH_REQUIRED' using errcode = '42501'; end if;
-  if not exists (select 1 from public.textdrop_page_access where page_id = p_id and user_id = caller)
-    then raise exception 'TEXTDROP_ACCESS_DENIED' using errcode = '42501'; end if;
-  if p_text is null or octet_length(p_text) > 1048576
-    then raise exception 'TEXTDROP_INVALID_TEXT' using errcode = '22023'; end if;
-  -- Every accepted save replaces the entire page after locking the current row.
-  -- The server's acceptance order determines the winner, never a device clock.
-  select * into page_row from public.textdrop_pages where id = p_id for update;
-  if not found then raise exception 'TEXTDROP_ACCESS_DENIED' using errcode = '42501'; end if;
-  if page_row.version = 9007199254740991
-    then raise exception 'TEXTDROP_VERSION_LIMIT' using errcode = 'P0001'; end if;
-  update public.textdrop_pages set content = p_text, version = version + 1, updated_at = clock_timestamp()
-    where id = page_row.id returning * into page_row;
-  return private.textdrop_page_json(page_row);
-end;
-$$;
-
--- Conditional poll: the caller's known version comes back as a few bytes when nothing changed.
--- Also in update-poll-and-grants.sql for projects installed earlier.
 create or replace function private.textdrop_poll_page(p_id uuid, p_known bigint)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
@@ -154,84 +121,6 @@ begin
   return private.textdrop_page_json(page_row);
 end;
 $$;
-
--- Also in update-save-receipt.sql for installed projects. The original save still
--- controls validation, row locks and acceptance order; only its response is smaller.
-create or replace function public.textdrop_save_page_receipt(p_id uuid, p_text text)
-returns jsonb language sql security invoker set search_path = '' as $$
-  select private.textdrop_save_page(p_id, p_text) - 'text';
-$$;
-
-revoke all on function public.textdrop_save_page_receipt(uuid,text) from public, anon, authenticated;
-grant execute on function public.textdrop_save_page_receipt(uuid,text) to authenticated;
-
--- Invoker entry points are exposed; checked privileged implementations stay private.
-create or replace function public.textdrop_create_page(p_id uuid)
-returns jsonb language sql security invoker set search_path = '' as $$
-  select private.textdrop_create_page(p_id);
-$$;
-create or replace function public.textdrop_join_page(p_code text)
-returns jsonb language sql security invoker set search_path = '' as $$
-  select private.textdrop_join_page(p_code);
-$$;
-create or replace function public.textdrop_load_page(p_id uuid)
-returns jsonb language sql security invoker set search_path = '' as $$
-  select private.textdrop_load_page(p_id);
-$$;
-create or replace function public.textdrop_save_page(p_id uuid, p_text text)
-returns jsonb language sql security invoker set search_path = '' as $$
-  select private.textdrop_save_page(p_id, p_text);
-$$;
-
-create or replace function public.textdrop_poll_page(p_id uuid, p_known bigint)
-returns jsonb language sql security invoker set search_path = '' as $$
-  select private.textdrop_poll_page(p_id, p_known);
-$$;
-
-revoke all on function private.textdrop_page_json(public.textdrop_pages), private.textdrop_create_page(uuid),
-  private.textdrop_join_page(text), private.textdrop_load_page(uuid), private.textdrop_save_page(uuid,text),
-  private.textdrop_poll_page(uuid,bigint) from public, anon, authenticated;
-revoke all on function public.textdrop_create_page(uuid), public.textdrop_join_page(text),
-  public.textdrop_load_page(uuid), public.textdrop_save_page(uuid,text), public.textdrop_poll_page(uuid,bigint)
-  from public, anon, authenticated;
-grant usage on schema private to authenticated;
-grant execute on function private.textdrop_create_page(uuid), private.textdrop_join_page(text),
-  private.textdrop_load_page(uuid), private.textdrop_save_page(uuid,text), private.textdrop_poll_page(uuid,bigint) to authenticated;
-grant execute on function public.textdrop_create_page(uuid), public.textdrop_join_page(text),
-  public.textdrop_load_page(uuid), public.textdrop_save_page(uuid,text), public.textdrop_poll_page(uuid,bigint) to authenticated;
-
-alter table public.textdrop_pages add column if not exists name text
-  check (name is null or (char_length(name) between 1 and 80 and name = btrim(name) and name !~ '[[:cntrl:]]'));
-
-create or replace function private.textdrop_page_json(p_page public.textdrop_pages)
-returns jsonb language sql immutable security invoker set search_path = '' as $$
-  select jsonb_build_object('id', p_page.id, 'code', p_page.code, 'text', p_page.content,
-    'name', p_page.name, 'version', p_page.version, 'updatedAt', p_page.updated_at);
-$$;
-
-create or replace function private.textdrop_rename_page(p_id uuid, p_name text)
-returns jsonb language plpgsql security definer set search_path = '' as $$
-declare
-  caller uuid := auth.uid();
-  normalized text := nullif(btrim(p_name), '');
-  page_row public.textdrop_pages%rowtype;
-begin
-  if caller is null then raise exception 'TEXTDROP_AUTH_REQUIRED' using errcode = '42501'; end if;
-  if not exists (select 1 from public.textdrop_page_access where page_id = p_id and user_id = caller)
-    then raise exception 'TEXTDROP_ACCESS_DENIED' using errcode = '42501'; end if;
-  if normalized is not null and (char_length(normalized) > 80 or normalized ~ '[[:cntrl:]]')
-    then raise exception 'TEXTDROP_INVALID_NAME' using errcode = '22023'; end if;
-  select * into page_row from public.textdrop_pages where id = p_id for update;
-  if not found then raise exception 'TEXTDROP_ACCESS_DENIED' using errcode = '42501'; end if;
-  if page_row.name is distinct from normalized then
-    if page_row.version = 9007199254740991 then raise exception 'TEXTDROP_VERSION_LIMIT' using errcode = 'P0001'; end if;
-    update public.textdrop_pages set name = normalized, version = version + 1, updated_at = clock_timestamp()
-      where id = p_id returning * into page_row;
-  end if;
-  return private.textdrop_page_json(page_row);
-end;
-$$;
-
 create or replace function private.textdrop_names(p_codes text[])
 returns jsonb language plpgsql security definer set search_path = '' as $$
 begin
@@ -242,25 +131,29 @@ begin
     where p.code = any(p_codes));
 end;
 $$;
-
-create or replace function public.textdrop_rename_page(p_id uuid, p_name text)
+create or replace function public.textdrop_create_page(p_id uuid)
 returns jsonb language sql security invoker set search_path = '' as $$
-  select private.textdrop_rename_page(p_id, p_name);
+  select private.textdrop_create_page(p_id);
+$$;
+create or replace function public.textdrop_join_page(p_code text)
+returns jsonb language sql security invoker set search_path = '' as $$
+  select private.textdrop_join_page(p_code);
+$$;
+create or replace function public.textdrop_poll_page(p_id uuid, p_known bigint)
+returns jsonb language sql security invoker set search_path = '' as $$
+  select private.textdrop_poll_page(p_id, p_known);
 $$;
 create or replace function public.textdrop_names(p_codes text[])
 returns jsonb language sql security invoker set search_path = '' as $$
   select private.textdrop_names(p_codes);
 $$;
-revoke all on function private.textdrop_rename_page(uuid,text), private.textdrop_names(text[]),
-  public.textdrop_rename_page(uuid,text), public.textdrop_names(text[])
-  from public, anon, authenticated;
-grant execute on function private.textdrop_rename_page(uuid,text), private.textdrop_names(text[]),
-  public.textdrop_rename_page(uuid,text), public.textdrop_names(text[])
-  to authenticated;
+grant usage on schema private to authenticated;
+revoke all on function private.textdrop_create_page(uuid), private.textdrop_join_page(text), private.textdrop_poll_page(uuid,bigint), private.textdrop_names(text[]) from public, anon, authenticated;
+grant execute on function private.textdrop_create_page(uuid), private.textdrop_join_page(text), private.textdrop_poll_page(uuid,bigint), private.textdrop_names(text[]) to authenticated;
+revoke all on function public.textdrop_create_page(uuid), public.textdrop_join_page(text), public.textdrop_poll_page(uuid,bigint), public.textdrop_names(text[]) from public, anon, authenticated;
+grant execute on function public.textdrop_create_page(uuid), public.textdrop_join_page(text), public.textdrop_poll_page(uuid,bigint), public.textdrop_names(text[]) to authenticated;
+revoke all on function private.textdrop_page_json(public.textdrop_pages) from public, anon, authenticated;
 
--- Ask the Data API to reload its schema cache so the new functions are callable at once.
-notify pgrst, 'reload schema';
-alter table public.textdrop_pages add column if not exists mutation_floor bigint not null default 0;
 create table if not exists private.textdrop_save_receipts (
   page_id uuid not null references public.textdrop_pages(id) on delete cascade,
   operation_id uuid not null,

@@ -475,7 +475,7 @@ for (const kind of ["note", "text"] as const) {
     await page.evaluate(() => { Object.defineProperty(navigator, "onLine", { value: true, configurable: true }); window.dispatchEvent(new Event("online")); });
     await expect.poll(() => cloud.rows[0].document.nodes.find((node: { id: string }) => node.id === id).data[field]).toBe(draft);
     await expect(editor).toBeFocused();
-    cloud.useLegacySchema();
+    cloud.returnInvalidProtocol();
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expect(page.getByTitle('Add Service', { exact: true })).toBeDisabled();
     await expect(editor).not.toBeEditable();
@@ -1172,21 +1172,21 @@ test("a failed removal preference write leaves the board visible", async ({
   await expect(page.locator(".board-card")).toHaveCount(1);
 });
 
-test("an older database shows the migration requirement and never sends document writes", async ({
+test("an invalid sync protocol shows setup guidance and never sends document writes", async ({
   page,
 }) => {
   const cloud = await mockCloud(page);
-  cloud.useLegacySchema();
+  cloud.returnInvalidProtocol();
   await signIn(page);
   await page.goto("./#/board/" + invite);
   await expect(page.getByRole("main", { name: "All boards" })).toBeVisible();
   await expect(page.locator(".architecture-node")).toHaveCount(0);
-  await expect(page.getByRole("alert")).toContainText("rename-to-blueprint.sql");
+  await expect(page.getByRole("alert")).toContainText("schema.sql");
   await page.waitForTimeout(1000);
   expect(cloud.writes).toEqual([]);
 });
 
-test("a schema mismatch discovered after loading cancels pending shared writes", async ({
+test("an invalid sync protocol discovered after loading cancels pending shared writes", async ({
   page,
 }) => {
   const cloud = await mockCloud(page);
@@ -1196,13 +1196,13 @@ test("a schema mismatch discovered after loading cancels pending shared writes",
     page.locator(".connection").filter({ hasText: "Connected" }),
   ).toBeVisible();
   await page.getByTitle("Add Service", { exact: true }).click();
-  cloud.useLegacySchema();
+  cloud.returnInvalidProtocol();
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByTitle("Add Service", { exact: true })).toBeDisabled();
   await page
     .getByRole("button", { name: "Board settings", exact: true })
     .click();
-  await expect(page.getByRole("alert")).toContainText("rename-to-blueprint.sql");
+  await expect(page.getByRole("alert")).toContainText("schema.sql");
   await page.waitForTimeout(900);
   expect(cloud.writes).toEqual([]);
   expect(cloud.rows[0].document.nodes.length).toBe(9);

@@ -174,7 +174,8 @@ describe('TextDrop page controls', () => {
     const download = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     const devices = new DeviceSnippets();
     devices.remember(first.code);
-    devices.rename(first.code, 'Travel/notes: May');
+    devices.sharedName(first.code, 'Travel/notes: May', 1);
+    vi.mocked(cloud.joinPage).mockResolvedValueOnce({ ...first, name: 'Travel/notes: May' });
     await start(`#/p/${first.code}`);
     element('download').click();
     expect((download.mock.instances[0]! as HTMLAnchorElement).download).toBe('Travel notes May.txt');

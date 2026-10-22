@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, expect, it } from 'vitest';
@@ -37,7 +37,7 @@ afterAll(async () => {
 });
 it('broadcasts only private identifiers to joined identities, without text or invitation codes', async () => {
   await database.exec('truncate realtime.captured');
-  await database.query('select public.textdrop_save_page($1::uuid,$2)', [page.id, 'Confidential text']);
+  await database.query('select public.textdrop_save_checked($1::uuid,$2,$3,$4,$5::uuid)', [page.id, 'Confidential text', 1, createHash('sha256').update('').digest('hex'), randomUUID()]);
   const events = (await database.query<{ payload: unknown; topic: string; private: boolean; event: string }>('select * from realtime.captured order by topic')).rows;
   expect(events).toHaveLength(2);
   expect(events.map(event => event.topic).sort()).toEqual([`textdrop:user:${owner}`, `textdrop:user:${member}`].sort());
@@ -57,13 +57,25 @@ it('authorizes only the caller’s own broadcast topic and cannot grant client p
 });
 it('commits saves when notification delivery fails and emits no hints for rolled-back writes', async () => {
   await database.exec(`create or replace function realtime.send(payload jsonb,event text,topic text,private boolean) returns void language plpgsql as $$ begin raise exception 'offline'; end $$`);
-  await database.query('select public.textdrop_save_page($1::uuid,$2)', [page.id, 'Saved despite realtime outage']);
+  await database.query('select public.textdrop_save_checked($1::uuid,$2,$3,$4,$5::uuid)', [
+    page.id,
+    'Saved despite realtime outage',
+    2,
+    createHash('sha256').update('Confidential text').digest('hex'),
+    randomUUID(),
+  ]);
   expect((await database.query<{ page: TextDropPage }>('select public.textdrop_poll_page($1::uuid,null) as page', [page.id])).rows[0]!.page.text).toBe('Saved despite realtime outage');
   await database.exec(
     `create or replace function realtime.send(payload jsonb,event text,topic text,private boolean) returns void language sql as $$ insert into realtime.captured values($1,$2,$3,$4) $$; truncate realtime.captured;`,
   );
   await database.exec('begin');
-  await database.query('select public.textdrop_save_page($1::uuid,$2)', [page.id, 'Rolled back']);
+  await database.query('select public.textdrop_save_checked($1::uuid,$2,$3,$4,$5::uuid)', [
+    page.id,
+    'Rolled back',
+    3,
+    createHash('sha256').update('Saved despite realtime outage').digest('hex'),
+    randomUUID(),
+  ]);
   await database.exec('rollback');
   expect((await database.query('select * from realtime.captured')).rows).toEqual([]);
 });

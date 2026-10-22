@@ -1,7 +1,7 @@
-import type { Cloud } from './ports';
+import type { RemoteCloud } from './ports';
 
 /** Observe confirmed remote operations before the offline cache can supply a fallback. */
-export function withSyncTime(remote: Cloud): Cloud {
+export function withSyncTime(remote: RemoteCloud): RemoteCloud {
   let lastSync: Date | undefined;
   const listeners = new Set<(at: Date) => void>();
   function track<Args extends unknown[], Result>(operation: (...args: Args) => Promise<Result>) {
@@ -24,10 +24,8 @@ export function withSyncTime(remote: Cloud): Cloud {
     createPage: track(remote.createPage),
     joinPage: track(remote.joinPage),
     pollPage: track(remote.pollPage),
-    savePage: track(remote.savePage),
-    ...(remote.saveCheckedPage ? { saveCheckedPage: track(remote.saveCheckedPage) } : {}),
-    ...(remote.renamePage ? { renamePage: track(remote.renamePage) } : {}),
-    ...(remote.renameCheckedPage ? { renameCheckedPage: track(remote.renameCheckedPage) } : {}),
-    ...(remote.listNames ? { listNames: (codes: string[]) => (codes.length ? track(remote.listNames!)(codes) : remote.listNames!(codes)) } : {}),
+    saveCheckedPage: track(remote.saveCheckedPage),
+    renameCheckedPage: track(remote.renameCheckedPage),
+    listNames: (codes: string[]) => (codes.length ? track(remote.listNames)(codes) : remote.listNames(codes)),
   };
 }

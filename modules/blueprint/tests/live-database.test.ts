@@ -30,8 +30,7 @@ beforeAll(async () => {
     create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
     grant usage on schema auth,public to authenticated,anon;
     insert into auth.users values('${creator}'),('${member}'),('${outsider}');`);
-  for (const name of ["001_blueprint_boards.sql", "002_board_invitations.sql", "003_shared_editing.sql", "004_incremental_sync.sql"])
-    await db.exec(await readFile(new URL("../supabase/migrations/" + name, import.meta.url), "utf8"));
+  await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
   migration = await readFile(new URL("../supabase/update-live-sync.sql", import.meta.url), "utf8");
   await expect(db.exec(migration)).rejects.toThrow("Supabase Realtime must be installed");
   await db.exec("rollback");

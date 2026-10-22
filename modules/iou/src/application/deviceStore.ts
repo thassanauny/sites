@@ -17,7 +17,7 @@ export interface AppStore {
   memberByGroup: Record<string, string>
   cloudRevisions: Record<string, number>
   removedGroupIds: string[]
-  removalEpochs?: Record<string, string>
+  removalEpochs: Record<string, string>
   travelMode: TravelModeSettings
   outbox: PendingGroup[]
   pendingJoins: PendingJoin[]
@@ -71,7 +71,7 @@ export function removeGroupFromDevice(store: AppStore, groupId: string): AppStor
 /** Only an invitation begun after the latest removal may restore a group. */
 export function restoreInvitation(store: AppStore, record: { group: Group; revision: number }, started: AppStore): AppStore {
   const id = record.group.id
-  if (store.removalEpochs?.[id] !== started.removalEpochs?.[id]) {
+  if (store.removalEpochs[id] !== started.removalEpochs[id]) {
     throw new Error('This group was removed while opening the invitation. Open its invitation again to rejoin.')
   }
   return mergeCloudStore(store, [record], id)

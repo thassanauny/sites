@@ -23,10 +23,10 @@ const allowedBuild = name => ['index.html', 'logo.svg', 'icons/icon-192.png', 'i
   || /^pdfjs\/standard_fonts\/(?:[\w.-]+\.(?:pfb|ttf)|LICENSE_[A-Z]+)$/.test(name);
 const allowed = (kind, name) => kind === 'build' ? allowedBuild(name) : allowedSource(kind, name);
 
-/** Read-only ownership check; the first run after an upgrade also accepts a manifest without source hashes. */
+/** Read-only check of the current output and source ownership manifest. */
 export function validateUtilityDestination(target) {
   return validateManagedDestination(target, {
-    label, app: 'utility-desk', site: 'site/utility-desk', source: 'modules/utility-desk', bootstrap: false, legacy: true,
+    label, app: 'utility-desk', site: 'site/utility-desk', source: 'modules/utility-desk',
     required: { files: ['index.html', '.nojekyll'], sourceFiles: ['Makefile', 'package.json', helperName] },
   });
 }

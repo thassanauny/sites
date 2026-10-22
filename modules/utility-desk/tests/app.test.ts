@@ -26,17 +26,6 @@ describe('state persistence', () => {
     s2.clearActivity();
     expect(s2.getActivity()).toEqual([]);
   });
-  it('ignores old persistent tool drafts after reload without clearing activity', () => {
-    const kv = mem();
-    for (const tool of ['compress-image', 'image-workshop', 'images-to-pdf', 'date-time']) {
-      kv.setItem(`utility-desk:v1:draft:${tool}`, JSON.stringify({ maxSize: '12', quality: '1', contrast: '25', date: '2000-01-01' }));
-    }
-    const reloaded = new Store(kv);
-    for (const tool of ['compress-image', 'image-workshop', 'images-to-pdf', 'date-time']) {
-      expect(reloaded.getDraft(tool)).toEqual({});
-      expect(kv.getItem(`utility-desk:v1:draft:${tool}`)).toBeNull();
-    }
-  });
   it('survives corrupt or unavailable storage', () => {
     const kv = mem();
     kv.setItem('utility-desk:v1:activity', '{bad');

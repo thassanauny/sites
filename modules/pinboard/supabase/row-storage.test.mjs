@@ -5,7 +5,6 @@ import { test } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 
 const forward = await readFile(new URL('./schema.sql', import.meta.url), 'utf8');
-const rollback = await readFile(new URL('./rollback-row-storage.sql', import.meta.url), 'utf8');
 const creator = randomUUID();
 const member = randomUUID();
 const stranger = randomUUID();
@@ -35,14 +34,17 @@ async function create(db) {
   ).rows[0].board;
 }
 async function mutate(db, id, operation, token, base) {
-  const call = token
-    ? 'public.pinboard_mutate_board_once($1,$3,$2::jsonb,$4)'
-    : 'public.pinboard_mutate_board($1,$2::jsonb)';
   return (
-    await db.query(
-      `select ${call} board`,
-      token ? [id, JSON.stringify(operation), token, base] : [id, JSON.stringify(operation)],
-    )
+    await db.query('select public.pinboard_mutate_board_once($1,$3,$2::jsonb,$4) board', [
+      id,
+      JSON.stringify(operation),
+      token ?? randomUUID(),
+      base ??
+        (
+          await db.query('select revision from public.pinboard_boards where id=$1', [id])
+        ).rows[0]?.revision ??
+        null,
+    ])
   ).rows[0].board;
 }
 async function document(db, id) {
@@ -67,165 +69,63 @@ const card = (overrides = {}) => ({
   ...overrides,
 });
 
-test('upgrades losslessly, replays without overwriting rows, and rolls back latest accepted rows and receipts', async (t) => {
-  const db = await setup(rollback);
+test('refresh preserves current rows, invitations and receipts while retiring unchecked APIs', async (t) => {
+  const db = await setup(forward);
   t.after(() => db.close());
   let board = await create(db);
-  board = await mutate(db, board.id, {
-    type: 'update_board',
-    patch: {
-      card_fields: { hidden: [], custom: [{ id: fieldId, title: 'Custom', hidden: false }] },
-    },
-  });
-  const cards = [
-    card({ customFields: {} }),
-    card({ archived: true }),
-    card({ archived: false, position: 0, customFields: { [fieldId]: '' } }),
-  ];
-  for (const value of cards)
-    board = await mutate(db, board.id, { type: 'create_card', card: value });
-  const gone = card();
-  await mutate(db, board.id, { type: 'create_card', card: gone });
-  board = await mutate(db, board.id, { type: 'delete_card', id: gone.id });
+  const value = card({ archived: false, customFields: {} });
+  board = await mutate(db, board.id, { type: 'create_card', card: value });
   const token = randomUUID();
-  const operation = {
-    type: 'update_card',
-    id: cards[0].id,
-    patch: { description: 'Accepted before migration' },
-  };
+  const operation = { type: 'update_card', id: value.id, patch: { title: 'Accepted once' } };
   board = await mutate(db, board.id, operation, token, board.revision);
   await actor(db, member);
   await db.query('select public.pinboard_join_board($1)', [board.invite_code]);
   board = await mutate(db, board.id, {
     type: 'update_card',
-    id: cards[0].id,
-    patch: { description: 'Later collaborator edit' },
+    id: value.id,
+    patch: { title: 'Later shared title' },
   });
   await db.exec('reset role');
-  const receipt = (await db.query('select * from private.pinboard_operation_receipts')).rows;
+  const receipts = (
+    await db.query('select * from private.pinboard_operation_receipts order by receipt_id')
+  ).rows;
   const access = (await db.query('select * from public.pinboard_board_access order by user_id'))
     .rows;
+  // Model retired installed objects without retaining their old implementations.
+  await db.exec(`create function public.pinboard_mutate_board(uuid,jsonb) returns jsonb language sql as $$select '{}'::jsonb$$;
+    create function private.pinboard_mutate_board(uuid,jsonb) returns jsonb language sql as $$select '{}'::jsonb$$;
+    create table private.pinboard_row_storage_audit(board_id uuid);`);
+  await db.exec(forward);
   await db.exec(forward);
   assert.deepEqual(await document(db, board.id), board);
-  const audit = (await db.query('select * from private.pinboard_row_storage_audit')).rows;
-  assert.equal(audit[0].source_revision, board.revision);
-  assert.deepEqual(audit[0].source_hash, audit[0].reconstructed_hash);
-  assert.equal(audit[0].card_count, 3);
-  assert.equal(audit[0].active_card_count, 2);
   assert.deepEqual(
-    (await db.query('select * from private.pinboard_operation_receipts')).rows,
-    receipt,
+    (await db.query('select * from private.pinboard_operation_receipts order by receipt_id')).rows,
+    receipts,
   );
   assert.deepEqual(
     (await db.query('select * from public.pinboard_board_access order by user_id')).rows,
     access,
   );
-  assert.equal(
+  assert.deepEqual(
     (
-      await db.query(
-        "select count(*) n from pg_attribute where attrelid='public.pinboard_boards'::regclass and attname in ('cards','columns') and not attisdropped",
-      )
-    ).rows[0].n,
-    0,
+      await db.query(`select to_regprocedure('public.pinboard_mutate_board(uuid,jsonb)') public_old,
+    to_regprocedure('private.pinboard_mutate_board(uuid,jsonb)') private_old,
+    to_regclass('private.pinboard_row_storage_audit') audit`)
+    ).rows[0],
+    { public_old: null, private_old: null, audit: null },
   );
   await actor(db, creator);
   assert.deepEqual(
     await mutate(db, board.id, operation, token, 1),
     board,
-    'pre-migration receipt does not replay an old patch',
+    'refresh never replays a previously accepted patch',
   );
-  board = await mutate(db, board.id, {
-    type: 'update_card',
-    id: cards[1].id,
-    patch: { archived: false },
-  });
-  board = await mutate(db, board.id, { type: 'delete_card', id: cards[2].id });
-  board = await mutate(db, board.id, {
-    type: 'create_card',
-    card: card({ archived: true, description: 'Accepted after cutover' }),
-  });
-  const latestToken = randomUUID();
-  const latestOperation = {
-    type: 'update_column',
-    id: 'todo',
-    patch: { title: 'Post-migration title' },
-  };
-  board = await mutate(db, board.id, latestOperation, latestToken, board.revision);
-  await db.exec('reset role');
-  await db.exec(forward);
-  await db.exec(forward);
-  assert.deepEqual(await document(db, board.id), board);
-  assert.deepEqual(
-    (await db.query('select * from private.pinboard_row_storage_audit')).rows,
-    audit,
-  );
-  const latestReceipts = (
-    await db.query('select * from private.pinboard_operation_receipts order by receipt_id')
-  ).rows;
-  await db.exec(rollback);
-  assert.deepEqual(
-    await document(db, board.id),
-    board,
-    'rollback uses latest rows including post-cutover changes',
-  );
-  assert.equal(
-    (await db.query("select to_regclass('public.pinboard_cards') relation")).rows[0].relation,
-    null,
-  );
-  assert.deepEqual(
-    (await db.query('select * from private.pinboard_operation_receipts order by receipt_id')).rows,
-    latestReceipts,
-  );
-  await actor(db, creator);
-  assert.deepEqual(await mutate(db, board.id, latestOperation, latestToken, 1), board);
-  assert.equal(
-    (await mutate(db, board.id, { type: 'create_card', card: gone })).cards.some(
-      (c) => c.id === gone.id,
-    ),
-    false,
-  );
-  await db.exec('reset role');
-  await db.exec(rollback);
-  assert.deepEqual(await document(db, board.id), board);
-  await db.exec(forward);
-  assert.deepEqual(await document(db, board.id), board, 'forward is safe after rollback too');
-});
-
-test('upgrades older JSON installations without a stored count and aborts malformed historical data atomically', async (t) => {
-  const db = await setup(rollback);
-  t.after(() => db.close());
-  let board = await create(db);
-  board = await mutate(db, board.id, { type: 'create_card', card: card() });
-  await db.exec(
-    'reset role; drop view public.pinboard_board_summaries; alter table public.pinboard_boards drop column active_card_count',
-  );
-  await db.exec(forward);
-  assert.deepEqual(await document(db, board.id), board);
-  assert.equal(
-    (await db.query('select active_card_count from public.pinboard_boards')).rows[0]
-      .active_card_count,
-    1,
-  );
-  await db.exec(rollback);
-  await db.exec(`do $$ declare c text; begin
-    for c in select conname from pg_constraint where conrelid='public.pinboard_boards'::regclass and contype='c' and pg_get_constraintdef(oid) like '%pinboard_valid_state%'
-    loop execute format('alter table public.pinboard_boards drop constraint %I',c); end loop;
-  end $$;`);
-  const invalid = [{ ...board.cards[0], title: null }];
-  await db.query('update public.pinboard_boards set cards=$1::jsonb where id=$2', [
-    JSON.stringify(invalid),
-    board.id,
-  ]);
-  await assert.rejects(db.exec(forward), /PINBOARD_ROW_BACKFILL_INVALID/);
-  await db.exec('rollback');
-  assert.deepEqual(
-    (await db.query('select cards from public.pinboard_boards where id=$1', [board.id])).rows[0]
-      .cards,
-    invalid,
-  );
-  assert.equal(
-    (await db.query("select to_regclass('public.pinboard_cards') relation")).rows[0].relation,
-    null,
+  await assert.rejects(
+    db.query('select private.pinboard_apply_operation($1,$2::jsonb)', [
+      board.id,
+      JSON.stringify(operation),
+    ]),
+    /permission denied/,
   );
 });
 
@@ -381,6 +281,6 @@ test('bulk operations, archives and removals retain exact incremental counts and
     assert.equal(counts.active_card_count, counts.actual_active, operation.type);
     assert.equal(counts.content_bytes, counts.actual_bytes, operation.type);
   }
-  await db.exec(rollback);
+  await db.exec(forward);
   assert.deepEqual(await document(db, board.id), board);
 });

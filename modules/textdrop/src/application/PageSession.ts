@@ -300,9 +300,7 @@ export class PageSession {
           this.update({ phase: 'ready' });
           return;
         }
-        const saved = this.cloud.saveCheckedPage
-          ? await this.cloud.saveCheckedPage(page.id, text, { baseVersion: base.version, baseText: base.text, resolveConflict, ...(resolveConflict ? { localText: page.text } : {}) })
-          : await this.cloud.savePage(page.id, text);
+        const saved = await this.cloud.saveCheckedPage(page.id, text, { baseVersion: base.version, baseText: base.text, resolveConflict, ...(resolveConflict ? { localText: page.text } : {}) });
         if (generation !== this.generation) return;
         this.remember(saved, true);
         if (edit === this.edits) {

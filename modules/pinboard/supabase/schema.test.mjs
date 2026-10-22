@@ -27,7 +27,7 @@ async function createBoard(title = 'Project board') {
 
 async function mutate(boardId, operation) {
   const result = await database.query(
-    'select public.pinboard_mutate_board($1::uuid, $2::jsonb) as board',
+    'select public.pinboard_mutate_board_once($1::uuid,gen_random_uuid(),$2::jsonb,(select revision from public.pinboard_boards where id=$1)) as board',
     [boardId, JSON.stringify(operation)],
   );
   return result.rows[0].board;
@@ -141,7 +141,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     const functions = await database.query(`
       select n.nspname, p.proname, p.prosecdef, p.proconfig
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where p.proname in ('pinboard_create_board','pinboard_join_board','pinboard_mutate_board')
+      where p.proname in ('pinboard_create_board','pinboard_join_board','pinboard_mutate_board_once')
       order by n.nspname, p.proname
     `);
     assert.equal(functions.rows.length, 6);
@@ -172,7 +172,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       where n.nspname in ('public','private') and p.proname like 'pinboard_%'
       order by n.nspname, p.proname
     `);
-    assert.equal(permissions.rows.length, 21);
+    assert.equal(permissions.rows.length, 20);
     for (const permission of permissions.rows) {
       assert.equal(permission.anonymous, false, permission.proname);
       assert.equal(permission.public, false, permission.proname);
@@ -181,7 +181,6 @@ describe('Supabase schema in actual embedded PostgreSQL', {
         [
           'pinboard_create_board',
           'pinboard_join_board',
-          'pinboard_mutate_board',
           'pinboard_mutate_board_once',
           'pinboard_sync_summaries',
         ].includes(permission.proname),
@@ -219,7 +218,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       'select octet_length(operation_hash) as bytes from private.pinboard_operation_receipts where board_id=$1',
       [board.id],
     );
-    assert.deepEqual(rows.rows, [{ bytes: 32 }]);
+    assert.deepEqual(rows.rows, [{ bytes: 32 }, { bytes: 32 }]);
     await identity(stranger);
     await assert.rejects(
       mutateOnce(board.id, token, operation, board.revision),
@@ -377,10 +376,10 @@ describe('Supabase schema in actual embedded PostgreSQL', {
         /PINBOARD_AUTH_REQUIRED/,
       );
       await assert.rejects(
-        database.query(`select ${schema}.pinboard_mutate_board($1::uuid,$2::jsonb)`, [
-          board.id,
-          '{"type":"update_board","patch":{}}',
-        ]),
+        database.query(
+          `select ${schema}.pinboard_mutate_board_once($1::uuid,gen_random_uuid(),$2::jsonb,null)`,
+          [board.id, '{"type":"update_board","patch":{}}'],
+        ),
         /PINBOARD_AUTH_REQUIRED/,
       );
     }
@@ -1731,53 +1730,6 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     );
   });
 
-  test('a refresh replaces an older result builder with an explicit list that keeps the previous result shape', async () => {
-    await identity(creator);
-    const board = await createBoard('Result shape');
-    await database.exec('reset role');
-    await database.exec(`create or replace function private.pinboard_board_json(p_board public.pinboard_boards)
-      returns jsonb language sql immutable security invoker set search_path = '' as $$
-        -- Model the old schema before optional settings, counts and retry metadata.
-        select to_jsonb(d) - 'card_fields' from public.pinboard_board_documents d where d.id=p_board.id;
-      $$`);
-    const volatility = async () =>
-      (
-        await database.query(
-          "select provolatile from pg_proc where proname = 'pinboard_board_json'",
-        )
-      ).rows[0].provolatile;
-    const shape = async () =>
-      (
-        await database.query(
-          'select private.pinboard_board_json(b) as json from public.pinboard_boards b where id = $1',
-          [board.id],
-        )
-      ).rows[0].json;
-    assert.equal(await volatility(), 'i');
-    const previous = await shape();
-    await database.exec(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
-    assert.equal(await volatility(), 's');
-    assert.deepEqual(await shape(), previous);
-    assert.deepEqual(
-      Object.keys(previous).sort(),
-      [
-        'id',
-        'invite_code',
-        'title',
-        'description',
-        'columns',
-        'cards',
-        'revision',
-        'created_at',
-        'updated_at',
-      ].sort(),
-    );
-    const ownerAfter = await database.query(
-      `select has_function_privilege('authenticated', 'private.pinboard_board_json(public.pinboard_boards)', 'execute') as executable`,
-    );
-    assert.equal(ownerAfter.rows[0].executable, false);
-  });
-
   test('a table column added later never reaches RPC results', async () => {
     await identity(creator);
     const board = await createBoard('Future column');
@@ -1859,7 +1811,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     );
   });
 
-  test('a refresh narrows an older table-wide read grant and keeps the narrow one', async () => {
+  test('a refresh repairs an accidental table-wide read grant and keeps the narrow one', async () => {
     await database.exec('reset role');
     const columnPrivileges = async () =>
       (

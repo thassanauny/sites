@@ -664,10 +664,35 @@ describe('durable offline boards', () => {
       id: 'todo',
       targetColumnId: 'done',
     });
+    // The checked endpoint recognizes the accepted operation ID and returns
+    // current state; a missing column alone is not proof of acknowledgement.
+    current = { ...current, title: 'A later collaborator edit', revision: 3 };
+    mutate.mockImplementationOnce(async () => current);
     await open().loadBoardList();
-    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate).toHaveBeenCalledTimes(2);
+    expect(mutate.mock.calls[1]).toEqual(mutate.mock.calls[0]);
+    expect(current.title).toBe('A later collaborator edit');
     expect(current.cards[0]?.columnId).toBe('done');
     expect(await database.all(true)).toEqual([]);
+  });
+  it('retains an unacknowledged deletion when another member already removed its column', async () => {
+    const cloud = open();
+    await cloud.loadBoard(original.id);
+    online = false;
+    const operation: Operation = { type: 'delete_column', id: 'todo', targetColumnId: 'done' };
+    await cloud.mutateBoard(original.id, operation);
+    const pending = (await database.read(original.id))!.pending;
+    current = { ...applyOfflineOperation(current, operation), revision: 2 };
+    mutate.mockRejectedValue(new BoardOperationError('The saved operation needs review.'));
+    online = true;
+    await open().loadBoardList();
+    expect(mutate).toHaveBeenCalledWith(
+      original.id,
+      operation,
+      pending[0]!.id,
+      pending[0]!.baseRevision,
+    );
+    expect((await database.read(original.id))?.pending).toEqual(pending);
   });
   it('keeps a rejected board ordered while uploading other boards and reporting its error only there', async () => {
     const other = {

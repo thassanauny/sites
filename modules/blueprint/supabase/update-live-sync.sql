@@ -1,4 +1,4 @@
--- Optional private Broadcast invalidation after migrations 001-004.
+-- Optional private Broadcast invalidation after schema.sql.
 -- Requires Supabase-managed Realtime; never creates or changes its tables/grants.
 begin;
 
@@ -12,7 +12,7 @@ do $$ begin
     raise exception 'Supabase Realtime messages must already have row security enabled';
   end if;
   if to_regprocedure('public.blueprint_sync_boards(jsonb)') is null then
-    raise exception 'Apply Blueprint migrations 001-004 before live sync';
+    raise exception 'Apply Blueprint schema.sql before live sync';
   end if;
 end; $$;
 

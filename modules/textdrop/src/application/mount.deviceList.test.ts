@@ -237,7 +237,7 @@ describe('TextDrop device list', () => {
     const opening = pending<TextDropPage>();
     vi.mocked(cloud.joinPage).mockReturnValueOnce(opening.promise);
     await start(`#/p/${first.code}`);
-    new DeviceSnippets().rename(first.code, 'Travel notes');
+    new DeviceSnippets().sharedName(first.code, 'Travel notes', 2);
     window.dispatchEvent(new StorageEvent('storage', { key: `${DEVICE_SNIPPETS_KEY}:name:${first.code}` }));
     opening.resolve(first);
     await flush();
@@ -251,7 +251,7 @@ describe('TextDrop device list', () => {
     const devices = new DeviceSnippets();
     devices.remember(first.code);
     devices.remember(second.code);
-    devices.rename(second.code, 'Travel notes');
+    devices.sharedName(second.code, 'Travel notes', 1);
     await start();
     const labels = [...root.querySelectorAll<HTMLElement>('#device-list .snippet-open, #device-list .snippet-rename')].map(control => [control.getAttribute('aria-label'), control.title]);
     expect(labels).toEqual([

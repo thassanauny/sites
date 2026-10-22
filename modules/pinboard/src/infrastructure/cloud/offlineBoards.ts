@@ -7,14 +7,14 @@ import {
   validateOperation,
   validateUuid,
 } from '../../domain/boards/board';
-import { AUTH_STORAGE_KEY, migratePinboardSession } from '../auth/migrateSession';
+import { AUTH_STORAGE_KEY, validatePinboardSession } from '../auth/session';
 import { OfflineDatabase } from '../storage/offlineDatabase';
 
 export interface Entry {
   draft?: Board;
   summary: BoardSummary;
   board?: Board;
-  pending: { id: string; operation: Operation; baseRevision?: number }[];
+  pending: { id: string; operation: Operation; baseRevision: number }[];
   backups?: { id: string; board: Board; createdAt: string }[];
   /** A local editor save rejected before queueing; its durable backup is never uploaded. */
   unappliedBackupId?: string;
@@ -54,7 +54,7 @@ export class BoardSyncUnavailableError extends Error {}
 export class BoardOperationError extends Error {}
 async function owner(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  await migratePinboardSession(window.localStorage);
+  validatePinboardSession(window.localStorage);
   const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
   return raw ? (JSON.parse(raw).user?.id ?? null) : null;
 }
@@ -223,23 +223,12 @@ export function withOfflineBoards(
             while (current?.pending.length && navigator.onLine) {
               if ((await database.owner()) !== identity) return;
               const sent = current.pending[0]!;
-              // Deleting a column may have succeeded before a response was lost.
-              const latest =
-                sent.operation.type === 'delete_column'
-                  ? await remote.loadBoard(entry.summary.id)
-                  : undefined;
-              const saved =
-                latest &&
-                !latest.columns.some(
-                  (column) => column.id === (sent.operation as { id: string }).id,
-                )
-                  ? latest
-                  : await remote.mutateBoard(
-                      entry.summary.id,
-                      sent.operation,
-                      sent.id,
-                      sent.baseRevision ?? current.board?.revision,
-                    );
+              const saved = await remote.mutateBoard(
+                entry.summary.id,
+                sent.operation,
+                sent.id,
+                sent.baseRevision,
+              );
               if ((await database.owner()) !== identity) return;
               current = await database.change(
                 saved.id,

@@ -80,8 +80,8 @@ it('projects every offline operation with the same content as the installed SQL 
     for (const operation of operations) {
       const local = applyOfflineOperation(board, operation);
       const result = await database.query<{ board: Board }>(
-        'select public.pinboard_mutate_board($1::uuid, $2::jsonb) as board',
-        [boardId, JSON.stringify(operation)],
+        'select public.pinboard_mutate_board_once($1::uuid,gen_random_uuid(),$2::jsonb,$3) as board',
+        [boardId, JSON.stringify(operation), board.revision],
       );
       board = readBoard(result.rows[0]!.board);
       expect(content(local), operation.type).toEqual(content(board));

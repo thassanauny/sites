@@ -52,10 +52,6 @@ function readEntry(code: string, saved: string | null): StoredSnippet | null {
   return { code, openedAt, ...(removalToken === undefined ? {} : { removalToken }) };
 }
 
-function inlineRemoved(code: string, saved: string | null): boolean {
-  return readRow(code, saved)?.removed === true;
-}
-
 function readRemovalToken(code: string, saved: string | null): string | null {
   const row = readRow(code, saved);
   return row?.removed === true && typeof row.token === 'string' && row.token ? row.token : null;
@@ -70,7 +66,6 @@ function openingKey(code: string, token: string | null): string {
 }
 
 function isRemovedState(code: string, state: StoredState): boolean {
-  if (inlineRemoved(code, state.row)) return true;
   return (readEntry(code, state.row)?.removalToken ?? null) !== readRemovalToken(code, state.marker);
 }
 
@@ -140,9 +135,7 @@ export class DeviceSnippets {
         const snippet = readEntry(code, state.row);
         if (snippet && !isRemovedState(code, state)) {
           const name = readName(code, storage.getItem(`${namePrefix}${code}`));
-          const savedName = readRow(code, storage.getItem(namePrefix + code));
-          const shared = Number.isSafeInteger(savedName?.version) && Number(savedName?.version) > 0;
-          snippets.push({ code, openedAt: snippet.openedAt, ...(name === undefined ? {} : { name }), ...(shared ? { nameShared: true } : {}) });
+          snippets.push({ code, openedAt: snippet.openedAt, ...(name === undefined ? {} : { name }) });
         }
       }
     } catch {
@@ -177,27 +170,6 @@ export class DeviceSnippets {
   isRemoved(code: string): boolean {
     const normalized = normalizeCode(code);
     return isRemovedState(normalized, this.state(this.storage(), normalized));
-  }
-
-  rename(code: string, name: string): DeviceSnippet[] {
-    const normalized = normalizeCode(code);
-    const nextName = normalizedName(name);
-    if (nextName.length > MAX_SNIPPET_NAME_LENGTH) throw new Error(`Use a name with ${MAX_SNIPPET_NAME_LENGTH} characters or fewer.`);
-    const storage = this.storage();
-    const previous = this.read(storage);
-    if (!previous.some(snippet => snippet.code === normalized)) throw new Error('This snippet is no longer saved on this device. Open it again before naming it.');
-    try {
-      // Names are independent of opening rows and removal markers: an opening
-      // cannot erase a name, and naming can never restore a removed snippet.
-      storage.setItem(`${namePrefix}${normalized}`, JSON.stringify({ code: normalized, name: nextName }));
-    } catch {
-      throw new Error('Could not save the snippet name on this device. Check browser storage permissions or available space.');
-    }
-    try {
-      return this.read(storage);
-    } catch {
-      return previous.filter(snippet => snippet.code !== normalized);
-    }
   }
 
   remember(code: string, expected?: string | null): DeviceSnippet[] {

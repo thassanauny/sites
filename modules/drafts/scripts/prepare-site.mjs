@@ -69,10 +69,10 @@ export function validateDraftsSources(input, release) {
   return renderRelease(readFileSync(join(input, 'index.html'), 'utf8'), release);
 }
 
-/** Read-only ownership check; the first run after an upgrade also accepts a manifest without source hashes. */
+/** Read-only check of the current output and source ownership manifest. */
 export function validateDraftsDestination(target) {
   return validateManagedDestination(target, {
-    label, app: 'drafts', site: siteName, source: sourceName, bootstrap: false, legacy: true,
+    label, app: 'drafts', site: siteName, source: sourceName,
     required: { files: ['index.html', '.nojekyll'], sourceFiles: ['site/index.html', scriptName] },
   });
 }
@@ -85,10 +85,9 @@ export function prepareDrafts(target, release, website) {
   target = validateDraftsDestination(target);
   const module = join(target, sourceName);
   const output = join(target, siteName);
-  const manifest = JSON.parse(readFileSync(join(module, manifestName), 'utf8'));
   for (const path of website ? [website, dirname(website)] : []) if (stat(path)?.isSymbolicLink()) throw new Error('Refusing a symbolic-link Drafts folder.');
   const origin = website ?? join(module, 'site');
-  const current = release ?? manifest;
+  const current = release ?? JSON.parse(readFileSync(join(module, manifestName), 'utf8'));
   const metadata = { app: 'drafts', version: current.version, chrome: { version: current.chrome?.version, url: current.chrome?.url }, site: siteName };
   const html = validateDraftsSources(origin, metadata);
   withStage(target, '.drafts-prepare-', stage => {

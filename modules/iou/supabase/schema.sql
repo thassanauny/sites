@@ -1,8 +1,14 @@
--- iou: run once in the Supabase SQL editor, as the project administrator.
--- Keep the private schema OUT of the Data API's exposed schemas.
--- This file creates tables, so it cannot be run again on a project that has them. To pick up a later change to the
--- validation rules, run only the changed "create or replace function private.iou_valid_*" statements (see README.md).
+-- IOU current row schema: install or refresh as project administrator.
+-- Keep private OUT of the Data API's exposed schemas. Existing current data is preserved.
 begin;
+
+do $$
+begin
+  if exists(select 1 from pg_class where oid=to_regclass('public.iou_groups') and relkind<>'v') then
+    raise exception 'IOU_CURRENT_ROW_SCHEMA_REQUIRED';
+  end if;
+end;
+$$;
 
 create schema if not exists private;
 
@@ -162,207 +168,27 @@ exception when others then return false;
 end;
 $$;
 
-create table public.iou_groups (
+create table if not exists public.iou_group_headers (
   id text primary key,
   invite_code text not null unique check (invite_code ~ '^[a-f0-9]{32}$'),
-  payload jsonb not null check (private.iou_valid_group(payload)),
   version bigint not null default 1 check (version between 1 and 9007199254740991),
   created_by uuid references auth.users(id) on delete set null,
   updated_at timestamptz not null default now(),
-  check (payload->>'id' = id),
-  check (payload->>'inviteCode' = invite_code)
+  metadata jsonb not null,
+  member_count integer not null,
+  transaction_count integer not null,
+  member_bytes bigint not null,
+  transaction_bytes bigint not null,
+  payload_bytes bigint not null
 );
-
-create table public.iou_group_access (
-  group_id text not null references public.iou_groups(id) on delete cascade,
+create table if not exists public.iou_group_access (
+  group_id text not null references public.iou_group_headers(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   joined_at timestamptz not null default now(),
-  primary key (group_id, user_id)
+  primary key(group_id,user_id)
 );
-
-create index iou_group_access_user_idx on public.iou_group_access (user_id, group_id);
-create index iou_groups_creator_idx on public.iou_groups (created_by);
-
-alter table public.iou_groups enable row level security;
-alter table public.iou_group_access enable row level security;
-
--- All writes go through the checked RPCs. There are no public or direct write grants.
-revoke all on public.iou_groups, public.iou_group_access from public, anon, authenticated;
-grant select on public.iou_groups, public.iou_group_access to authenticated;
-
-create policy iou_read_own_access on public.iou_group_access
-  for select to authenticated using (user_id = (select auth.uid()));
-
-create policy iou_read_joined_groups on public.iou_groups
-  for select to authenticated using (exists (
-    select 1 from public.iou_group_access access
-    where access.group_id = iou_groups.id and access.user_id = (select auth.uid())
-  ));
-
-create or replace function private.iou_create_group(p_payload jsonb)
-returns jsonb language plpgsql security definer set search_path = '' as $$
-declare
-  caller uuid := auth.uid();
-  invite text;
-  prepared jsonb;
-  new_row public.iou_groups%rowtype;
-begin
-  if caller is null then raise exception 'IOU_AUTH_REQUIRED' using errcode = '42501'; end if;
-  -- Bound one anonymous session's storage usage, including concurrent creates.
-  perform pg_advisory_xact_lock(hashtextextended(caller::text, 9183));
-  if jsonb_typeof(p_payload) is distinct from 'object'
-    or not coalesce(private.iou_valid_id(p_payload->'id'), false)
-  then raise exception 'IOU_INVALID_GROUP' using errcode = '22023'; end if;
-  -- A response can be lost after commit. Retrying the same ID returns the
-  -- creator's existing group, without overwriting it or generating another code.
-  select * into new_row from public.iou_groups where id = p_payload->>'id';
-  if found then
-    if new_row.created_by = caller and exists (
-      select 1 from public.iou_group_access where group_id = new_row.id and user_id = caller
-    ) then
-      return jsonb_build_object('payload', new_row.payload, 'version', new_row.version);
-    end if;
-    raise exception 'IOU_INVALID_GROUP' using errcode = '22023';
-  end if;
-  if (select count(*) from public.iou_groups where created_by = caller) >= 100 then
-    raise exception 'IOU_GROUP_LIMIT' using errcode = 'P0001';
-  end if;
-  loop
-    invite := replace(gen_random_uuid()::text, '-', '');
-    prepared := jsonb_set(p_payload, '{inviteCode}', to_jsonb(invite));
-    if not private.iou_valid_group(prepared) then raise exception 'IOU_INVALID_GROUP' using errcode = '22023'; end if;
-    begin
-      insert into public.iou_groups (id, invite_code, payload, created_by)
-        values (prepared->>'id', invite, prepared, caller) returning * into new_row;
-      exit;
-    exception when unique_violation then
-      -- Retry the exceedingly unlikely code collision, never an existing group ID.
-      if exists (select 1 from public.iou_groups where id = prepared->>'id') then
-        raise exception 'IOU_INVALID_GROUP' using errcode = '22023';
-      end if;
-    end;
-  end loop;
-  insert into public.iou_group_access (group_id, user_id) values (new_row.id, caller);
-  return jsonb_build_object('payload', new_row.payload, 'version', new_row.version);
-end;
-$$;
-
-create or replace function private.iou_join_group(p_invite_code text)
-returns jsonb language plpgsql security definer set search_path = '' as $$
-declare
-  caller uuid := auth.uid();
-  normalized text := lower(regexp_replace(p_invite_code, '\s+', '', 'g'));
-  group_row public.iou_groups%rowtype;
-begin
-  if caller is null then raise exception 'IOU_AUTH_REQUIRED' using errcode = '42501'; end if;
-  if normalized is null or normalized !~ '^[a-f0-9]{32}$' then
-    raise exception 'IOU_INVALID_INVITE' using errcode = 'P0001';
-  end if;
-  perform pg_advisory_xact_lock(hashtextextended(caller::text, 9183));
-  select * into group_row from public.iou_groups where invite_code = normalized;
-  if not found then raise exception 'IOU_INVALID_INVITE' using errcode = 'P0001'; end if;
-  if not exists (select 1 from public.iou_group_access where group_id = group_row.id and user_id = caller)
-    and (select count(*) from public.iou_group_access where user_id = caller) >= 1000
-  then raise exception 'IOU_GROUP_LIMIT' using errcode = 'P0001'; end if;
-  insert into public.iou_group_access (group_id, user_id) values (group_row.id, caller) on conflict do nothing;
-  return jsonb_build_object('payload', group_row.payload, 'version', group_row.version);
-end;
-$$;
-
-create or replace function private.iou_save_group(p_payload jsonb, p_expected_version bigint)
-returns jsonb language plpgsql security definer set search_path = '' as $$
-declare
-  caller uuid := auth.uid();
-  group_row public.iou_groups%rowtype;
-begin
-  if caller is null then raise exception 'IOU_AUTH_REQUIRED' using errcode = '42501'; end if;
-  if p_expected_version is null or p_expected_version not between 1 and 9007199254740990
-    or not private.iou_valid_group(p_payload)
-  then raise exception 'IOU_INVALID_GROUP' using errcode = '22023'; end if;
-  if not exists (select 1 from public.iou_group_access where group_id = p_payload->>'id' and user_id = caller) then
-    raise exception 'IOU_ACCESS_DENIED' using errcode = '42501';
-  end if;
-  -- The lock serializes writes. Compare the revision after obtaining the lock.
-  select * into group_row from public.iou_groups where id = p_payload->>'id' for update;
-  if not found then raise exception 'IOU_ACCESS_DENIED' using errcode = '42501'; end if;
-  if group_row.version <> p_expected_version then raise exception 'IOU_CONFLICT' using errcode = 'PT409'; end if;
-  if p_payload->>'id' is distinct from group_row.payload->>'id'
-    or p_payload->>'inviteCode' is distinct from group_row.invite_code
-    or p_payload->>'currency' is distinct from group_row.payload->>'currency'
-    or p_payload->>'createdAt' is distinct from group_row.payload->>'createdAt'
-  then raise exception 'IOU_IMMUTABLE_SETTINGS' using errcode = '22023'; end if;
-  update public.iou_groups set payload = p_payload, version = version + 1, updated_at = now()
-    where id = group_row.id and version = p_expected_version returning * into group_row;
-  if not found then raise exception 'IOU_CONFLICT' using errcode = 'PT409'; end if;
-  return jsonb_build_object('payload', group_row.payload, 'version', group_row.version);
-end;
-$$;
-
--- Exposed RPC entry points have invoker privileges. Privileged code stays private.
-create or replace function public.iou_create_group(p_payload jsonb)
-returns jsonb language sql security invoker set search_path = '' as $$
-  select private.iou_create_group(p_payload);
-$$;
-create or replace function public.iou_join_group(p_invite_code text)
-returns jsonb language sql security invoker set search_path = '' as $$
-  select private.iou_join_group(p_invite_code);
-$$;
-create or replace function public.iou_save_group(p_payload jsonb, p_expected_version bigint)
-returns jsonb language sql security invoker set search_path = '' as $$
-  select private.iou_save_group(p_payload, p_expected_version);
-$$;
-
--- Also shipped in update-group-heads.sql for installed projects. One scalar JSON
--- response avoids row caps and repeated exact counts; start from this user's access.
-create or replace function private.iou_group_heads()
-returns jsonb language plpgsql stable security definer set search_path = '' as $$
-declare caller uuid := auth.uid();
-begin
-  if caller is null then raise exception 'IOU_AUTH_REQUIRED' using errcode = '42501'; end if;
-  return jsonb_build_object('format', 1, 'heads', coalesce((
-    select jsonb_agg(jsonb_build_object('id', g.id, 'version', g.version) order by g.id)
-    from public.iou_group_access a
-    join public.iou_groups g on g.id = a.group_id
-    where a.user_id = caller
-  ), '[]'::jsonb));
-end;
-$$;
-
-create or replace function public.iou_group_heads()
-returns jsonb language sql stable security invoker set search_path = '' as $$
-  select private.iou_group_heads();
-$$;
-
-revoke all on function private.iou_group_heads(), public.iou_group_heads() from public, anon, authenticated;
-grant execute on function private.iou_group_heads(), public.iou_group_heads() to authenticated;
-
--- Revoke PostgreSQL's default PUBLIC execution grants and Supabase role defaults.
-revoke all on function private.iou_has_keys(jsonb,text[]), private.iou_valid_text(jsonb,integer,boolean),
-  private.iou_valid_id(jsonb), private.iou_valid_date(jsonb), private.iou_valid_timestamp(jsonb),
-  private.iou_valid_money(jsonb,boolean), private.iou_valid_group(jsonb),
-  private.iou_create_group(jsonb), private.iou_join_group(text), private.iou_save_group(jsonb,bigint)
-  from public, anon, authenticated;
-revoke all on function public.iou_create_group(jsonb), public.iou_join_group(text), public.iou_save_group(jsonb,bigint)
-  from public, anon, authenticated;
-grant usage on schema private to authenticated;
-grant execute on function private.iou_create_group(jsonb), private.iou_join_group(text), private.iou_save_group(jsonb,bigint)
-  to authenticated;
-grant execute on function public.iou_create_group(jsonb), public.iou_join_group(text), public.iou_save_group(jsonb,bigint)
-  to authenticated;
-
--- Authoritative row storage (also installed by update-row-storage.sql).
--- Serialize cutover with existing writers; never seed rows from an old snapshot on replay.
-do $$
-begin
-  if to_regclass('public.iou_group_headers') is null then
-    lock table public.iou_groups in access exclusive mode;
-    if exists (select 1 from public.iou_groups where not private.iou_valid_group(payload)) then
-      raise exception 'IOU_ROW_BACKFILL_INVALID';
-    end if;
-    alter table public.iou_groups rename to iou_group_headers;
-  end if;
-end;
-$$;
+create index if not exists iou_group_access_user_idx on public.iou_group_access(user_id,group_id);
+create index if not exists iou_groups_creator_idx on public.iou_group_headers(created_by);
 lock table public.iou_group_headers in access exclusive mode;
 
 -- Reassert the maintained policy bodies, including upgrades from older installations.
@@ -376,14 +202,6 @@ create policy iou_read_own_access on public.iou_group_access for select to authe
 drop policy if exists iou_read_joined_groups on public.iou_group_headers;
 create policy iou_read_joined_groups on public.iou_group_headers for select to authenticated
   using (exists(select 1 from public.iou_group_access a where a.group_id=iou_group_headers.id and a.user_id=(select auth.uid())));
-
-alter table public.iou_group_headers
-  add column if not exists metadata jsonb,
-  add column if not exists member_count integer,
-  add column if not exists transaction_count integer,
-  add column if not exists member_bytes bigint,
-  add column if not exists transaction_bytes bigint,
-  add column if not exists payload_bytes bigint;
 
 create table if not exists public.iou_members (
   group_id text not null references public.iou_group_headers(id) on delete cascade,
@@ -480,55 +298,10 @@ returns bigint language sql immutable security invoker set search_path='' as $$
     + p_member_bytes + p_transaction_bytes + greatest(p_members-1,0)*2 + greatest(p_transactions-1,0)*2;
 $$;
 
-create table if not exists private.iou_row_backfill (
-  group_id text primary key,
-  source_version bigint not null,
-  source_hash text not null,
-  applied_at timestamptz not null default now()
-);
-revoke all on private.iou_row_backfill from public,anon,authenticated;
-
--- Only the first cutover has a payload column. Replay verifies latest row authority.
+-- A refresh checks the existing authority and cached budgets without rewriting user data.
 do $$
 declare g record; reconstructed jsonb;
 begin
-  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='iou_group_headers' and column_name='payload') then
-    for g in select * from public.iou_group_headers order by id for update loop
-      insert into public.iou_members(group_id,id,name,position,payload_bytes)
-        select g.id,value->>'id',value->>'name',ordinality,octet_length(value::text)
-        from jsonb_array_elements(g.payload->'members') with ordinality;
-      insert into public.iou_transactions(group_id,id,type,position,payload_bytes)
-        select g.id,value->>'id',value->>'type',ordinality,octet_length(value::text)
-        from jsonb_array_elements(g.payload->'transactions') with ordinality;
-      insert into public.iou_expenses(group_id,id,description,amount,paid_by,category,date,created_at)
-        select g.id,value->>'id',value->>'description',(value->>'amount')::numeric,value->>'paidBy',value->>'category',value->>'date',value->>'createdAt'
-        from jsonb_array_elements(g.payload->'transactions') where value->>'type'='expense';
-      insert into public.iou_payments(group_id,id,amount,from_id,to_id,note,date,created_at)
-        select g.id,value->>'id',(value->>'amount')::numeric,value->>'fromId',value->>'toId',value->>'note',value->>'date',value->>'createdAt'
-        from jsonb_array_elements(g.payload->'transactions') where value->>'type'='payment';
-      insert into public.iou_expense_shares(group_id,expense_id,member_id,amount)
-        select g.id,tx.value->>'id',s.key,(s.value#>>'{}')::numeric
-        from jsonb_array_elements(g.payload->'transactions') tx(value)
-        cross join lateral jsonb_each(tx.value->'shares') s where tx.value->>'type'='expense';
-      update public.iou_group_headers set metadata=g.payload-'members'-'transactions',
-        member_count=jsonb_array_length(g.payload->'members'),transaction_count=jsonb_array_length(g.payload->'transactions'),
-        member_bytes=(select coalesce(sum(payload_bytes),0) from public.iou_members where group_id=g.id),
-        transaction_bytes=(select coalesce(sum(payload_bytes),0) from public.iou_transactions where group_id=g.id),
-        payload_bytes=octet_length(g.payload::text) where id=g.id;
-      insert into private.iou_row_backfill(group_id,source_version,source_hash) values(g.id,g.version,md5(g.payload::text))
-        on conflict(group_id) do update set source_version=excluded.source_version,source_hash=excluded.source_hash,applied_at=now();
-      reconstructed:=private.iou_group_payload(g.id);
-      if reconstructed is distinct from g.payload or md5(reconstructed::text)<>md5(g.payload::text)
-        or not private.iou_valid_group(reconstructed) then raise exception 'IOU_ROW_BACKFILL_MISMATCH %',g.id; end if;
-    end loop;
-    -- Drop only the obsolete full-document storage and its dependent checks.
-    if exists(select 1 from pg_trigger where tgrelid='public.iou_group_headers'::regclass and tgname='iou_live_group_change') then
-      drop trigger iou_live_group_change on public.iou_group_headers;
-      create trigger iou_live_group_change after update of version on public.iou_group_headers
-        for each row execute function private.iou_broadcast_group_change();
-    end if;
-    alter table public.iou_group_headers drop column payload;
-  end if;
   for g in select * from public.iou_group_headers order by id for update loop
     reconstructed:=private.iou_group_payload(g.id);
     if not private.iou_valid_group(reconstructed)
@@ -542,14 +315,6 @@ begin
   end loop;
 end;
 $$;
--- Drain backfill FK events before changing child-table RLS. Only IOU's member
--- references are affected; the encompassing upgrade may include other apps.
-set constraints public.iou_expenses_group_id_paid_by_fkey,public.iou_payments_group_id_from_id_fkey,
-  public.iou_payments_group_id_to_id_fkey,public.iou_expense_shares_group_id_member_id_fkey immediate;
-alter table public.iou_group_headers alter column metadata set not null,
-  alter column member_count set not null,alter column transaction_count set not null,
-  alter column member_bytes set not null,alter column transaction_bytes set not null,alter column payload_bytes set not null;
-
 -- No child table is a public write API. Reads require joined-parent membership.
 do $$
 declare relation text;
@@ -742,20 +507,6 @@ $$;
 create or replace function public.iou_save_group_delta(p_group_id text,p_expected_version bigint,p_delta jsonb)
 returns jsonb language sql security invoker set search_path='' as $$ select private.iou_save_group_delta(p_group_id,p_expected_version,p_delta); $$;
 
-create or replace function private.iou_save_group(p_payload jsonb,p_expected_version bigint)
-returns jsonb language plpgsql security definer set search_path='' as $$
-declare receipt jsonb; delta jsonb;
-begin
-  if auth.uid() is null then raise exception 'IOU_AUTH_REQUIRED' using errcode='42501'; end if;
-  if not coalesce(private.iou_valid_group(p_payload),false) then raise exception 'IOU_INVALID_GROUP' using errcode='22023'; end if;
-  delta:=jsonb_build_object('metadata',p_payload-'members'-'transactions',
-    'members',jsonb_build_object('upsert',p_payload->'members','remove',coalesce((select jsonb_agg(m.id) from public.iou_members m where m.group_id=p_payload->>'id' and not (m.id in(select value->>'id' from jsonb_array_elements(p_payload->'members')))),'[]'::jsonb),'order',(select jsonb_agg(value->>'id' order by ordinality) from jsonb_array_elements(p_payload->'members') with ordinality)),
-    'transactions',jsonb_build_object('upsert',p_payload->'transactions','remove',coalesce((select jsonb_agg(t.id) from public.iou_transactions t where t.group_id=p_payload->>'id' and not (t.id in(select value->>'id' from jsonb_array_elements(p_payload->'transactions')))),'[]'::jsonb),'order',coalesce((select jsonb_agg(value->>'id' order by ordinality) from jsonb_array_elements(p_payload->'transactions') with ordinality),'[]'::jsonb)));
-  receipt:=private.iou_save_group_delta(p_payload->>'id',p_expected_version,delta);
-  return jsonb_build_object('payload',private.iou_group_payload(p_payload->>'id'),'version',receipt->'version');
-end;
-$$;
-
 create or replace function private.iou_create_group(p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare caller uuid:=auth.uid(); invite text; prepared jsonb; h public.iou_group_headers%rowtype;
@@ -803,24 +554,17 @@ begin
 end;
 $$;
 
--- Keep heads independent of expensive compatibility reconstruction.
+-- Heads never assemble complete documents.
 create or replace function private.iou_group_heads()
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare caller uuid := auth.uid();
 begin
   if caller is null then raise exception 'IOU_AUTH_REQUIRED' using errcode = '42501'; end if;
-  if to_regclass('public.iou_group_headers') is not null then
-    return jsonb_build_object('format', 1, 'heads', coalesce((
+  return jsonb_build_object('format', 1, 'heads', coalesce((
       select jsonb_agg(jsonb_build_object('id', h.id, 'version', h.version) order by h.id)
       from public.iou_group_access a join public.iou_group_headers h on h.id = a.group_id
       where a.user_id = caller
     ), '[]'::jsonb));
-  end if;
-  return jsonb_build_object('format', 1, 'heads', coalesce((
-    select jsonb_agg(jsonb_build_object('id', g.id, 'version', g.version) order by g.id)
-    from public.iou_group_access a join public.iou_groups g on g.id = a.group_id
-    where a.user_id = caller
-  ), '[]'::jsonb));
 end;
 $$;
 
@@ -829,7 +573,21 @@ revoke all on function private.iou_has_keys(jsonb,text[]),private.iou_valid_text
 revoke all on function private.iou_valid_transaction(jsonb,text[]),private.iou_apply_delta(text,jsonb),private.iou_save_group_delta(text,bigint,jsonb),public.iou_save_group_delta(text,bigint,jsonb) from public,anon,authenticated;
 grant execute on function private.iou_save_group_delta(text,bigint,jsonb),public.iou_save_group_delta(text,bigint,jsonb) to authenticated;
 
-set constraints public.iou_expenses_group_id_paid_by_fkey,public.iou_payments_group_id_from_id_fkey,
-  public.iou_payments_group_id_to_id_fkey,public.iou_expense_shares_group_id_member_id_fkey deferred;
+create or replace function public.iou_create_group(p_payload jsonb)
+returns jsonb language sql security invoker set search_path='' as $$ select private.iou_create_group(p_payload); $$;
+create or replace function public.iou_join_group(p_invite_code text)
+returns jsonb language sql security invoker set search_path='' as $$ select private.iou_join_group(p_invite_code); $$;
+create or replace function public.iou_group_heads()
+returns jsonb language sql stable security invoker set search_path='' as $$ select private.iou_group_heads(); $$;
+revoke all on function private.iou_create_group(jsonb),private.iou_join_group(text),private.iou_group_heads(),
+  public.iou_create_group(jsonb),public.iou_join_group(text),public.iou_group_heads() from public,anon,authenticated;
+grant usage on schema private to authenticated;
+grant execute on function private.iou_create_group(jsonb),private.iou_join_group(text),private.iou_group_heads(),
+  public.iou_create_group(jsonb),public.iou_join_group(text),public.iou_group_heads() to authenticated;
 
+-- Confirmed-unused APIs and migration-only history; never cascade unknown dependencies.
+drop function if exists public.iou_save_group(jsonb,bigint);
+drop function if exists private.iou_save_group(jsonb,bigint);
+drop table if exists private.iou_row_backfill;
+notify pgrst, 'reload schema';
 commit;

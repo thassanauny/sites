@@ -49,19 +49,9 @@ end;
 $$;
 
 revoke all on function private.iou_broadcast_group_change(), private.iou_broadcast_membership() from public, anon, authenticated;
-do $$
-begin
-  if to_regclass('public.iou_group_headers') is not null then
-    drop trigger if exists iou_live_group_change on public.iou_group_headers;
-    create trigger iou_live_group_change after update of version on public.iou_group_headers
-      for each row execute function private.iou_broadcast_group_change();
-  else
-    drop trigger if exists iou_live_group_change on public.iou_groups;
-    create trigger iou_live_group_change after update of payload, version on public.iou_groups
-      for each row execute function private.iou_broadcast_group_change();
-  end if;
-end;
-$$;
+drop trigger if exists iou_live_group_change on public.iou_group_headers;
+create trigger iou_live_group_change after update of version on public.iou_group_headers
+  for each row execute function private.iou_broadcast_group_change();
 drop trigger if exists iou_live_membership on public.iou_group_access;
 create trigger iou_live_membership after insert on public.iou_group_access
   for each row execute function private.iou_broadcast_membership();

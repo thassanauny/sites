@@ -13,10 +13,10 @@ import {
 } from '../../domain/boards/board';
 import {
   AUTH_STORAGE_KEY,
-  migratePinboardSession,
+  validatePinboardSession,
   SessionRecoveryError,
   startNewPinboardSession,
-} from '../auth/migrateSession';
+} from '../auth/session';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? '';
@@ -170,7 +170,7 @@ export async function initializeCloud(): Promise<void> {
     authentication = (async () => {
       if (!client && typeof window !== 'undefined') {
         try {
-          await migratePinboardSession(window.localStorage);
+          validatePinboardSession(window.localStorage);
         } catch (failure) {
           if (failure instanceof SessionRecoveryError) throw failure;
           throw new Error(

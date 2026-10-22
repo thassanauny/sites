@@ -59,7 +59,7 @@ describe('shared snippet names', () => {
   it('shows shared names in the editor and list without overwriting an existing shared name', async () => {
     const history = new DeviceSnippets();
     history.remember(first.code);
-    history.rename(first.code, 'Old private label');
+    history.sharedName(first.code, 'Old private label', 1);
     vi.mocked(cloud.joinPage).mockResolvedValueOnce({ ...first, name: 'Team notes', version: 2 });
     await start(`#/p/${first.code}`);
     expect(element('page-name').textContent).toBe('Team notes');
@@ -68,19 +68,19 @@ describe('shared snippet names', () => {
     expect(localStorage.getItem(`${DEVICE_SNIPPETS_KEY}:name:${first.code}`)).toContain('Team notes');
     expect(cloud.renamePage).not.toHaveBeenCalled();
   });
-  it('automatically shares existing names and retains failed edits and text drafts', async () => {
+  it('retains failed explicit name edits and text drafts', async () => {
     const history = new DeviceSnippets();
     history.remember(first.code);
-    history.rename(first.code, 'Old private label');
-    vi.mocked(cloud.joinPage).mockResolvedValueOnce({ ...first, name: null });
+    history.sharedName(first.code, 'Shared label', 1);
+    vi.mocked(cloud.joinPage).mockResolvedValueOnce({ ...first, name: 'Shared label' });
     await start(`#/p/${first.code}`);
     await flush();
-    expect(cloud.renamePage).toHaveBeenCalledWith(first.id, 'Old private label');
-    expect(new DeviceSnippets().list()[0]?.nameShared).toBe(true);
+    expect(cloud.renamePage).not.toHaveBeenCalled();
+    expect(new DeviceSnippets().list()[0]?.name).toBe('Shared label');
     edit('Unsaved text');
     element('settings').click();
     element('settings-rename').click();
-    expect(element<HTMLInputElement>('snippet-name-input').value).toBe('Old private label');
+    expect(element<HTMLInputElement>('snippet-name-input').value).toBe('Shared label');
     element<HTMLInputElement>('snippet-name-input').value = 'Updated shared name';
     vi.mocked(cloud.renamePage!).mockRejectedValueOnce(new Error('Could not connect'));
     element('rename-confirm').click();
@@ -88,7 +88,7 @@ describe('shared snippet names', () => {
     expect(element<HTMLDialogElement>('snippet-dialog').open).toBe(true);
     expect(element<HTMLInputElement>('snippet-name-input').value).toBe('Updated shared name');
     expect(element<HTMLTextAreaElement>('editor').value).toBe('Unsaved text');
-    expect(element('page-name').textContent).toBe('Old private label');
+    expect(element('page-name').textContent).toBe('Shared label');
     element('rename-confirm').click();
     await flush();
     expect(cloud.renamePage).toHaveBeenLastCalledWith(first.id, 'Updated shared name');

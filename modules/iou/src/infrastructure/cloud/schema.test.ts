@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Group } from '../../domain/groups/types'
+import { groupDelta } from './groupDelta'
 
 type Record = { payload: Group; version: number }
 const creator = randomUUID()
@@ -41,15 +42,20 @@ async function create(payload = group()): Promise<Record> {
 }
 
 async function save(record: Record, patch: Partial<Group>, version = record.version): Promise<Record> {
-  const result = await database.query<{ record: Record }>('select public.iou_save_group($1::jsonb, $2::bigint) as record', [JSON.stringify({ ...record.payload, ...patch }), version])
-  return result.rows[0]!.record
+  const payload = { ...record.payload, ...patch }
+  const result = await database.query<{ receipt: { version: number } }>('select public.iou_save_group_delta($1,$2,$3::jsonb) receipt', [
+    payload.id,
+    version,
+    JSON.stringify(groupDelta(record.payload, payload)),
+  ])
+  return { payload, version: result.rows[0]!.receipt.version }
 }
 
 async function stored(id: string) {
   return (await database.query<Record>('select payload, version from public.iou_groups where id = $1', [id])).rows[0]
 }
 
-describe('iou initial schema executed in embedded PostgreSQL', () => {
+describe('iou current schema executed in embedded PostgreSQL', () => {
   beforeAll(async () => {
     database = new PGlite()
     await database.exec(`
@@ -84,7 +90,7 @@ describe('iou initial schema executed in embedded PostgreSQL', () => {
       has_table_privilege('authenticated','public.iou_groups','insert,update,delete') as allowed`)
     expect(grants.rows[0]!.allowed).toBe(false)
     const functions = await database.query<{ schema: string; prosecdef: boolean; proconfig: string[] }>(`select n.nspname as schema, p.prosecdef, p.proconfig
-      from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.proname='iou_save_group' order by n.nspname`)
+      from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.proname='iou_save_group_delta' order by n.nspname`)
     expect(functions.rows.map(row => ({ ...row, proconfig: row.proconfig.join(',') }))).toEqual([
       { schema: 'private', prosecdef: true, proconfig: 'search_path=""' },
       { schema: 'public', prosecdef: false, proconfig: 'search_path=""' },
@@ -164,12 +170,13 @@ describe('iou initial schema executed in embedded PostgreSQL', () => {
     }
   })
 
-  it('rolls back a failed initial-schema rerun without disturbing saved data or grants', async () => {
+  it('refreshes the current schema without changing data or revisions', async () => {
     await identity(creator)
     const record = await create()
     await database.exec('reset role')
-    await expect(database.exec(await readFile(new URL('../../../supabase/schema.sql', import.meta.url), 'utf8'))).rejects.toMatchObject({ code: '42P07' })
-    await database.exec('rollback')
+    const source = await readFile(new URL('../../../supabase/schema.sql', import.meta.url), 'utf8')
+    await database.exec(source)
+    await database.exec(source)
     await identity(creator)
     expect(await stored(record.payload.id)).toEqual(record)
     expect((await save(record, { name: 'Still usable' })).version).toBe(2)
@@ -194,12 +201,12 @@ describe('iou initial schema executed in embedded PostgreSQL', () => {
     await expect(heads()).rejects.toMatchObject({ code: '42501' })
   })
 
-  it('upgrades and replays without changing records, grants or the initial read implementation', async () => {
+  it('upgrades and replays without changing records, grants or the current read implementation', async () => {
     await database.exec('reset role')
     const definition = (await database.query("select pg_get_functiondef('private.iou_group_heads()'::regprocedure) as body")).rows
     const before = (await database.query('select * from public.iou_groups order by id')).rows
     await database.exec('drop function public.iou_group_heads(); drop function private.iou_group_heads();')
-    const update = await readFile(new URL('../../../supabase/update-group-heads.sql', import.meta.url), 'utf8')
+    const update = await readFile(new URL('../../../supabase/schema.sql', import.meta.url), 'utf8')
     await database.exec(update)
     await database.exec(update)
     expect((await database.query("select pg_get_functiondef('private.iou_group_heads()'::regprocedure) as body")).rows).toEqual(definition)
@@ -213,6 +220,28 @@ describe('iou initial schema executed in embedded PostgreSQL', () => {
       has_table_privilege('authenticated','public.iou_groups','insert,update,delete') as writes`)
       ).rows,
     ).toEqual([{ anonymous: false, private_anonymous: false, signed_in: true, writes: false }])
+  })
+
+  it('retires obsolete installed writes/history without cascading unknown dependencies', async () => {
+    await database.exec('reset role')
+    const before = (await database.query('select * from public.iou_groups order by id')).rows
+    await database.exec(`create function private.iou_save_group(jsonb,bigint) returns jsonb language sql as $$select $1$$;
+      create function public.iou_save_group(jsonb,bigint) returns jsonb language sql as $$select $1$$;
+      create table private.iou_row_backfill(group_id text primary key,source_version bigint,source_hash text);
+      create view private.iou_test_dependency as select public.iou_save_group('{}'::jsonb,1::bigint) result;`)
+    const source = await readFile(new URL('../../../supabase/schema.sql', import.meta.url), 'utf8')
+    await expect(database.exec(source)).rejects.toMatchObject({ code: '2BP01' })
+    await database.exec('rollback')
+    expect((await database.query('select * from public.iou_groups order by id')).rows).toEqual(before)
+    await database.exec('drop view private.iou_test_dependency')
+    await database.exec(source)
+    expect(
+      (
+        await database.query(`select to_regprocedure('public.iou_save_group(jsonb,bigint)') a,
+      to_regprocedure('private.iou_save_group(jsonb,bigint)') b,to_regclass('private.iou_row_backfill') c`)
+      ).rows,
+    ).toEqual([{ a: null, b: null, c: null }])
+    expect((await database.query('select * from public.iou_groups order by id')).rows).toEqual(before)
   })
 
   it('returns more than a normal API row cap in one scalar response', async () => {

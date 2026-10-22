@@ -71,7 +71,7 @@ describe("shared board protocol", () => {
 
   it("reports missing incremental setup without using the retired list API", async () => {
     const { client, calls } = mockClient({ code: "PGRST202", message: "Missing function" }, 404);
-    await expect(listCloudBoards(client)).rejects.toThrow("rename-to-blueprint.sql");
+    await expect(listCloudBoards(client)).rejects.toThrow("schema.sql");
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toContain("/rpc/blueprint_sync_boards");
   });
@@ -115,10 +115,10 @@ describe("shared board protocol", () => {
   });
   it("refuses an older sharing schema instead of accepting hidden token requirements", async () => {
     const board = createBoard();
-    const { sharing_version: _version, ...legacy } = row(board);
-    const { client } = mockClient(legacy);
+    const { sharing_version: _version, ...invalid } = row(board);
+    const { client } = mockClient(invalid);
     await expect(saveCloudBoard(client, board)).rejects.toThrow(
-      "rename-to-blueprint.sql",
+      "schema.sql",
     );
   });
   it("reports stale or revoked writes as a conflict", async () => {

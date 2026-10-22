@@ -21,7 +21,7 @@ import {
   installHarness,
 } from './testSupport';
 import type { Board } from '../domain/boards/types';
-import { SESSION_CORRUPT_MESSAGE } from '../infrastructure/auth/migrateSession';
+import { SESSION_CORRUPT_MESSAGE } from '../infrastructure/auth/session';
 
 vi.mock('../infrastructure/cloud/boards', async () => (await import('./cloudMock')).cloudModule);
 installHarness();

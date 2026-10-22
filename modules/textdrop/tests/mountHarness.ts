@@ -10,7 +10,7 @@ import { DEVICE_SNIPPETS_KEY, DeviceSnippets } from '../src/infrastructure/stora
 // fake timers and the <dialog> methods jsdom lacks. A test file calls `useMountHarness()` once at its top level.
 // `root`, `cloud`, `dispose` and `writeText` are replaced before every test; importing files always read the current value.
 
-export const first: TextDropPage = { id: '00000000-0000-4000-8000-000000000001', code: 'a'.repeat(32), text: 'Shared text', version: 1, updatedAt: '2026-10-10T01:00:00.000Z' };
+export const first: TextDropPage = { id: '00000000-0000-4000-8000-000000000001', code: 'a'.repeat(32), text: 'Shared text', name: null, version: 1, updatedAt: '2026-10-10T01:00:00.000Z' };
 export const second: TextDropPage = { ...first, id: '00000000-0000-4000-8000-000000000002', code: 'b'.repeat(32), text: 'Another snippet' };
 export const key = (code: string) => `${DEVICE_SNIPPETS_KEY}:${code}`;
 
@@ -100,6 +100,7 @@ export function useMountHarness(): void {
       joinPage: vi.fn(async code => (code === second.code ? second : first)),
       pollPage: vi.fn().mockResolvedValue(first),
       savePage: vi.fn(async (_id, text) => ({ ...first, text, version: 2 })),
+      saveCheckedPage: (id, text) => cloud.savePage(id, text),
       renamePage: vi.fn(async (id, name) => ({ ...(id === second.id ? second : first), name, version: ++nameVersion })),
       startNewSession: vi.fn().mockResolvedValue(undefined),
     };

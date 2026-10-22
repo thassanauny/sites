@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
@@ -9,8 +9,6 @@ const creator = randomUUID();
 const collaborator = randomUUID();
 const stranger = randomUUID();
 const schema = new URL('../supabase/schema.sql', import.meta.url);
-const update = new URL('../supabase/update-poll-and-grants.sql', import.meta.url);
-const receiptUpdate = new URL('../supabase/update-save-receipt.sql', import.meta.url);
 const guide = new URL('../supabase/README.md', import.meta.url);
 let database: PGlite;
 let siblingState: Record<string, unknown>[];
@@ -38,7 +36,14 @@ async function load(id: string): Promise<TextDropPage> {
 }
 
 async function save(id: string, text: string | null): Promise<TextDropPage> {
-  const result = await database.query<{ receipt: Omit<TextDropPage, 'text'> }>('select public.textdrop_save_page_receipt($1::uuid, $2) as receipt', [id, text]);
+  const page = await load(id);
+  const result = await database.query<{ receipt: Omit<TextDropPage, 'text'> }>('select public.textdrop_save_checked($1::uuid,$2,$3,$4,$5::uuid) as receipt', [
+    id,
+    text,
+    page.version,
+    createHash('sha256').update(page.text).digest('hex'),
+    randomUUID(),
+  ]);
   const receipt = result.rows[0]!.receipt;
   expect(Object.keys(receipt).sort()).toEqual(['code', 'id', 'name', 'updatedAt', 'version']);
   return readPage({ ...receipt, text });
@@ -111,10 +116,10 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
     const functions = await database.query<{ nspname: string; proname: string; prosecdef: boolean; proconfig: string[] }>(`
       select n.nspname, p.proname, p.prosecdef, p.proconfig
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where p.proname in ('textdrop_create_page','textdrop_join_page','textdrop_load_page','textdrop_save_page','textdrop_poll_page','textdrop_save_page_receipt')
+      where p.proname in ('textdrop_create_page','textdrop_join_page','textdrop_poll_page','textdrop_names','textdrop_save_checked','textdrop_rename_checked')
       order by n.nspname, p.proname
     `);
-    expect(functions.rows).toHaveLength(11);
+    expect(functions.rows).toHaveLength(12);
     for (const row of functions.rows) {
       expect(row.prosecdef).toBe(row.nspname === 'private');
       expect(row.proconfig).toEqual(['search_path=""']);
@@ -155,7 +160,7 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
   // The setup guide is not part of standalone source snapshots.
   it.skipIf(!existsSync(guide))('runs every SQL query shown in the setup guide', async () => {
     const queries = [...(await readFile(guide, 'utf8')).matchAll(/`(select [^`]+;)`/g)].map(match => match[1]!);
-    expect(queries).toHaveLength(2);
+    expect(queries).toHaveLength(1);
     await database.exec('reset role');
     for (const query of queries) expect((await database.query(query)).rows).toHaveLength(1);
   });
@@ -234,15 +239,14 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
     expect(access.rows.map(row => row.user_id).sort()).toEqual([creator, collaborator].sort());
   });
 
-  it('replaces the whole text in server acceptance order, including a stale client save', async () => {
+  it('accepts checked edits sequentially and acknowledges identical text without another write', async () => {
     await identity(creator);
     const original = await create();
     await identity(collaborator);
     await join(original.code);
     const first = await save(original.id, 'The collaborator saves first');
     await identity(creator);
-    // This caller still holds original version 1. There is deliberately no
-    // expected-version argument: its later accepted save wins the entire text.
+    // Read the latest baseline before accepting the next checked edit.
     const latest = await save(original.id, 'The creator saves later');
     expect(first.version).toBe(2);
     expect(latest.version).toBe(3);
@@ -250,7 +254,7 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
     expect(await load(original.id)).toEqual(latest);
     expect(Date.parse(latest.updatedAt)).toBeGreaterThanOrEqual(Date.parse(first.updatedAt));
     const repeated = await save(original.id, latest.text);
-    expect(repeated.version).toBe(4);
+    expect(repeated.version).toBe(3);
     await identity(collaborator);
     expect(await load(original.id)).toEqual(repeated);
   });
@@ -335,86 +339,41 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
     expect((await join(joined.code)).code).toBe(joined.code);
   });
 
-  it('updates a project installed before the poll function and the read-grant removal, and can run again', async () => {
-    const earlier = new PGlite();
-    try {
-      await earlier.exec(`
-        create role anon; create role authenticated; create schema auth;
-        create table auth.users (id uuid primary key);
-        create function auth.uid() returns uuid language sql stable as $$
-          select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
-        $$;
-        grant usage on schema auth to anon, authenticated;
-        grant execute on function auth.uid() to anon, authenticated;
-        create schema private;
-      `);
-      await earlier.exec(await readFile(schema, 'utf8'));
-      // Put the earlier schema back: no poll function, direct read grants and policies.
-      await earlier.exec(`
-        drop function public.textdrop_poll_page(uuid, bigint);
-        drop function private.textdrop_poll_page(uuid, bigint);
-        grant select on public.textdrop_pages, public.textdrop_page_access to authenticated;
-        create policy textdrop_read_own_access on public.textdrop_page_access
-          for select to authenticated using (user_id = (select auth.uid()));
-        create policy textdrop_read_joined_pages on public.textdrop_pages
-          for select to authenticated using (exists (
-            select 1 from public.textdrop_page_access access
-            where access.page_id = textdrop_pages.id and access.user_id = (select auth.uid())
-          ));
-      `);
-      await earlier.query('insert into auth.users (id) values ($1)', [creator]);
-      await earlier.query("select set_config('request.jwt.claim.sub', $1, false)", [creator]);
-      await earlier.exec('set role authenticated');
-      const kept = (await earlier.query<{ page: TextDropPage }>('select public.textdrop_create_page($1::uuid) as page', [randomUUID()])).rows[0]!.page;
-      await expect(earlier.query('select public.textdrop_poll_page($1::uuid, 1)', [kept.id])).rejects.toThrow();
-      expect((await earlier.query('select id from public.textdrop_pages')).rows).toHaveLength(1);
-      await earlier.exec('reset role');
-      for (let run = 0; run < 2; run += 1) await earlier.exec(await readFile(update, 'utf8'));
-      expect((await earlier.query("select policyname from pg_policies where tablename like 'textdrop_%'")).rows).toEqual([]);
-      expect(
-        (
-          await earlier.query(`
-        select has_table_privilege('authenticated', 'public.textdrop_pages', 'select') as pages,
-          has_table_privilege('authenticated', 'public.textdrop_page_access', 'select') as access,
-          has_function_privilege('authenticated', 'public.textdrop_poll_page(uuid,bigint)', 'execute') as poll,
-          has_function_privilege('anon', 'public.textdrop_poll_page(uuid,bigint)', 'execute') as anonymous_poll
-      `)
-        ).rows,
-      ).toEqual([{ pages: false, access: false, poll: true, anonymous_poll: false }]);
-      await earlier.exec('set role authenticated');
-      expect((await earlier.query<{ page: unknown }>('select public.textdrop_poll_page($1::uuid, 1) as page', [kept.id])).rows[0]!.page).toEqual({ id: kept.id, unchanged: true, version: 1 });
-      expect((await earlier.query<{ page: TextDropPage }>('select public.textdrop_load_page($1::uuid) as page', [kept.id])).rows[0]!.page).toEqual(kept);
-    } finally {
-      await earlier.close();
-    }
-  }, 30_000);
-
-  it('rolls back an attempted rerun without changing existing pages or sibling objects', async () => {
+  it('refreshes current schema without changing pages, access, receipts or sibling objects', async () => {
+    await identity(creator);
+    const page = await create();
+    await save(page.id, 'Preserved text');
     await database.exec('reset role');
-    const before = (await database.query('select count(*) as count from public.textdrop_pages')).rows;
-    await expect(database.exec(await readFile(schema, 'utf8'))).rejects.toThrow('already exists');
-    await database.exec('rollback');
-    expect((await database.query('select count(*) as count from public.textdrop_pages')).rows).toEqual(before);
+    const snapshot = async () => ({
+      pages: (await database.query('select * from public.textdrop_pages order by id')).rows,
+      access: (await database.query('select * from public.textdrop_page_access order by page_id,user_id')).rows,
+      receipts: (await database.query('select * from private.textdrop_save_receipts order by page_id,operation_id')).rows,
+    });
+    const before = await snapshot();
+    for (let run = 0; run < 2; run++) await database.exec(await readFile(schema, 'utf8'));
+    expect(await snapshot()).toEqual(before);
     expect(await siblings()).toEqual(siblingState);
+    for (const signature of [
+      'public.textdrop_load_page(uuid)',
+      'public.textdrop_save_page(uuid,text)',
+      'public.textdrop_save_page_receipt(uuid,text)',
+      'public.textdrop_rename_page(uuid,text)',
+      'private.textdrop_load_page(uuid)',
+      'private.textdrop_save_page(uuid,text)',
+      'private.textdrop_rename_page(uuid,text)',
+    ])
+      expect((await database.query<{ routine: string | null }>('select to_regprocedure($1) as routine', [signature])).rows[0].routine).toBeNull();
   });
 
-  it('saves through a compact receipt with identical literal text, versions and legacy reads', async () => {
+  it('acknowledges maximum-size checked text with a compact receipt', async () => {
     await identity(creator);
     const page = await create();
     const text = '😀'.repeat(MAX_TEXT_BYTES / 4);
-    const response = await database.query<{ receipt: Omit<TextDropPage, 'text'> }>('select public.textdrop_save_page_receipt($1::uuid,$2) as receipt', [page.id, text]);
-    const receipt = response.rows[0]!.receipt;
-    expect(Object.keys(receipt).sort()).toEqual(['code', 'id', 'name', 'updatedAt', 'version']);
-    expect(receipt).toMatchObject({ id: page.id, code: page.code, version: 2 });
-    expect(readPage({ ...receipt, text })).toEqual(await load(page.id));
+    const saved = await save(page.id, text);
+    expect(saved).toEqual(await load(page.id));
+    const { text: _text, ...receipt } = saved;
     expect(Buffer.byteLength(JSON.stringify(receipt))).toBeLessThan(256);
-    expect(Buffer.byteLength(JSON.stringify(receipt))).toBeLessThan(Buffer.byteLength(JSON.stringify({ ...receipt, text })) / 1000);
-    const later = (await database.query<{ page: TextDropPage }>('select public.textdrop_save_page($1::uuid, $2) as page', [page.id, 'Legacy caller'])).rows[0]!.page;
-    expect(later.version).toBe(3);
-    expect((await database.query<{ page: TextDropPage }>('select public.textdrop_load_page($1::uuid) as page', [page.id])).rows[0]!.page).toEqual(later);
-    const cleared = (await database.query<{ receipt: Omit<TextDropPage, 'text'> }>('select public.textdrop_save_page_receipt($1::uuid,$2) as receipt', [page.id, ''])).rows[0]!.receipt;
-    expect(cleared.version).toBe(4);
-    expect(await load(page.id)).toEqual({ ...cleared, text: '' });
+    expect((await save(page.id, '')).version).toBe(3);
   });
 
   it('rolls back an earlier receipt save when a later statement fails', async () => {
@@ -427,26 +386,6 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
     expect(await load(page.id)).toEqual(page);
   });
 
-  it('adds and replays the receipt API without changing tables or the original save implementation', async () => {
-    await database.exec('reset role');
-    const original = (await database.query("select pg_get_functiondef('private.textdrop_save_page(uuid,text)'::regprocedure) as body")).rows;
-    const initial = (await database.query("select pg_get_functiondef('public.textdrop_save_page_receipt(uuid,text)'::regprocedure) as body")).rows;
-    const before = (await database.query('select id,code,version,updated_at from public.textdrop_pages order by id')).rows;
-    await database.exec('drop function public.textdrop_save_page_receipt(uuid,text)');
-    for (let run = 0; run < 2; run++) await database.exec(await readFile(receiptUpdate, 'utf8'));
-    expect((await database.query("select pg_get_functiondef('public.textdrop_save_page_receipt(uuid,text)'::regprocedure) as body")).rows).toEqual(initial);
-    expect((await database.query("select pg_get_functiondef('private.textdrop_save_page(uuid,text)'::regprocedure) as body")).rows).toEqual(original);
-    expect((await database.query('select id,code,version,updated_at from public.textdrop_pages order by id')).rows).toEqual(before);
-    expect(
-      (
-        await database.query(`select
-      has_function_privilege('anon','public.textdrop_save_page_receipt(uuid,text)','execute') as anonymous,
-      has_function_privilege('authenticated','public.textdrop_save_page_receipt(uuid,text)','execute') as signed_in,
-      has_table_privilege('authenticated','public.textdrop_pages','select,insert,update,delete') as direct`)
-      ).rows,
-    ).toEqual([{ anonymous: false, signed_in: true, direct: false }]);
-    expect(await siblings()).toEqual(siblingState);
-  });
   describe('checked saves and replay receipts', () => {
     async function checked(page: TextDropPage, text: string, operation = randomUUID()) {
       const { createHash } = await import('node:crypto');
@@ -477,7 +416,7 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
     it('allows a name-only revision, acknowledges identical text without another write, and handles maximum text', async () => {
       await identity(creator);
       const page = await create();
-      await database.query('select public.textdrop_rename_page($1::uuid,$2)', [page.id, 'Name only']);
+      await database.query('select public.textdrop_rename_checked($1::uuid,$2,$3)', [page.id, 'Name only', createHash('sha256').update(page.text).digest('hex')]);
       const text = '😀'.repeat(MAX_TEXT_BYTES / 4);
       const saved = await checked(page, text);
       expect(saved).toMatchObject({ name: 'Name only', version: 3 });
@@ -486,10 +425,10 @@ describe('TextDrop schema in embedded PostgreSQL', () => {
       expect(same.version).toBe(3);
       expect((await load(page.id)).text).toBe(text);
     });
-    it('replays the additive upgrade without changing data, permissions or sibling apps', async () => {
+    it('refreshes the current schema without changing data, permissions or sibling apps', async () => {
       await database.exec('reset role');
       const before = (await database.query('select id,code,content,version,mutation_floor from public.textdrop_pages order by id')).rows;
-      const sql = await readFile(new URL('../supabase/update-checked-saves.sql', import.meta.url), 'utf8');
+      const sql = await readFile(schema, 'utf8');
       await database.exec(sql);
       await database.exec(sql);
       expect((await database.query('select id,code,content,version,mutation_floor from public.textdrop_pages order by id')).rows).toEqual(before);

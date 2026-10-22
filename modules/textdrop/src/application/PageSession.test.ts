@@ -6,7 +6,7 @@ import type { Cloud, DraftRecovery } from './ports';
 const id = '11111111-1111-4111-8111-111111111111';
 const code = '0123456789abcdef0123456789abcdef';
 function page(text = '', version = 1): TextDropPage {
-  return { id, code, text, version, updatedAt: '2026-10-10T10:00:00Z' };
+  return { id, code, text, name: null, version, updatedAt: '2026-10-10T10:00:00Z' };
 }
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -23,6 +23,7 @@ function setup(maxWait?: number) {
     joinPage: vi.fn(async () => page()),
     pollPage: vi.fn(async () => page()),
     savePage: vi.fn(async (_id: string, text: string) => page(text, 2)),
+    saveCheckedPage: (id, text) => cloud.savePage(id, text),
     startNewSession: vi.fn(async () => {}),
   };
   const session = new PageSession(cloud, 50, maxWait);

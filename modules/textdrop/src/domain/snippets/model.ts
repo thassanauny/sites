@@ -4,8 +4,7 @@ export interface TextDropPage {
   text: string;
   version: number;
   updatedAt: string;
-  /** Optional shared name; absent only in legacy cached pages. */
-  name?: string | null;
+  name: string | null;
   /** A durable local edit that has not yet been acknowledged by the server. */
   localPending?: boolean;
   /** Both versions remain on this device until the user resolves a conflicting queued edit. */
@@ -37,7 +36,6 @@ export interface DeviceSnippet {
   code: string;
   openedAt: string;
   name?: string;
-  nameShared?: boolean;
 }
 const PAGE_KEYS = ['id', 'code', 'text', 'version', 'updatedAt', 'name'];
 const encoder = new TextEncoder();
@@ -149,6 +147,6 @@ export function readPage(input: unknown): TextDropPage {
     text: validateText(page.text),
     version: page.version,
     updatedAt: timestamp(page.updatedAt),
-    ...(Object.hasOwn(page, 'name') ? { name: validateName(page.name) } : {}),
+    name: validateName(page.name),
   };
 }

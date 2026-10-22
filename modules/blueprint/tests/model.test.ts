@@ -30,11 +30,11 @@ describe("portable board files", () => {
     expect(JSON.parse(boardContent(board)).iconStyle).toBe(iconStyle);
     expect(imported.nodes[0].data).toEqual(board.nodes[0].data);
   });
-  it("accepts legacy boards without an icon set and drops unsupported values", () => {
+  it("accepts boards without an icon set and drops unsupported values", () => {
     const board = createBoard();
-    const legacy = parseBoard(serializeBoard(board));
-    expect(legacy.iconStyle).toBeUndefined();
-    expect(JSON.parse(boardContent(legacy))).not.toHaveProperty("iconStyle");
+    const restored = parseBoard(serializeBoard(board));
+    expect(restored.iconStyle).toBeUndefined();
+    expect(JSON.parse(boardContent(restored))).not.toHaveProperty("iconStyle");
     const payload = JSON.parse(serializeBoard(board));
     payload.board.iconStyle = "unknown-style";
     const imported = parseBoard(JSON.stringify(payload));
@@ -52,21 +52,21 @@ describe("portable board files", () => {
     const board = { ...createBoard(), colorIntensity: value };
     expect(parseBoard(serializeBoard(board)).colorIntensity).toBe(expected);
   });
-  it("maps legacy presets and missing values to slider endpoints", () => {
+  it("maps stored presets and missing values to slider endpoints", () => {
     expect(colorDepth("soft")).toBe(0);
     expect(colorDepth(undefined)).toBe(0);
     expect(colorDepth("deep")).toBe(100);
     expect(colorDepth(Number.NaN)).toBe(0);
   });
-  it("keeps legacy boards in Soft colors and drops invalid intensity values", () => {
+  it("keeps boards in Soft colors and drops invalid intensity values", () => {
     const payload = JSON.parse(serializeBoard(createBoard()));
-    const legacy = parseBoard(JSON.stringify(payload));
-    expect(legacy.colorIntensity).toBeUndefined();
-    expect(JSON.parse(boardContent(legacy))).not.toHaveProperty("colorIntensity");
+    const restored = parseBoard(JSON.stringify(payload));
+    expect(restored.colorIntensity).toBeUndefined();
+    expect(JSON.parse(boardContent(restored))).not.toHaveProperty("colorIntensity");
     payload.board.colorIntensity = "unknown";
     const imported = parseBoard(JSON.stringify(payload));
     expect(imported.colorIntensity).toBeUndefined();
-    expect(boardContent(imported)).toBe(boardContent(legacy));
+    expect(boardContent(imported)).toBe(boardContent(restored));
   });
   it.each(["outline", "isometric", "solid"])("loads boards using the retired %s set with default icons and preserves the diagram", (iconStyle) => {
     const board = createBoard();

@@ -109,34 +109,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
     const names = await cloud.listNames(rememberedSnippets.map(row => row.code));
     if (signal.aborted) return;
     for (const row of names) {
-      const local = rememberedSnippets.find(item => item.code === row.code);
-      if (!local?.nameShared && local?.name && row.name === null) {
-        await migrateName(row.code, local.name);
-        continue;
-      }
       if (!deviceSnippets.isRemoved(row.code)) updateDeviceSnippets(() => deviceSnippets.sharedName?.(row.code, row.name, row.version) ?? deviceSnippets.list(), true);
-    }
-  }
-
-  const migratingNames = new Set<string>();
-  async function migrateName(code: string, name: string): Promise<void> {
-    if (migratingNames.has(code) || !cloud.renamePage) return;
-    migratingNames.add(code);
-    try {
-      const page = session.state.page?.code === code ? session.state.page : await cloud.joinPage(code);
-      if (signal.aborted || deviceSnippets.isRemoved(code)) return;
-      const saved = page.name ? page : await cloud.renamePage(page.id, name);
-      if (!signal.aborted) {
-        cacheName(saved);
-        session.acceptName(saved);
-      }
-    } catch (error) {
-      if (!signal.aborted) {
-        uiError = errorMessage(error, 'Could not sync the snippet name.');
-        render();
-      }
-    } finally {
-      migratingNames.delete(code);
     }
   }
 
@@ -311,9 +284,7 @@ export function mountTextDrop(root: HTMLElement, cloud: Cloud, deviceSnippets: D
       const mark = JSON.stringify([page.code, page.version, page.name, page.localPending]);
       if (mark !== sharedMark) {
         sharedMark = mark;
-        const local = rememberedSnippets.find(row => row.code === page.code);
-        if (page.name === null && local?.name && !local.nameShared) void migrateName(page.code, local.name);
-        else cacheName(page);
+        cacheName(page);
       }
     }
     render();

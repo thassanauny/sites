@@ -85,7 +85,9 @@ const recordResult = (output) => JSON.parse(output.split('\n').filter(line => li
 async function sql(script) { return checked(psqlArgs, script); }
 
 const create = (id = randomUUID()) => `select public.textdrop_create_page(${quote(id)}::uuid);`;
-const save = (id, text) => `select public.textdrop_save_page_receipt(${quote(id)}::uuid, ${quote(text)});`;
+const save = (id, text) => `select public.textdrop_save_checked(${quote(id)}::uuid, ${text === null ? 'null' : quote(text)},
+  (baseline->>'version')::bigint, encode(sha256(convert_to(baseline->>'text','UTF8')),'hex'), ${quote(randomUUID())}::uuid)
+  from (select public.textdrop_poll_page(${quote(id)}::uuid,null) baseline) editing;`;
 async function race(first, second) {
   let markReady;
   let markFailed;
@@ -270,13 +272,16 @@ async function main() {
       `${session(collaborator)} ${save(page.id, 'Whole text accepted second')}`,
     );
     assert.equal(second.code, 0, second.stderr);
-    const winner = recordResult(second.stdout);
+    const conflict = recordResult(second.stdout);
+    assert.equal(conflict.conflict.text, 'First text');
+    assert.equal(conflict.conflict.version, first.version);
+    const winner = recordResult(await sql(`${session(collaborator)} ${save(page.id, 'Whole text accepted second')} commit;`));
     assert.equal(Object.hasOwn(winner, 'text'), false);
     assert.equal(winner.version, first.version+1);
     assert.deepEqual(recordResult(await sql(`${session(creator)} select public.textdrop_poll_page(${quote(page.id)}::uuid, null); commit;`)),{...winner,text:'Whole text accepted second'});
-    console.log('PASS: waiting receipt saves replace the whole committed text in server acceptance order with increasing versions.');
+    console.log('PASS: concurrent checked edits retain the first save, return the competing text for review, and accept a fresh baseline.');
 
-    const rollback = await command(psqlArgs, `${session(creator)} ${save(page.id,'Must roll back')} select public.textdrop_save_page_receipt(${quote(page.id)}::uuid, null); commit;`);
+    const rollback = await command(psqlArgs, `${session(creator)} ${save(page.id,'Must roll back')} ${save(page.id, null)} commit;`);
     assert.notEqual(rollback.code,0);
     assert.match(rollback.stderr,/TEXTDROP_INVALID_TEXT/);
     assert.deepEqual(recordResult(await sql(`${session(creator)} select public.textdrop_poll_page(${quote(page.id)}::uuid, null); commit;`)),{...winner,text:'Whole text accepted second'});
@@ -314,7 +319,7 @@ async function main() {
     assert.equal(await sql(`select count(*) from public.textdrop_page_access where user_id=${quote(joiner)}::uuid;`),'1000');
     console.log('PASS: concurrent joins cannot exceed the access quota.');
     for (const nameFirst of [true, false]) {
-      const rename = `select public.textdrop_rename_page(${quote(page.id)}::uuid, ${quote(nameFirst ? 'Name before text' : 'Name after text')});`;
+      const rename = `select public.textdrop_rename_checked(${quote(page.id)}::uuid, ${quote(nameFirst ? 'Name before text' : 'Name after text')}, ${quote('0'.repeat(64))});`;
       const text = save(page.id, nameFirst ? 'Text after name' : 'Text before name');
       const [, result] = await race(`${session(creator)} ${nameFirst ? rename : text}`, `${session(collaborator)} ${nameFirst ? text : rename}`);
       assert.equal(result.code, 0, result.stderr);

@@ -107,7 +107,7 @@ describe('authoritative IOU rows and checked deltas', () => {
     await database?.close()
   })
 
-  it('preserves exact money, zero versus excluded shares, textual timestamps and legacy CSV', async () => {
+  it('preserves exact money, zero versus excluded shares, textual timestamps and CSV', async () => {
     const record = await create()
     expect(record.payload.transactions).toEqual([expense, payment])
     const changed = { ...record.payload, transactions: [{ ...expense, shares: { alice: expense.amount }, description: 'Revised' }, payment] }
@@ -130,7 +130,7 @@ describe('authoritative IOU rows and checked deltas', () => {
     expect(text).toContain('"bob": 0.000')
     await budget(record.payload.id)
     await database.exec('reset role')
-    await database.exec(await sql('update-row-storage.sql'))
+    await database.exec(await sql('schema.sql'))
     await identity()
     expect((await database.query<{ payload: string }>('select payload::text from public.iou_groups where id=$1', [record.payload.id])).rows[0]!.payload).toBe(text)
   })
@@ -176,16 +176,15 @@ describe('authoritative IOU rows and checked deltas', () => {
     await identity()
   }, 30_000)
 
-  it('uses one revision authority for legacy saves, deltas and lost-response retries', async () => {
+  it('rejects lost-response retries and accepts rebased subsequent deltas', async () => {
     const record = await create()
-    const changed = { ...record.payload, description: 'Delta edit' }
+    const changed = { ...record.payload, description: 'Accepted edit' }
     await delta(record, changed)
     await expect(delta(record, changed)).rejects.toMatchObject({ code: 'PT409', message: 'IOU_CONFLICT' })
-    await expect(database.query('select public.iou_save_group($1::jsonb,$2)', [JSON.stringify(record.payload), record.version])).rejects.toMatchObject({ code: 'PT409' })
     const accepted = await stored(record.payload.id)
-    const legacy = { ...accepted.payload, transactions: [expense, { ...payment, note: 'Legacy accepted' }] }
-    await database.query('select public.iou_save_group($1::jsonb,$2)', [JSON.stringify(legacy), accepted.version])
-    expect(await stored(record.payload.id)).toEqual({ payload: legacy, version: 3 })
+    const next = { ...accepted.payload, transactions: [expense, { ...payment, note: 'Rebased edit' }] }
+    await delta(accepted, next)
+    expect(await stored(record.payload.id)).toEqual({ payload: next, version: 3 })
   })
 
   it('rejects invalid financial tuples, orphaning removals, malformed orders and hidden metadata arrays atomically', async () => {
@@ -228,7 +227,7 @@ describe('authoritative IOU rows and checked deltas', () => {
     }
   })
 
-  it('preserves legacy administrative whole-group deletion without orphaning normalized rows', async () => {
+  it('preserves administrative whole-group deletion without orphaning normalized rows', async () => {
     const record = await create()
     await database.exec('reset role')
     await database.query('delete from public.iou_groups where id=$1', [record.payload.id])
@@ -262,7 +261,7 @@ describe('authoritative IOU rows and checked deltas', () => {
     // Child policies still fence ledger rows, but the stale header policy leaks its invitation.
     expect((await stored(record.payload.id)).payload.inviteCode).toBe(record.payload.inviteCode)
     await database.exec('reset role')
-    await database.exec(await sql('update-row-storage.sql'))
+    await database.exec(await sql('schema.sql'))
     await identity(stranger)
     expect((await database.query('select * from public.iou_groups where id=$1', [record.payload.id])).rows).toEqual([])
     expect((await database.query('select * from public.iou_group_access')).rows).toEqual([])
@@ -333,62 +332,29 @@ describe('authoritative IOU rows and checked deltas', () => {
     await identity()
   }, 15_000)
 
-  it('replays upgrades and reconstructs latest rows on rollback, then permits another cutover', async () => {
+  it('refreshes current rows after edits without changing documents, access, ordering or versions', async () => {
     const record = await create()
-    await delta(record, { ...record.payload, name: 'Accepted after cutover', transactions: [payment, { ...expense, description: 'Newest' }] })
+    await delta(record, { ...record.payload, name: 'Latest accepted data', transactions: [payment, { ...expense, description: 'Newest' }] })
     const latest = await stored(record.payload.id)
     await database.exec('reset role')
-    await database.exec(await sql('update-row-storage.sql'))
-    await database.exec(await sql('update-row-storage.sql'))
-    await database.exec(await sql('rollback-row-storage.sql'))
-    await database.exec(await sql('rollback-row-storage.sql'))
+    const access = (await database.query('select * from public.iou_group_access order by group_id,user_id')).rows
+    await database.exec(await sql('schema.sql'))
+    await database.exec(await sql('schema.sql'))
+    expect((await database.query('select * from public.iou_group_access order by group_id,user_id')).rows).toEqual(access)
     await identity()
     expect(await stored(record.payload.id)).toEqual(latest)
-    const updated = { ...latest.payload, description: 'Accepted during rollback' }
-    await database.query('select public.iou_save_group($1::jsonb,$2)', [JSON.stringify(updated), latest.version])
-    await database.exec('reset role')
-    await database.exec(await sql('update-row-storage.sql'))
-    await identity()
-    expect(await stored(record.payload.id)).toEqual({ payload: updated, version: latest.version + 1 })
     await budget(record.payload.id)
   }, 15_000)
 
-  it('backs up old JSON storage under lock with complete ordering/share/canonical parity and fails invalid historic data', async () => {
-    const current = database
-    const initial = await sql('schema.sql')
-    database = await initialize(`${initial.slice(0, initial.indexOf('-- Authoritative row storage (also installed'))}\ncommit;`)
-    try {
-      await identity()
-      const raw = JSON.stringify(group()).replace('"amount":1000000000000', '"amount":1000000000000.0').replace('"bob":0', '"bob":0.0')
-      const record = (await database.query<{ value: Record }>('select public.iou_create_group($1::jsonb) value', [raw])).rows[0]!.value
-      const source = (await database.query<{ hash: string }>('select md5(payload::text) hash from public.iou_groups where id=$1', [record.payload.id])).rows[0]!.hash
-      await database.exec('reset role')
-      await installLive()
-      await database.exec('truncate realtime.messages')
-      await database.exec(await sql('update-row-storage.sql'))
-      expect((await database.query('select * from realtime.messages')).rows).toEqual([])
-      const audit = (
-        await database.query<{ version: number; matches: boolean }>(
-          `select a.source_version version,a.source_hash=md5(g.payload::text) matches,a.source_hash hash
-        from private.iou_row_backfill a join public.iou_groups g on g.id=a.group_id where a.group_id=$1`,
-          [record.payload.id],
-        )
-      ).rows[0]
-      expect(audit).toEqual({ version: record.version, matches: true, hash: source })
-      await identity()
-      expect(await stored(record.payload.id)).toEqual(record)
-      await budget(record.payload.id)
-      await database.exec('reset role')
-      await database.exec(await sql('rollback-row-storage.sql'))
-      await database.exec('alter table public.iou_groups drop constraint iou_groups_payload_valid')
-      await database.query("update public.iou_groups set payload=jsonb_set(payload,'{transactions,0,amount}','1') where id=$1", [record.payload.id])
-      await expect(database.exec(await sql('update-row-storage.sql'))).rejects.toThrow('IOU_ROW_BACKFILL_INVALID')
-      await database.exec('rollback')
-      expect((await database.query<{ result: string | null }>("select to_regclass('public.iou_group_headers') result")).rows[0]!.result).toBeNull()
-    } finally {
-      await database.close()
-      database = current
-      await identity()
-    }
-  }, 15_000)
+  it('aborts a refresh atomically when current row budgets are inconsistent', async () => {
+    const record = await create()
+    await database.exec('reset role')
+    await database.query('update public.iou_group_headers set payload_bytes=payload_bytes+1 where id=$1', [record.payload.id])
+    await expect(database.exec(await sql('schema.sql'))).rejects.toThrow('IOU_ROW_AUTHORITY_INVALID')
+    await database.exec('rollback')
+    await database.query('update public.iou_group_headers set payload_bytes=payload_bytes-1 where id=$1', [record.payload.id])
+    await identity()
+    expect(await stored(record.payload.id)).toEqual(record)
+    await budget(record.payload.id)
+  })
 })

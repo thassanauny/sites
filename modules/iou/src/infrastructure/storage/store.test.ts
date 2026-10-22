@@ -136,16 +136,6 @@ describe('saved browser data', () => {
     expect(loaded.store.cloudRevisions).toEqual({ trip: 4, other: 4 })
   })
 
-  it('reads only the current cache namespace without importing earlier data', () => {
-    const oldRaw = JSON.stringify({ version: 1, groups: [makeGroup('local')] })
-    entries.set('iou:store:v1', oldRaw)
-    expect(loadStore()).toEqual({ store: emptyStore() })
-    expect(memoryStorage.getItem).toHaveBeenCalledWith(STORE_KEY)
-    expect(memoryStorage.getItem).not.toHaveBeenCalledWith('iou:store:v1')
-    expect(entries.get('iou:store:v1')).toBe(oldRaw)
-    expect(memoryStorage.setItem).not.toHaveBeenCalled()
-  })
-
   it('requires current fields and a confirmed revision for every cached group', () => {
     const valid = { ...emptyStore(), groups: [makeGroup('trip')], cloudRevisions: { trip: 4 } }
     const { removedGroupIds: _removedGroupIds, ...incomplete } = valid
@@ -199,11 +189,12 @@ describe('saved browser data', () => {
 describe('saved Travel mode preferences', () => {
   const sharedStore = () => ({ ...emptyStore(), groups: [makeGroup('trip'), makeGroup('other')], pinnedIds: ['trip'], memberByGroup: { trip: 'trip-amy' }, cloudRevisions: { trip: 4, other: 2 } })
 
-  it('adds disabled Travel mode to the previous current cache without losing data or rewriting it', () => {
-    const { travelMode: _travelMode, ...previous } = sharedStore()
-    const raw = JSON.stringify(previous)
+  it.each(['travelMode', 'outbox', 'pendingJoins', 'removalEpochs'] as const)('requires current saved field %s instead of migrating an older shape', field => {
+    const incomplete = { ...sharedStore() } as Record<string, unknown>
+    delete incomplete[field]
+    const raw = JSON.stringify(incomplete)
     entries.set(STORE_KEY, raw)
-    expect(loadStore()).toEqual({ store: sharedStore() })
+    expect(loadStore().error).toContain('kept in browser storage')
     expect(entries.get(STORE_KEY)).toBe(raw)
     expect(memoryStorage.setItem).not.toHaveBeenCalled()
   })
@@ -409,11 +400,8 @@ describe('invitation removal ordering', () => {
     saveStore(removedAgain)
     expect(loadStore().store.removalEpochs).toEqual(removedAgain.removalEpochs)
   })
-  it('loads previous stores without removal history and preserves corrupt history for recovery', () => {
+  it('preserves corrupt current removal history for recovery', () => {
     const previous = emptyStore()
-    delete previous.removalEpochs
-    entries.set(STORE_KEY, JSON.stringify(previous))
-    expect(loadStore().store.removalEpochs).toEqual({})
     for (const history of [null, [], { trip: 'invalid' }]) {
       const raw = JSON.stringify({ ...previous, removalEpochs: history })
       entries.set(STORE_KEY, raw)

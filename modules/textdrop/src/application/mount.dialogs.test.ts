@@ -282,7 +282,7 @@ describe('TextDrop dialogs', () => {
     element('rename-cancel').click();
     expect(new DeviceSnippets().list()[0]!.name).toBeUndefined();
     expect(document.activeElement).toBe(root.querySelector('.snippet-rename'));
-    new DeviceSnippets().rename(first.code, 'From another tab');
+    new DeviceSnippets().sharedName(first.code, 'From another tab', 1);
     window.dispatchEvent(new StorageEvent('storage', { key: `${DEVICE_SNIPPETS_KEY}:name:${first.code}` }));
     expect(root.querySelector('.snippet-name')!.textContent).toBe('From another tab');
     expect(document.activeElement).toBe(root.querySelector('.snippet-rename'));

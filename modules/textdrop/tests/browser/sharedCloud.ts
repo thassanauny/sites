@@ -193,7 +193,7 @@ export function sharedCloud() {
           await route.fulfill({ json: result });
           return;
         }
-        if (rpc === 'textdrop_rename_checked' || rpc === 'textdrop_rename_page') {
+        if (rpc === 'textdrop_rename_checked') {
           const name = args.p_name?.trim() || null;
           if (page.name !== name) {
             page.name = name;

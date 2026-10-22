@@ -14,11 +14,11 @@ const checkerName = 'scripts/check-shared-build.mjs';
 const schemaFiles = ['tsconfig.app.json', 'tsconfig.node.json', 'biome.json', 'build-config.test.ts', 'supabase/schema.sql'];
 const iconAssets = ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
 const apps = {
-  textdrop: { assets: new Set(['logo.svg', ...iconAssets]), files: [...schemaFiles, 'playwright.config.ts', 'supabase/update-poll-and-grants.sql', 'supabase/update-save-receipt.sql', 'supabase/update-shared-names.sql', 'supabase/update-checked-saves.sql', 'supabase/update-live-sync.sql', 'supabase/postgres-check.mjs'], folders: ['src', 'public', 'tests'] },
-  pinboard: { assets: new Set(['favicon.svg', ...iconAssets]), files: [...schemaFiles, 'playwright.config.ts', 'supabase/schema.test.mjs', 'supabase/row-storage.test.mjs', 'supabase/postgres-check.mjs', 'supabase/live-sync.test.mjs', 'supabase/update-live-sync.sql', 'supabase/rollback-row-storage.sql'], folders: ['src', 'public', 'tests'] },
+  textdrop: { assets: new Set(['logo.svg', ...iconAssets]), files: [...schemaFiles, 'playwright.config.ts', 'supabase/update-live-sync.sql', 'supabase/postgres-check.mjs'], folders: ['src', 'public', 'tests'] },
+  pinboard: { assets: new Set(['favicon.svg', ...iconAssets]), files: [...schemaFiles, 'playwright.config.ts', 'supabase/schema.test.mjs', 'supabase/row-storage.test.mjs', 'supabase/postgres-check.mjs', 'supabase/live-sync.test.mjs', 'supabase/update-live-sync.sql'], folders: ['src', 'public', 'tests'] },
   blueprint: {
     assets: new Set([...iconAssets, 'favicon.svg', '.nojekyll', 'licenses/Manrope.txt', 'licenses/DM-Sans.txt', 'licenses/React-Flow.txt']),
-    files: ['supabase/update-live-sync.sql', 'playwright.config.ts', 'supabase/rename-to-blueprint.sql', 'supabase/migrations/001_blueprint_boards.sql', 'supabase/migrations/002_board_invitations.sql', 'supabase/migrations/003_shared_editing.sql', 'supabase/migrations/004_incremental_sync.sql'],
+    files: ['supabase/schema.sql', 'supabase/update-live-sync.sql', 'playwright.config.ts'],
     folders: ['src', 'public', 'tests'], fonts: true,
   },
 };

@@ -1,7 +1,7 @@
 import { createClient, navigatorLock, type SupabaseClient } from '@supabase/supabase-js';
-import type { Cloud } from '../../application/ports';
+import type { RemoteCloud } from '../../application/ports';
 import { normalizeCode, readPage, TextConflictError, validateName, validateText, validateUuid, type TextDropPage } from '../../domain/snippets/model';
-import { discardDamagedSession, migrateLegacyAuthStorage, TEXTDROP_AUTH_KEY } from '../auth/sessionStorage';
+import { discardDamagedSession, validateAuthStorage, TEXTDROP_AUTH_KEY } from '../auth/sessionStorage';
 import { fetchWithTimeout } from './requestTimeout';
 import { listenForChanges } from './liveChanges';
 
@@ -74,7 +74,7 @@ async function textHash(text: string): Promise<string> {
 }
 
 /** Remote API; the offline adapter separately owns cached content and pending edits. */
-export function createCloud(url: string, key: string): Cloud {
+export function createCloud(url: string, key: string): RemoteCloud {
   const projectUrl = url.trim();
   const publicKey = key.trim();
   let client: SupabaseClient | undefined;
@@ -100,7 +100,7 @@ export function createCloud(url: string, key: string): Cloud {
     ensureOnline();
     if (!authentication) {
       authentication = (async () => {
-        await migrateLegacyAuthStorage();
+        await validateAuthStorage();
         const supabase = getClient();
         const { data, error } = await call('restore your TextDrop session', () => supabase.auth.getSession());
         if (error) throw serviceError(error, 'restore your TextDrop session');
@@ -126,7 +126,6 @@ export function createCloud(url: string, key: string): Cloud {
 
   function parsePage(data: unknown): TextDropPage {
     try {
-      if (!data || typeof data !== 'object' || !Object.hasOwn(data, 'name')) throw new Error(INVALID_RESPONSE);
       return readPage(data);
     } catch {
       throw new Error(INVALID_RESPONSE);
@@ -185,12 +184,6 @@ export function createCloud(url: string, key: string): Cloud {
       if (page.id !== pageId) throw new Error(INVALID_RESPONSE);
       return page;
     },
-    renamePage: async (id, name) => {
-      const pageId = validateUuid(id);
-      const page = await rpc('save the snippet name', 'textdrop_rename_page', { p_id: pageId, p_name: validateName(name) });
-      if (page.id !== pageId) throw new Error(INVALID_RESPONSE);
-      return page;
-    },
     listNames: async codes => {
       const normalized = codes.map(normalizeCode);
       if (normalized.length > 1000) throw new Error('Too many snippets to refresh.');
@@ -243,19 +236,6 @@ export function createCloud(url: string, key: string): Cloud {
       await client?.auth.stopAutoRefresh();
       client = undefined;
       authentication = undefined;
-    },
-    savePage: async (id, text) => {
-      const pageId = validateUuid(id);
-      const sent = validateText(text);
-      await initialize();
-      const action = 'save the snippet';
-      const { data, error } = await call(action, () => getClient().rpc('textdrop_save_page_receipt', { p_id: pageId, p_text: sent }));
-      if (error) throw serviceError(error, action);
-      if (!data || typeof data !== 'object' || Array.isArray(data) || Object.hasOwn(data, 'text')) throw new Error(INVALID_RESPONSE);
-      // The receipt acknowledges the exact literal text sent, under the same server save/lock rules.
-      const page = parsePage({ ...data, text: sent });
-      if (page.id !== pageId) throw new Error('The server returned a different snippet. Refresh the app and try again.');
-      return page;
     },
   };
 }

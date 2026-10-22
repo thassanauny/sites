@@ -63,7 +63,7 @@ describe('device snippet history', () => {
     expect(values.size).toBe(2);
   });
 
-  it('persists a normalized device name without changing opening times, order, or opening guards', () => {
+  it('caches a checked shared name without changing opening times, order, or opening guards', () => {
     const { storage, values } = fixture();
     let time = firstTime;
     const history = new DeviceSnippets(
@@ -76,16 +76,16 @@ describe('device snippet history', () => {
     const opening = values.get(storageKey(firstCode));
     const guard = history.snapshot(firstCode);
     storage.setItem.mockClear();
-    expect(history.rename(firstCode, '  Travel\n  notes\t ')).toEqual([
+    expect(history.sharedName(firstCode, '  Travel notes  ', 1)).toEqual([
       { code: secondCode, openedAt: secondTime },
       { code: firstCode, openedAt: firstTime, name: 'Travel notes' },
     ]);
     expect(storage.setItem.mock.calls.map(([key]) => key)).toEqual([nameKey(firstCode)]);
-    expect(JSON.parse(values.get(nameKey(firstCode))!)).toEqual({ code: firstCode, name: 'Travel notes' });
+    expect(JSON.parse(values.get(nameKey(firstCode))!)).toEqual({ code: firstCode, name: 'Travel notes', version: 1 });
     expect(values.get(storageKey(firstCode))).toBe(opening);
     expect(history.snapshot(firstCode)).toBe(guard);
     expect(new DeviceSnippets(() => storage).list()[1]!.name).toBe('Travel notes');
-    expect(history.rename(firstCode, '\n \t')[1]).toEqual({ code: firstCode, openedAt: firstTime });
+    expect(history.sharedName(firstCode, '  ', 1)[1]).toEqual({ code: firstCode, openedAt: firstTime });
   });
 
   it('keeps a name through subsequent openings, removal, and an explicit successful rejoin', () => {
@@ -99,11 +99,11 @@ describe('device snippet history', () => {
       () => new Date(secondTime),
     );
     firstTab.remember(firstCode);
-    firstTab.rename(firstCode, 'Shared checklist');
+    firstTab.sharedName(firstCode, 'Shared checklist', 1);
     expect(secondTab.remember(firstCode)).toEqual([{ code: firstCode, openedAt: secondTime, name: 'Shared checklist' }]);
     expect(secondTab.remove(firstCode)).toEqual([]);
     storage.setItem.mockClear();
-    expect(() => firstTab.rename(firstCode, 'Hidden entry')).toThrow('no longer saved');
+    expect(firstTab.sharedName(firstCode, 'Shared checklist', 1)).toEqual([]);
     expect(storage.setItem).not.toHaveBeenCalled();
     expect(values.get(nameKey(firstCode))).toContain('Shared checklist');
     expect(firstTab.remember(firstCode)).toEqual([]);
@@ -126,7 +126,7 @@ describe('device snippet history', () => {
       { code: secondCode, openedAt: firstTime },
       { code: thirdCode, openedAt: firstTime },
     ]);
-    expect(() => history.rename(fourthCode, 'Still orphaned')).toThrow('no longer saved');
+    expect(history.sharedName(fourthCode, 'Still orphaned', 1).some(row => row.code === fourthCode)).toBe(false);
     for (const name of [123, null, [], {}, ' \n ']) {
       storage.setItem(nameKey(firstCode), JSON.stringify({ code: firstCode, name }));
       expect(history.list()[0]).toEqual({ code: firstCode, openedAt: firstTime });
@@ -141,18 +141,18 @@ describe('device snippet history', () => {
       () => storage,
       () => new Date(firstTime),
     );
-    expect(() => history.rename('bad-code', 'Name')).toThrow('32-character');
-    expect(() => history.rename(firstCode, 'x'.repeat(MAX_SNIPPET_NAME_LENGTH + 1))).toThrow('80 characters');
+    expect(() => history.sharedName('bad-code', 'Name', 1)).toThrow('32-character');
+    expect(() => history.sharedName(firstCode, 'x'.repeat(MAX_SNIPPET_NAME_LENGTH + 1), 1)).toThrow('80 characters');
     expect(storage.key).not.toHaveBeenCalled();
     expect(storage.setItem).not.toHaveBeenCalled();
     history.remember(firstCode);
-    history.rename(firstCode, 'Original');
+    history.sharedName(firstCode, 'Original', 1);
     const name = values.get(nameKey(firstCode));
     storage.setItem.mockImplementation(() => {
       throw new Error('QuotaExceededError');
     });
-    expect(() => history.rename(firstCode, 'Changed')).toThrow('Could not save the snippet name');
-    expect(() => history.rename(firstCode, '')).toThrow('Could not save the snippet name');
+    expect(() => history.sharedName(firstCode, 'Changed', 1)).toThrow('QuotaExceededError');
+    expect(() => history.sharedName(firstCode, '', 1)).toThrow('QuotaExceededError');
     expect(values.get(nameKey(firstCode))).toBe(name);
     expect(history.list()).toEqual([{ code: firstCode, openedAt: firstTime, name: 'Original' }]);
   });
@@ -172,7 +172,7 @@ describe('device snippet history', () => {
       storage.setItem.mockImplementation((nextKey, nextSaved) => {
         values.set(nextKey, nextSaved);
       });
-      secondTab.rename(firstCode, 'Named while opening');
+      secondTab.sharedName(firstCode, 'Named while opening', 1);
       values.set(key, saved);
     });
     expect(firstTab.remember(firstCode)).toEqual([{ code: firstCode, openedAt: firstTime, name: 'Named while opening' }]);
@@ -183,7 +183,7 @@ describe('device snippet history', () => {
       secondTab.remember(firstCode);
       values.set(key, saved);
     });
-    expect(firstTab.rename(firstCode, 'Named after opening')).toEqual([{ code: firstCode, openedAt: secondTime, name: 'Named after opening' }]);
+    expect(firstTab.sharedName(firstCode, 'Named after opening', 1)).toEqual([{ code: firstCode, openedAt: secondTime, name: 'Named after opening' }]);
   });
 
   it('never restores a concurrently removed snippet while writing its separate name', () => {
@@ -200,25 +200,25 @@ describe('device snippet history', () => {
       new DeviceSnippets(() => storage).remove(firstCode);
       values.set(key, saved);
     });
-    expect(history.rename(firstCode, 'Name retained for rejoin')).toEqual([]);
+    expect(history.sharedName(firstCode, 'Name retained for rejoin', 1)).toEqual([]);
     expect(history.isRemoved(firstCode)).toBe(true);
     expect(new DeviceSnippets(() => storage).list()).toEqual([]);
     expect(history.remember(firstCode, history.snapshot(firstCode))).toEqual([{ code: firstCode, openedAt: firstTime, name: 'Name retained for rejoin' }]);
   });
 
-  it('blocks name writes after denied reads and omits the renamed row when post-write visibility cannot be checked', () => {
+  it('preserves cached names after denied reads and reports failed post-write visibility', () => {
     const { storage, values } = fixture();
     const history = new DeviceSnippets(
       () => storage,
       () => new Date(firstTime),
     );
     history.remember(firstCode);
-    history.rename(firstCode, 'Original');
+    history.sharedName(firstCode, 'Original', 1);
     storage.setItem.mockClear();
     storage.getItem.mockImplementationOnce(() => {
       throw new Error('Denied');
     });
-    expect(() => history.rename(firstCode, 'Not committed')).toThrow('Could not read');
+    expect(() => history.sharedName(firstCode, 'Not committed', 1)).toThrow('Denied');
     expect(storage.setItem).not.toHaveBeenCalled();
     expect(values.get(nameKey(firstCode))).toContain('Original');
     storage.setItem.mockImplementationOnce((key, saved) => {
@@ -231,7 +231,7 @@ describe('device snippet history', () => {
         throw new Error('Denied after write');
       });
     });
-    expect(history.rename(firstCode, 'Committed')).toEqual([]);
+    expect(() => history.sharedName(firstCode, 'Committed', 1)).toThrow('Could not read');
     expect(history.isRemoved(firstCode)).toBe(true);
     expect(values.get(nameKey(firstCode))).toContain('Committed');
   });
@@ -263,7 +263,7 @@ describe('device snippet history', () => {
     const rowsOf = (code: string) => [...values.keys()].filter(key => key.includes(code)).sort();
     history.remember(firstCode);
     history.remember(secondCode);
-    history.rename(firstCode, 'Travel notes');
+    history.sharedName(firstCode, 'Travel notes', 1);
     history.remove(firstCode);
     expect(storage.removeItem).not.toHaveBeenCalled();
     expect(values.has(storageKey(firstCode))).toBe(true);
@@ -623,43 +623,6 @@ describe('device snippet history', () => {
     expect(storage.setItem).not.toHaveBeenCalled();
   });
 
-  it('honors old inline removal markers until an explicit fresh join succeeds', () => {
-    const inlineMarker = JSON.stringify({ code: firstCode, removed: true, token: 'older-removal', openedAt: firstTime });
-    const { storage, values } = fixture([[storageKey(firstCode), inlineMarker]]);
-    const history = new DeviceSnippets(
-      () => storage,
-      () => new Date(secondTime),
-    );
-    expect(history.list()).toEqual([]);
-    expect(history.isRemoved(firstCode)).toBe(true);
-    expect(history.remember(firstCode)).toEqual([]);
-    expect(values.get(storageKey(firstCode))).toBe(inlineMarker);
-    expect(history.remember(firstCode, history.snapshot(firstCode))).toEqual([{ code: firstCode, openedAt: secondTime }]);
-    expect(history.isRemoved(firstCode)).toBe(false);
-    expect(JSON.parse(values.get(storageKey(firstCode))!)).toEqual({ code: firstCode, openedAt: secondTime });
-    expect(values.has(removalKey(firstCode))).toBe(false);
-  });
-
-  it('keeps a new independent removal when an old inline marker is being explicitly restored', () => {
-    const { storage, values } = fixture([[storageKey(firstCode), JSON.stringify({ code: firstCode, removed: true })]]);
-    const history = new DeviceSnippets(
-      () => storage,
-      () => new Date(firstTime),
-    );
-    const beforeJoin = history.snapshot(firstCode);
-    storage.setItem.mockImplementationOnce((key, saved) => {
-      storage.setItem.mockImplementation((nextKey, nextSaved) => {
-        values.set(nextKey, nextSaved);
-      });
-      new DeviceSnippets(() => storage).remove(firstCode);
-      values.set(key, saved);
-    });
-    expect(history.remember(firstCode, beforeJoin)).toEqual([]);
-    expect(history.isRemoved(firstCode)).toBe(true);
-    expect(history.remember(firstCode, history.snapshot(firstCode))).toEqual([{ code: firstCode, openedAt: firstTime }]);
-    expect(history.isRemoved(firstCode)).toBe(false);
-  });
-
   it('sanitizes malformed removal metadata without exposing it in returned rows', () => {
     const { storage } = fixture([
       [reopeningKey(firstCode, 'observed-removal'), JSON.stringify({ code: firstCode, openedAt: firstTime, removalToken: 'observed-removal', text: 'private' })],
@@ -755,7 +718,7 @@ describe('device snippet history', () => {
     for (const key of [null, storageKey(firstCode), removalKey(firstCode), nameKey(firstCode), reopeningKey(firstCode, 'token')]) {
       expect(history.changedBy(key), String(key)).toBe(true);
     }
-    for (const key of ['textdrop-auth', 'paste-auth', DEVICE_SNIPPETS_KEY, `${DEVICE_SNIPPETS_KEY}x:${firstCode}`, '']) {
+    for (const key of ['textdrop-auth', 'unrelated-auth', DEVICE_SNIPPETS_KEY, `${DEVICE_SNIPPETS_KEY}x:${firstCode}`, '']) {
       expect(history.changedBy(key), key).toBe(false);
     }
   });

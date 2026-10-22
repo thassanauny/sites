@@ -1,12 +1,10 @@
 import { emptyStore, withoutRemovedGroups, type AppStore } from '../../application/deviceStore'
 import { isId, isInviteCode } from '../../domain/groups/identifiers'
 import { validateGroup } from '../../domain/ledger/calculations'
-import { emptyTravelMode } from '../../domain/travel/preferences'
 
 export const STORE_KEY = 'iou:store:v2'
 
-const REQUIRED_FIELDS = ['version', 'groups', 'pinnedIds', 'memberByGroup', 'cloudRevisions', 'removedGroupIds']
-const OPTIONAL_FIELDS = ['travelMode', 'outbox', 'pendingJoins', 'removalEpochs']
+const REQUIRED_FIELDS = ['version', 'groups', 'pinnedIds', 'memberByGroup', 'cloudRevisions', 'removedGroupIds', 'travelMode', 'outbox', 'pendingJoins', 'removalEpochs']
 const EPOCH_PATTERN = /^[a-f0-9-]{36}$/
 const UNREADABLE = 'Your saved data could not be opened. It has been kept in browser storage. Export or recover it before saving new data.'
 const UNKNOWN_FORMAT =
@@ -16,7 +14,7 @@ const UNKNOWN_FORMAT =
 class UnknownFormat extends Error {}
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
-const hasUnknownField = (value: object): boolean => Object.keys(value).some(field => !REQUIRED_FIELDS.includes(field) && !OPTIONAL_FIELDS.includes(field))
+const hasUnknownField = (value: object): boolean => Object.keys(value).some(field => !REQUIRED_FIELDS.includes(field))
 const isPendingJoin = (value: unknown): boolean => {
   const item = value as Record<string, unknown> | null
   return (
@@ -46,7 +44,7 @@ function parseStore(raw: string): AppStore {
     !isObject(value.cloudRevisions)
   )
     throw new Error('Invalid saved data')
-  const travelMode = value.travelMode ?? (Object.hasOwn(value, 'travelMode') ? null : emptyTravelMode())
+  const travelMode = value.travelMode
   if (
     !travelMode ||
     typeof travelMode !== 'object' ||
@@ -57,10 +55,10 @@ function parseStore(raw: string): AppStore {
     throw new Error('Invalid Travel mode settings')
   if (!Array.isArray(value.removedGroupIds) || value.removedGroupIds.some(id => !isId(id))) throw new Error('Invalid device removals')
   const removedGroupIds = [...new Set(value.removedGroupIds)]
-  const removalEpochs = Object.hasOwn(value, 'removalEpochs') ? value.removalEpochs : {}
+  const removalEpochs = value.removalEpochs
   if (!isObject(removalEpochs) || Object.entries(removalEpochs).some(([id, epoch]) => !isId(id) || typeof epoch !== 'string' || !EPOCH_PATTERN.test(epoch)))
     throw new Error('Invalid device removal history')
-  const pending = Object.hasOwn(value, 'outbox') ? value.outbox : []
+  const pending = value.outbox
   if (!Array.isArray(pending)) throw new Error('Invalid pending changes')
   const outbox = pending.map(item => {
     if (!item || Object.keys(item).length !== 3 || !Number.isSafeInteger(item.revision) || item.revision < 0) throw new Error('Invalid pending change')
@@ -71,7 +69,7 @@ function parseStore(raw: string): AppStore {
     return { group, base, revision: item.revision }
   })
   if (new Set(outbox.map(item => item.group.id)).size !== outbox.length) throw new Error('Duplicate pending changes')
-  const pendingJoins = Object.hasOwn(value, 'pendingJoins') ? value.pendingJoins : []
+  const pendingJoins = value.pendingJoins
   if (!Array.isArray(pendingJoins) || !pendingJoins.every(isPendingJoin) || new Set(pendingJoins.map(item => item.code)).size !== pendingJoins.length) throw new Error('Invalid pending invitations')
   const groups = value.groups.map(validateGroup)
   if (new Set(groups.map(g => g.id)).size !== groups.length) throw new Error('Duplicate saved groups')

@@ -83,7 +83,7 @@ export type SavedBoard = {
 };
 
 export const SHARING_UPDATE =
-  "Cloud sharing needs an update. Follow Blueprint’s database setup guide, including rename-to-blueprint.sql for an existing installation, then retry.";
+  "Cloud sharing needs an update. Apply Blueprint’s current supabase/schema.sql using the database setup guide, then retry.";
 export class SharingUpdateError extends Error {
   constructor() {
     super(SHARING_UPDATE);
@@ -178,7 +178,7 @@ export async function saveCloudBoard(
 export function messageFor(error: unknown): string {
   const value = error as { code?: string; message?: string };
   if (["PGRST202", "42P01", "42883"].includes(value?.code || ""))
-    return "Sharing setup is not installed yet. Apply the Blueprint database migrations, then retry.";
+    return "Sharing setup is not installed yet. Apply the Blueprint schema.sql, then retry.";
   return (
     value?.message ||
     "Cloud access failed. Your draft is still saved in this browser."

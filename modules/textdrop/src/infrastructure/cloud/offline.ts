@@ -1,18 +1,18 @@
-import type { Cloud, TextSave } from '../../application/ports';
+import type { Cloud, RemoteCloud, TextSave } from '../../application/ports';
 import { readPage, TextConflictError, validateName, validateText, type TextDropPage } from '../../domain/snippets/model';
-import { migrateLegacyAuthStorage, TEXTDROP_AUTH_KEY } from '../auth/sessionStorage';
+import { validateAuthStorage, TEXTDROP_AUTH_KEY } from '../auth/sessionStorage';
 import { OfflineDatabase } from '../storage/offlineDatabase';
 
 export interface SavedPage {
   page: TextDropPage;
-  pending?: { id: string; text: string; at: number; baseVersion?: number; baseText?: string };
+  pending?: { id: string; text: string; at: number; baseVersion: number; baseText: string };
   conflict?: TextDropPage;
   pendingName?: { id: string; name: string | null; at: number };
   nameInfo?: { name: string | null; version: number };
 }
 
 async function owner(): Promise<string | null> {
-  await migrateLegacyAuthStorage();
+  await validateAuthStorage();
   const raw = localStorage.getItem(TEXTDROP_AUTH_KEY);
   if (!raw) return null;
   const value = JSON.parse(raw);
@@ -30,7 +30,7 @@ const project = (entry: SavedPage): TextDropPage => ({
 });
 
 /** Cache and upload queue are separate from recovery copies and scoped to the authenticated device. */
-export function withOfflinePages(remote: Cloud, database = new OfflineDatabase<SavedPage>('textdrop-offline-v1', owner)): Cloud {
+export function withOfflinePages(remote: RemoteCloud, database = new OfflineDatabase<SavedPage>('textdrop-offline-v1', owner)): Cloud {
   let synchronizing: Promise<void> | undefined;
   let failures = new Map<string, unknown>();
   async function begin(): Promise<string | null> {
@@ -142,15 +142,11 @@ export function withOfflinePages(remote: Cloud, database = new OfflineDatabase<S
                 const nameEdit = next.pendingName;
                 const sent = nameEdit ?? next.pending!;
                 if (!nameEdit && next.conflict) throw new TextConflictError(next.conflict);
-                if (nameEdit && !remote.renamePage) throw new Error('Shared snippet names need a database update.');
-                if (!nameEdit && !remote.saveCheckedPage) throw new Error('Checked snippet saves need a database update.');
-                const baseVersion = next.pending?.baseVersion ?? next.page.version;
-                const baseText = next.pending?.baseText ?? next.page.text;
+                const baseVersion = next.pending ? next.pending.baseVersion : next.page.version;
+                const baseText = next.pending ? next.pending.baseText : next.page.text;
                 const saved = nameEdit
-                  ? remote.renameCheckedPage
-                    ? await remote.renameCheckedPage(next.page.id, nameEdit.name, next.page)
-                    : await remote.renamePage!(next.page.id, nameEdit.name)
-                  : await remote.saveCheckedPage!(next.page.id, next.pending!.text, { baseVersion, baseText, operationId: sent.id });
+                  ? await remote.renameCheckedPage(next.page.id, nameEdit.name, next.page)
+                  : await remote.saveCheckedPage(next.page.id, next.pending!.text, { baseVersion, baseText, operationId: sent.id });
                 if ((await database.owner()) !== currentOwner) return;
                 next = await database.change(
                   saved.code,
@@ -158,8 +154,7 @@ export function withOfflinePages(remote: Cloud, database = new OfflineDatabase<S
                     let pending = !nameEdit && current?.pending?.id === sent.id ? undefined : current?.pending;
                     const pendingName = nameEdit && current?.pendingName?.id === sent.id ? undefined : current?.pendingName;
                     // A newer local edit was based on the text just acknowledged, not on another device's change.
-                    if (!nameEdit && pending && (pending.baseVersion ?? baseVersion) === baseVersion && (pending.baseText ?? baseText) === baseText)
-                      pending = { ...pending, baseVersion: saved.version, baseText: saved.text };
+                    if (!nameEdit && pending && pending.baseVersion === baseVersion && pending.baseText === baseText) pending = { ...pending, baseVersion: saved.version, baseText: saved.text };
                     return {
                       value: {
                         page: current && current.page.version > saved.version ? current.page : readPage(saved),
@@ -240,7 +235,7 @@ export function withOfflinePages(remote: Cloud, database = new OfflineDatabase<S
     listNames: async codes => {
       const currentOwner = await database.owner();
       let names: { code: string; name: string | null; version: number }[] | undefined;
-      if (navigator.onLine && remote.listNames) {
+      if (navigator.onLine) {
         // Report failed online reads so synchronization keeps its retry cadence.
         // The UI retains cached labels; offline reads below still use the cache.
         names = await remote.listNames(codes);

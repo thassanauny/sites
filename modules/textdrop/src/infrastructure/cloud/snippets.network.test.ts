@@ -15,7 +15,7 @@ const page = {
 };
 const reply = (url: unknown) => {
   const { id, code, version, updatedAt, name } = page;
-  const data = String(url).endsWith('textdrop_save_page_receipt') ? { id, code, version, updatedAt, name } : page;
+  const data = String(url).endsWith('textdrop_save_checked') ? { id, code, version, updatedAt, name } : page;
   return new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } });
 };
 const stalled = () => new Promise<Response>(() => {});
@@ -54,7 +54,7 @@ describe('snippet requests on a stalled connection', () => {
     const cloud = createCloud('https://test-project.supabase.co', 'public-test-key');
     const unreachable = 'Could not connect to shared snippets. Check your connection and try again.';
 
-    const saving = expect(cloud.savePage(page.id, 'Typed text')).rejects.toThrow(unreachable);
+    const saving = expect(cloud.saveCheckedPage(page.id, 'Typed text', { baseVersion: 1, baseText: page.text })).rejects.toThrow(unreachable);
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 1000);
     await saving;
     const polling = expect(cloud.pollPage(page.id, 0)).rejects.toThrow(unreachable);
@@ -62,12 +62,12 @@ describe('snippet requests on a stalled connection', () => {
     await polling;
     expect(network).toHaveBeenCalledTimes(2);
 
-    await expect(cloud.savePage(page.id, 'Typed text')).resolves.toEqual({ ...page, text: 'Typed text' });
+    await expect(cloud.saveCheckedPage(page.id, 'Typed text', { baseVersion: 1, baseText: page.text })).resolves.toEqual({ ...page, text: 'Typed text' });
     await expect(cloud.pollPage(page.id, 0)).resolves.toEqual(page);
     expect(network.mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual([
-      '/rest/v1/rpc/textdrop_save_page_receipt',
+      '/rest/v1/rpc/textdrop_save_checked',
       '/rest/v1/rpc/textdrop_poll_page',
-      '/rest/v1/rpc/textdrop_save_page_receipt',
+      '/rest/v1/rpc/textdrop_save_checked',
       '/rest/v1/rpc/textdrop_poll_page',
     ]);
   });

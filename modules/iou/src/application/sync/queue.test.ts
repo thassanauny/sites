@@ -136,12 +136,6 @@ describe('durable offline changes', () => {
     expect(store.memberByGroup.trip).toBe('amy')
   })
 
-  it('preserves the existing current cache when adding offline fields', () => {
-    const { outbox: _outbox, pendingJoins: _joins, ...previous } = cached()
-    vi.stubGlobal('localStorage', { getItem: () => JSON.stringify(previous) })
-    expect(loadStore().store).toEqual(cached())
-  })
-
   it('keeps independent transactions and applies the newest conflicting edit automatically', () => {
     const base = { ...group(), transactions: [expense('same')] }
     const local = { ...base, name: 'Our trip', updatedAt: time(2), transactions: [{ ...expense('same'), amount: 2000, shares: { amy: 1000, ben: 1000 } }, expense('ours')] }

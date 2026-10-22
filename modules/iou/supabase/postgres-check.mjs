@@ -90,7 +90,7 @@ function payload(id = randomUUID()) {
     members: [{id:'alice',name:'Alice'}], transactions: [] };
 }
 const create = (group) => `select public.iou_create_group(${json(group)});`;
-const save = (group, revision) => `select public.iou_save_group(${json(group)}, ${revision});`;
+const save = (group, revision) => `${saveDelta(group, revision)} ${load(group.id)}`;
 const saveDelta = (group, revision, changes = {}) => {
   const { members: _members, transactions: _transactions, ...metadata } = group;
   const delta = {
@@ -278,9 +278,10 @@ async function main() {
       grant execute on function auth.uid() to anon, authenticated;
       insert into auth.users(id) values (${quote(creator)}),(${quote(collaborator)}),(${quote(limitedCreator)});
     `);
-    await sql(await readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
-    const rowMigration = await readFile(new URL('./update-row-storage.sql', import.meta.url), 'utf8');
-    await sql(rowMigration);
+    const currentSchema = await readFile(new URL('./schema.sql', import.meta.url), 'utf8');
+    await sql(currentSchema);
+    await sql(currentSchema);
+    assert.equal(await sql("select to_regprocedure('public.iou_save_group(jsonb,bigint)') is null and to_regprocedure('private.iou_save_group(jsonb,bigint)') is null and to_regclass('private.iou_row_backfill') is null;"), 't');
 
     const record = recordResult(await sql(`${session(creator)} ${create(payload())} commit;`));
     await sql(`${session(collaborator)} select public.iou_join_group(${quote(record.payload.inviteCode)}); commit;`);
@@ -302,36 +303,25 @@ async function main() {
     assert.deepEqual(recordResult(await sql(`${session(creator)} ${load(recovered.payload.id)} commit;`)), recovered);
 
     let shared = recovered;
-    for (const [firstKind, waitingKind] of [
-      ['delta', 'delta'],
-      ['delta', 'legacy'],
-      ['legacy', 'delta'],
-    ]) {
-      const first = { ...shared.payload, name: `Accepted ${firstKind} before ${waitingKind}` };
-      const waiting = { ...shared.payload, name: 'Waiting stale metadata' };
-      const write = (kind, group) =>
-        kind === 'delta' ? saveDelta(group, shared.version) : save(group, shared.version);
-      const [result, stale] = await race(
-        `${session(creator)} ${write(firstKind, first)}`,
-        `${session(collaborator)} ${write(waitingKind, waiting)}`,
-      );
-      assert.notEqual(stale.code, 0, 'All writers must compare versions after obtaining the same lock.');
-      assert.match(stale.stderr, /PT409.*IOU_CONFLICT/);
-      assert.doesNotMatch(stale.stderr, /40001/);
-      shared = recordResult(await sql(`${session(collaborator)} ${load(first.id)} commit;`));
-      assert.deepEqual(shared.payload, first);
-      assert.equal(shared.version, result.version);
-      if (firstKind === 'delta') {
-        assert.deepEqual(result, { format: 1, id: first.id, version: shared.version });
-        assert.equal('payload' in result, false, 'Delta saves must not reconstruct the ledger response.');
-      }
-      const retried = { ...shared.payload, description: `Rebased ${waitingKind} edit` };
-      const receipt = recordResult(await sql(`${session(collaborator)} ${saveDelta(retried, shared.version)} commit;`));
-      shared = recordResult(await sql(`${session(creator)} ${load(first.id)} commit;`));
-      assert.deepEqual(shared.payload, retried);
-      assert.equal(shared.version, receipt.version);
-    }
-    console.log('PASS: delta/delta and both legacy/delta lock orders reject stale writers with PT409 and accept rebased retries.');
+    const first = { ...shared.payload, name: 'Accepted collaborator delta' };
+    const waiting = { ...shared.payload, name: 'Waiting stale creator delta' };
+    const [result, stale] = await race(
+      `${session(collaborator)} ${saveDelta(first, shared.version)}`,
+      `${session(creator)} ${saveDelta(waiting, shared.version)}`,
+    );
+    assert.notEqual(stale.code, 0, 'Deltas must compare versions after obtaining the group lock.');
+    assert.match(stale.stderr, /PT409.*IOU_CONFLICT/);
+    assert.doesNotMatch(stale.stderr, /40001/);
+    shared = recordResult(await sql(`${session(creator)} ${load(first.id)} commit;`));
+    assert.deepEqual(shared.payload, first);
+    assert.deepEqual(result, { format: 1, id: first.id, version: shared.version });
+    assert.equal('payload' in result, false, 'A checked save returns a compact receipt.');
+    const retried = { ...shared.payload, description: 'Rebased creator delta' };
+    const receipt = recordResult(await sql(`${session(creator)} ${saveDelta(retried, shared.version)} commit;`));
+    shared = recordResult(await sql(`${session(collaborator)} ${load(first.id)} commit;`));
+    assert.deepEqual(shared.payload, retried);
+    assert.equal(shared.version, receipt.version);
+    console.log('PASS: both member lock orders reject stale deltas with PT409, return compact receipts and accept rebased retries.');
 
     const expense = {
       id: 'exact-expense', type: 'expense', description: 'Exact minor units',
@@ -359,8 +349,8 @@ async function main() {
     assert.equal(await sql(`select amount::text from public.iou_expenses where group_id=${quote(shared.payload.id)} and id=${quote(expense.id)};`), '1000000000000.0');
     assert.equal(await sql(`select amount::text from public.iou_expense_shares where group_id=${quote(shared.payload.id)} and expense_id=${quote(expense.id)} and member_id='alice';`), '0.0');
     assert.equal(await sql(`select h.payload_bytes=octet_length(g.payload::text) from public.iou_group_headers h join public.iou_groups g using(id) where h.id=${quote(shared.payload.id)};`), 't', 'Integer-valued scaled JSON numbers must retain exact cached bytes.');
-    await sql(rowMigration);
-    assert.deepEqual(recordResult(await sql(`${session(creator)} ${load(shared.payload.id)} commit;`)), shared, 'Migration replay must preserve the latest normalized ledger and version.');
+    await sql(currentSchema);
+    assert.deepEqual(recordResult(await sql(`${session(creator)} ${load(shared.payload.id)} commit;`)), shared, 'Current schema refresh must preserve the latest ledger and version.');
     const beforeInvalid = shared;
     for (const invalid of [
       { transactions: { upsert: [{ ...expense, shares: { alice: 1, bob: expense.amount } }], remove: [] } },
