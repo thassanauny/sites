@@ -232,14 +232,9 @@ test('force sync is checked, atomic and receipt-protected without replaying over
   assert.deepEqual(counts, { card_count: 1, active_card_count: 1, column_count: 3 });
 });
 
-test('refresh repairs nullable card counts and initializes future boards without changing saved work', async (t) => {
+test('refresh preserves current card counts and initializes future boards without changing saved work', async (t) => {
   const db = await setup(forward);
   t.after(() => db.close());
-  // This formerly generated count was nullable and had no default.
-  // Reproduce that installed column shape, rather than an archived schema bridge.
-  await db.exec(`alter table public.pinboard_boards
-    alter column active_card_count drop not null,
-    alter column active_card_count drop default;`);
   let board = await create(db);
   const value = card();
   board = await mutate(db, board.id, { type: 'create_card', card: value });
@@ -270,7 +265,7 @@ test('refresh repairs nullable card counts and initializes future boards without
   assert.equal(
     (await db.query('select active_card_count from public.pinboard_boards where id=$1', [board.id]))
       .rows[0].active_card_count,
-    null,
+    1,
   );
   await db.exec(forward);
   assert.deepEqual(await snapshot(), before);
@@ -307,7 +302,7 @@ test('refresh repairs nullable card counts and initializes future boards without
   assert.deepEqual(await snapshot(), before);
 });
 
-test('refresh preserves current rows, invitations and receipts while retiring unchecked APIs', async (t) => {
+test('refresh preserves current rows, invitations and receipts with only checked APIs', async (t) => {
   const db = await setup(forward);
   t.after(() => db.close());
   let board = await create(db);
@@ -329,10 +324,6 @@ test('refresh preserves current rows, invitations and receipts while retiring un
   ).rows;
   const access = (await db.query('select * from public.pinboard_board_access order by user_id'))
     .rows;
-  // Model retired installed objects without retaining their old implementations.
-  await db.exec(`create function public.pinboard_mutate_board(uuid,jsonb) returns jsonb language sql as $$select '{}'::jsonb$$;
-    create function private.pinboard_mutate_board(uuid,jsonb) returns jsonb language sql as $$select '{}'::jsonb$$;
-    create table private.pinboard_row_storage_audit(board_id uuid);`);
   await db.exec(forward);
   await db.exec(forward);
   assert.deepEqual(await document(db, board.id), board);

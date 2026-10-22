@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyStore, mergeCloudStore, removeGroupFromDevice, restoreInvitation, updateTravelMode } from '../../application/deviceStore'
 import type { Group } from '../../domain/groups/types'
-import { STORE_KEY, loadStore, saveStore } from './store'
+import { STORE_KEY, readSavedStore, saveStore } from './store'
 
 const now = '2026-10-08T09:00:00.000Z'
 
@@ -66,7 +66,7 @@ afterEach(() => {
 
 describe('saved browser data', () => {
   it('returns a fresh empty store when no browser data exists', () => {
-    expect(loadStore()).toEqual({ store: emptyStore() })
+    expect(readSavedStore()).toEqual({ store: emptyStore(), raw: localStorage.getItem(STORE_KEY) })
     const first = emptyStore()
     first.removedGroupIds.push('removed')
     expect(emptyStore().removedGroupIds).toEqual([])
@@ -82,7 +82,7 @@ describe('saved browser data', () => {
       cloudRevisions: { thailand: 7, bangladesh: 2, america: 1, canada: 1, europe: 1, britain: 1 },
     }
     saveStore(value)
-    expect(loadStore()).toEqual({ store: value })
+    expect(readSavedStore()).toEqual({ store: value, raw: localStorage.getItem(STORE_KEY) })
     expect(JSON.parse(entries.get(STORE_KEY)!)).toEqual(value)
   })
 
@@ -110,7 +110,7 @@ describe('saved browser data', () => {
     ]
     for (const raw of invalidValues) {
       entries.set(STORE_KEY, raw)
-      const loaded = loadStore()
+      const loaded = readSavedStore()
       expect(loaded.store).toEqual(emptyStore())
       expect(loaded.error).toMatch(/kept in browser storage/)
       expect(entries.get(STORE_KEY)).toBe(raw)
@@ -128,7 +128,7 @@ describe('saved browser data', () => {
       memberByGroup: { trip: 'missing-member', other: 'other-ben', absent: 'absent-person' },
       cloudRevisions: { trip: 4, other: 4, absent: 9 },
     })
-    const loaded = loadStore()
+    const loaded = readSavedStore()
     expect(loaded.error).toBeUndefined()
     expect(loaded.store.groups).toEqual([trip, other])
     expect(loaded.store.pinnedIds).toEqual(['trip'])
@@ -148,7 +148,7 @@ describe('saved browser data', () => {
     for (const value of invalid) {
       const raw = JSON.stringify(value)
       entries.set(STORE_KEY, raw)
-      expect(loadStore().error).toMatch(/kept in browser storage/)
+      expect(readSavedStore().error).toMatch(/kept in browser storage/)
       expect(entries.get(STORE_KEY)).toBe(raw)
     }
     expect(memoryStorage.setItem).not.toHaveBeenCalled()
@@ -163,14 +163,14 @@ describe('saved browser data', () => {
     })
     expect(() => saveStore({ ...previous, pinnedIds: ['previous'] })).toThrow(/Could not save on this device/)
     expect(entries.get(STORE_KEY)).toBe(original)
-    expect(loadStore()).toEqual({ store: previous })
+    expect(readSavedStore()).toEqual({ store: previous, raw: localStorage.getItem(STORE_KEY) })
   })
 
   it('rejects unexpected root fields without rewriting the cache', () => {
     const previous = { ...emptyStore(), groups: [makeGroup('trip')], pinnedIds: ['trip'], memberByGroup: { trip: 'trip-amy' }, cloudRevisions: { trip: 4 } }
     const raw = JSON.stringify({ ...previous, name: 'Extra field' })
     entries.set(STORE_KEY, raw)
-    expect(loadStore().error).toMatch(/kept in browser storage/)
+    expect(readSavedStore().error).toMatch(/kept in browser storage/)
     expect(entries.get(STORE_KEY)).toBe(raw)
     expect(memoryStorage.setItem).not.toHaveBeenCalled()
   })
@@ -179,7 +179,7 @@ describe('saved browser data', () => {
     vi.mocked(memoryStorage.getItem).mockImplementationOnce(() => {
       throw new DOMException('Denied', 'SecurityError')
     })
-    const loaded = loadStore()
+    const loaded = readSavedStore()
     expect(loaded.store).toEqual(emptyStore())
     expect(loaded.error).toBeDefined()
     expect(memoryStorage.setItem).not.toHaveBeenCalled()
@@ -194,7 +194,7 @@ describe('saved Travel mode preferences', () => {
     delete incomplete[field]
     const raw = JSON.stringify(incomplete)
     entries.set(STORE_KEY, raw)
-    expect(loadStore().error).toContain('kept in browser storage')
+    expect(readSavedStore().error).toContain('kept in browser storage')
     expect(entries.get(STORE_KEY)).toBe(raw)
     expect(memoryStorage.setItem).not.toHaveBeenCalled()
   })
@@ -202,10 +202,10 @@ describe('saved Travel mode preferences', () => {
   it('persists the default group and retains that choice when switched off', () => {
     const active = updateTravelMode(sharedStore(), { enabled: true, defaultGroupId: 'trip' })
     saveStore(active)
-    expect(loadStore()).toEqual({ store: active })
+    expect(readSavedStore()).toEqual({ store: active, raw: localStorage.getItem(STORE_KEY) })
     const disabled = updateTravelMode(active, { ...active.travelMode, enabled: false })
     saveStore(disabled)
-    expect(loadStore().store.travelMode).toEqual({ enabled: false, defaultGroupId: 'trip' })
+    expect(readSavedStore().store.travelMode).toEqual({ enabled: false, defaultGroupId: 'trip' })
   })
 
   it('requires a default group on this device before enabling', () => {
@@ -221,13 +221,13 @@ describe('saved Travel mode preferences', () => {
     const removed = removeGroupFromDevice(active, 'trip')
     expect(removed.travelMode).toEqual(emptyStore().travelMode)
     saveStore(removed)
-    expect(loadStore().store.travelMode).toEqual(emptyStore().travelMode)
+    expect(readSavedStore().store.travelMode).toEqual(emptyStore().travelMode)
     expect(mergeCloudStore(removed, [{ group: active.groups[0], revision: 5 }], 'trip').travelMode).toEqual(emptyStore().travelMode)
   })
 
   it('clears a stale default during loading and honors another tab changing the setting during refresh', () => {
     saveStore({ ...sharedStore(), travelMode: { enabled: true, defaultGroupId: 'missing' } })
-    expect(loadStore().store.travelMode).toEqual(emptyStore().travelMode)
+    expect(readSavedStore().store.travelMode).toEqual(emptyStore().travelMode)
     const base = updateTravelMode(sharedStore(), { enabled: true, defaultGroupId: 'trip' })
     const next = mergeCloudStore(base, [{ group: { ...base.groups[0], name: 'Updated trip' }, revision: 5 }])
     const external = updateTravelMode(base, { enabled: true, defaultGroupId: 'other' })
@@ -244,14 +244,14 @@ describe('saved Travel mode preferences', () => {
       throw new DOMException('Full', 'QuotaExceededError')
     })
     expect(() => saveStore(updateTravelMode(original, { enabled: true, defaultGroupId: 'trip' }))).toThrow(/Could not save/)
-    expect(loadStore()).toEqual({ store: original })
+    expect(readSavedStore()).toEqual({ store: original, raw: localStorage.getItem(STORE_KEY) })
   })
 
   it('preserves the original cache when Travel mode settings are malformed', () => {
     for (const travelMode of [null, [], { enabled: 'true', defaultGroupId: 'trip' }, { enabled: true, defaultGroupId: 3 }, { enabled: false }, { enabled: false, defaultGroupId: null, extra: true }]) {
       const raw = JSON.stringify({ ...sharedStore(), travelMode })
       entries.set(STORE_KEY, raw)
-      expect(loadStore().error).toMatch(/kept in browser storage/)
+      expect(readSavedStore().error).toMatch(/kept in browser storage/)
       expect(entries.get(STORE_KEY)).toBe(raw)
     }
   })
@@ -279,7 +279,7 @@ describe('removing groups from this device', () => {
     expect(removed.removedGroupIds).toEqual(['trip'])
     expect(original).toEqual(snapshot)
     saveStore(removed)
-    expect(loadStore()).toEqual({ store: removed })
+    expect(readSavedStore()).toEqual({ store: removed, raw: localStorage.getItem(STORE_KEY) })
   })
 
   it('keeps removed groups out after automatic refresh, reload, and newer remote revisions', () => {
@@ -289,7 +289,7 @@ describe('removing groups from this device', () => {
     const refreshed = mergeCloudStore(removed, records)
     expect(refreshed).toEqual(removed)
     saveStore(refreshed)
-    expect(mergeCloudStore(loadStore().store, records)).toEqual(removed)
+    expect(mergeCloudStore(readSavedStore().store, records)).toEqual(removed)
   })
 
   it('restores only the explicitly rejoined group with its latest data', () => {
@@ -303,7 +303,7 @@ describe('removing groups from this device', () => {
     expect(restored.memberByGroup).toEqual({})
     expect(restored.pinnedIds).toEqual([])
     saveStore(restored)
-    expect(loadStore().store).toEqual(restored)
+    expect(readSavedStore().store).toEqual(restored)
     expect(mergeCloudStore(removed, [], 'trip')).toEqual(removed)
   })
 
@@ -367,20 +367,20 @@ describe('removing groups from this device', () => {
     })
     expect(() => saveStore(removeGroupFromDevice(original, 'trip'))).toThrow(/Could not save/)
     expect(entries.get(STORE_KEY)).toBe(fingerprint)
-    expect(loadStore().store).toEqual(original)
+    expect(readSavedStore().store).toEqual(original)
   })
 
   it('honors saved removal markers even if a stale cache still contains the group', () => {
     const stale = { ...sharedStore(), removedGroupIds: ['trip', 'trip'] }
     entries.set(STORE_KEY, JSON.stringify(stale))
-    expect(loadStore().store).toEqual({ ...removeGroupFromDevice(sharedStore(), 'trip'), removalEpochs: {} })
+    expect(readSavedStore().store).toEqual({ ...removeGroupFromDevice(sharedStore(), 'trip'), removalEpochs: {} })
   })
 
   it('preserves invalid removal records for recovery instead of silently rediscovering groups', () => {
     for (const removedGroupIds of [null, 'trip', [5], ['__proto__'], ['bad id']]) {
       const raw = JSON.stringify({ ...sharedStore(), removedGroupIds })
       entries.set(STORE_KEY, raw)
-      expect(loadStore().error).toMatch(/kept in browser storage/)
+      expect(readSavedStore().error).toMatch(/kept in browser storage/)
       expect(entries.get(STORE_KEY)).toBe(raw)
     }
     expect(memoryStorage.setItem).not.toHaveBeenCalled()
@@ -398,14 +398,14 @@ describe('invitation removal ordering', () => {
     const removedAgain = removeGroupFromDevice(rejoined, 'trip')
     expect(() => restoreInvitation(removedAgain, record, removed)).toThrow('removed while opening')
     saveStore(removedAgain)
-    expect(loadStore().store.removalEpochs).toEqual(removedAgain.removalEpochs)
+    expect(readSavedStore().store.removalEpochs).toEqual(removedAgain.removalEpochs)
   })
   it('preserves corrupt current removal history for recovery', () => {
     const previous = emptyStore()
     for (const history of [null, [], { trip: 'invalid' }]) {
       const raw = JSON.stringify({ ...previous, removalEpochs: history })
       entries.set(STORE_KEY, raw)
-      expect(loadStore().error).toContain('kept')
+      expect(readSavedStore().error).toContain('kept')
       expect(entries.get(STORE_KEY)).toBe(raw)
     }
   })

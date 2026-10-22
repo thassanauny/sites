@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './application/App'
 import { emptyStore, removeGroupFromDevice } from './application/deviceStore'
-import { loadStore, saveStore, STORE_KEY } from './infrastructure/storage/store'
+import { readSavedStore, saveStore, STORE_KEY } from './infrastructure/storage/store'
 import type { Group } from './domain/groups/types'
 
 const mocks = vi.hoisted(() => ({ join: vi.fn(), versions: vi.fn(), load: vi.fn() }))
@@ -89,7 +89,7 @@ describe('invitation navigation and late results', () => {
     await act(async () => close.click())
     expect(window.location.hash).toBe('#/')
     expect(host.querySelector('dialog')).toBeNull()
-    expect(loadStore().store.groups).toEqual([])
+    expect(readSavedStore().store.groups).toEqual([])
   })
   it('resets the input and loaded group when invitation A changes to B', async () => {
     await mount()
@@ -113,12 +113,12 @@ describe('invitation navigation and late results', () => {
     await mount()
     await submit()
     await act(async () => {
-      saveStore(removeGroupFromDevice(loadStore().store, 'a'))
+      saveStore(removeGroupFromDevice(readSavedStore().store, 'a'))
       window.dispatchEvent(new StorageEvent('storage', { key: STORE_KEY }))
       finish({ group: group(), revision: 1 })
     })
-    expect(loadStore().store.groups).toEqual([])
-    expect(loadStore().store.removedGroupIds).toEqual(['a'])
+    expect(readSavedStore().store.groups).toEqual([])
+    expect(readSavedStore().store.removedGroupIds).toEqual(['a'])
     expect(host.textContent).toContain('removed while opening')
   })
   it('does not queue restoration or save membership after another tab removes a loaded preview', async () => {
@@ -129,12 +129,12 @@ describe('invitation navigation and late results', () => {
       const identity = host.querySelector<HTMLSelectElement>('form select')!
       identity.value = 'amy'
       identity.dispatchEvent(new Event('change', { bubbles: true }))
-      saveStore(removeGroupFromDevice(loadStore().store, 'a'))
+      saveStore(removeGroupFromDevice(readSavedStore().store, 'a'))
       window.dispatchEvent(new StorageEvent('storage', { key: STORE_KEY }))
     })
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     await submit()
-    const saved = loadStore().store
+    const saved = readSavedStore().store
     expect(saved.groups).toEqual([])
     expect(saved.memberByGroup.a).toBeUndefined()
     expect(saved.pendingJoins).toEqual([])
@@ -153,7 +153,7 @@ describe('invitation navigation and late results', () => {
       const writes = vi.spyOn(Storage.prototype, 'setItem')
       await submit()
       expect(writes.mock.calls.filter(([key]) => key === STORE_KEY)).toHaveLength(1)
-      const saved = loadStore().store
+      const saved = readSavedStore().store
       expect(saved.groups[0]!.members.map(member => member.name)).toEqual(['Amy', 'Cam'])
       expect(saved.memberByGroup.a).toBe(saved.groups[0]!.members[1]!.id)
       expect(saved.pendingJoins).toHaveLength(1)
@@ -185,7 +185,7 @@ describe('invitation navigation and late results', () => {
       })
       await submit()
       expect(host.querySelector('.form-error')).toBeNull()
-      const saved = loadStore().store
+      const saved = readSavedStore().store
       expect(saved.groups[0]!.members.map(member => member.name)).toEqual(['Amy', 'Cam'])
       expect(saved.memberByGroup.a).toBe(saved.groups[0]!.members[1]!.id)
     })
@@ -218,7 +218,7 @@ describe('invitation navigation and late results', () => {
     await navigate(codeB)
     expect(host.querySelector<HTMLInputElement>('form input')!.disabled).toBe(false)
     await act(async () => finish({ group: group(), revision: 1 }))
-    expect(loadStore().store.groups).toEqual([])
+    expect(readSavedStore().store.groups).toEqual([])
     expect(host.querySelector<HTMLInputElement>('form input')!.value).toBe(codeB)
   })
 })

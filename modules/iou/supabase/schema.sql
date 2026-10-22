@@ -585,9 +585,5 @@ grant usage on schema private to authenticated;
 grant execute on function private.iou_create_group(jsonb),private.iou_join_group(text),private.iou_group_heads(),
   public.iou_create_group(jsonb),public.iou_join_group(text),public.iou_group_heads() to authenticated;
 
--- Confirmed-unused APIs and migration-only history; never cascade unknown dependencies.
-drop function if exists public.iou_save_group(jsonb,bigint);
-drop function if exists private.iou_save_group(jsonb,bigint);
-drop table if exists private.iou_row_backfill;
 notify pgrst, 'reload schema';
 commit;

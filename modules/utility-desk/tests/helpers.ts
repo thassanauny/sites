@@ -12,14 +12,6 @@ export function selectFiles(scope: ParentNode, files: File[], input: HTMLInputEl
   input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-/** Drop files on a drop zone. The returned event shows whether the drop was handled (`defaultPrevented`). */
-export function dropFiles(zone: Element, files: File[], types: string[] = ['Files']) {
-  const event = new Event('drop', { bubbles: true, cancelable: true });
-  Object.defineProperty(event, 'dataTransfer', { value: { files, types } });
-  zone.dispatchEvent(event);
-  return event;
-}
-
 /** A promise that the test resolves or rejects by hand. */
 export function deferred<T = void>() {
   let resolve!: (value: T) => void;

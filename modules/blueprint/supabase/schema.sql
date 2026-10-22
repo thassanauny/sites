@@ -4,11 +4,6 @@
 begin;
 create schema if not exists private;
 grant usage on schema private to authenticated;
-drop function if exists public.blueprint_unlock_board(uuid,text);
-drop function if exists public.blueprint_rotate_edit_token(uuid);
-drop function if exists public.blueprint_lock_board(uuid);
-drop function if exists public.blueprint_leave_board(uuid);
-drop function if exists public.blueprint_list_boards();
 
 create table if not exists public.blueprint_boards (
   id uuid primary key default gen_random_uuid(),
@@ -110,7 +105,6 @@ alter table private.blueprint_board_members enable row level security;
 revoke all(id,user_id,title,document,revision,created_at,updated_at) on public.blueprint_boards from public, anon, authenticated;
 drop policy if exists "Blueprint readers" on public.blueprint_boards;
 drop policy if exists "Blueprint editors" on public.blueprint_boards;
-drop policy if exists "Blueprint owner deletion" on public.blueprint_boards;
 revoke all on public.blueprint_boards from public, anon, authenticated;
 grant select(id,title,document,revision,created_at,updated_at) on public.blueprint_boards to authenticated;
 grant update(title,document) on public.blueprint_boards to authenticated;

@@ -136,11 +136,6 @@ export function readSavedStore(): StoreRead {
   }
 }
 
-export function loadStore(): { store: AppStore; error?: string; unavailable?: boolean } {
-  const { raw: _raw, ...result } = readSavedStore()
-  return result
-}
-
 export function saveStore(store: AppStore): string {
   try {
     const serialized = JSON.stringify(store)

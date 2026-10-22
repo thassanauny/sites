@@ -254,7 +254,7 @@ describe("shared invitation permissions", () => {
     ).toBe(board.invite_code);
     expect((await write(board)).rows).toHaveLength(1);
   });
-  it("removes obsolete token functions and role/secret columns", async () => {
+  it("keeps obsolete token functions and role/secret columns absent", async () => {
     await db.exec("reset role");
     for (const name of [
       "blueprint_unlock_board(uuid,text)",

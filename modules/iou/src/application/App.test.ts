@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { queueGroup } from './sync/queue'
 import { emptyStore } from './deviceStore'
-import { loadStore, saveStore, STORE_KEY } from '../infrastructure/storage/store'
+import { readSavedStore, saveStore, STORE_KEY } from '../infrastructure/storage/store'
 import type { Group } from '../domain/groups/types'
 
 const cloud = vi.hoisted(() => ({ versions: vi.fn(), load: vi.fn(), create: vi.fn(), save: vi.fn(), join: vi.fn() }))
@@ -160,7 +160,7 @@ describe('device storage shared with other tabs', () => {
     await mount()
     saveStore(cached('a', 'b'))
     await click(host.querySelector('[aria-label="Pin Group a"]'))
-    const saved = loadStore().store
+    const saved = readSavedStore().store
     expect(saved.groups.map(group => group.id)).toEqual(['a', 'b'])
     expect(saved.pinnedIds).toEqual(['a'])
     expect(host.textContent).toContain('Group b')
@@ -338,7 +338,7 @@ describe('automatic sync', () => {
     await mount()
     expect(cloud.create).toHaveBeenCalledOnce()
     expect(window.location.hash).toBe(`#/group/${'d'.repeat(32)}`)
-    const saved = loadStore().store
+    const saved = readSavedStore().store
     expect(saved.outbox).toEqual([])
     expect(saved.groups[0]!.inviteCode).toBe('d'.repeat(32))
     expect(saved.cloudRevisions.c).toBe(1)
@@ -367,7 +367,7 @@ describe('automatic sync', () => {
     expect(cloud.load).toHaveBeenCalledOnce()
     expect(cloud.load).toHaveBeenCalledWith(['b'])
     expect(host.textContent).toContain('Renamed')
-    expect(loadStore().store.cloudRevisions).toEqual({ a: 1, b: 2 })
+    expect(readSavedStore().store.cloudRevisions).toEqual({ a: 1, b: 2 })
   })
 
   it('waits longer between automatic attempts while the server keeps failing, but never delays the user’s own actions', async () => {
@@ -417,7 +417,7 @@ describe('shared groups this version cannot read', () => {
     await mount()
     expect(host.querySelector('.notice.warning')?.textContent).toContain('This group’s shared copy could not be read by this version of iou')
     expect(host.querySelector('.connection')?.textContent).toContain('Connected')
-    expect(loadStore().store.groups.find(item => item.id === 'b')!.name).toBe('Newer b')
+    expect(readSavedStore().store.groups.find(item => item.id === 'b')!.name).toBe('Newer b')
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000)
     })
@@ -528,9 +528,9 @@ describe('creating a shared group', () => {
     await click(hash === '#/groups' ? host.querySelector('[aria-label="Create group"]') : button('Create a group'))
     await typeInto(host.querySelector('input[placeholder="e.g. Bangkok weekend"]'), 'Trip')
     await typeInto(host.querySelector('input[aria-label="Your name"]'), 'Amy')
-    saveStore({ ...loadStore().store, pinnedIds: ['b'] })
+    saveStore({ ...readSavedStore().store, pinnedIds: ['b'] })
     await submit(host.querySelector('dialog form'))
-    const saved = loadStore().store
+    const saved = readSavedStore().store
     const created = saved.groups.find(group => group.name === 'Trip')!
     expect(created).toBeDefined()
     expect(saved.pinnedIds).toEqual(['b', created.id])
@@ -561,12 +561,12 @@ describe('joining a shared group', () => {
     await submit(host.querySelector('dialog form'))
     expect(host.textContent).toContain('Who are you in this group?')
 
-    saveStore({ ...loadStore().store, pinnedIds: ['b'] })
+    saveStore({ ...readSavedStore().store, pinnedIds: ['b'] })
     await selectValue(host.querySelector('select')!, 'amy')
     await submit(host.querySelector('dialog form'))
 
-    expect(loadStore().store.pinnedIds).toEqual(['b', 'c'])
-    expect(loadStore().store.memberByGroup.c).toBe('amy')
+    expect(readSavedStore().store.pinnedIds).toEqual(['b', 'c'])
+    expect(readSavedStore().store.memberByGroup.c).toBe('amy')
     await act(async () => {
       window.location.hash = '#/'
       window.dispatchEvent(new HashChangeEvent('hashchange'))
@@ -587,7 +587,7 @@ describe('editing a shared group', () => {
     await typeInto(host.querySelector('input[placeholder="What was it for?"]'), 'Dinner')
     await typeInto(host.querySelector('input[aria-label="Amount in THB"]'), '10.01')
     await submit(host.querySelector('dialog form'))
-    const saved = loadStore().store
+    const saved = readSavedStore().store
     expect(saved.groups[0]!.transactions).toMatchObject([{ type: 'expense', description: 'Dinner', amount: 1001, paidBy: 'amy', shares: { amy: 501, ben: 500 } }])
     expect(cloud.save).toHaveBeenCalledOnce()
     expect(saved.outbox).toEqual([])
@@ -624,7 +624,7 @@ describe('editing a shared group', () => {
       await typeInto(host.querySelector('input[aria-label="Amount in THB"]'), '10.01')
       await submit(host.querySelector('dialog form'))
       expect(host.querySelector('.form-error')).toBeNull()
-      const saved = loadStore().store.groups[0]!
+      const saved = readSavedStore().store.groups[0]!
       expect(saved.transactions).toHaveLength(1)
       expect(saved.updatedAt).toBe('2026-10-09T12:00:00.001Z')
       expect(host.querySelector('.toast')?.textContent).toContain('Expense added')
@@ -642,7 +642,7 @@ describe('editing a shared group', () => {
       await storageEvent()
       await typeInto(host.querySelector('dialog form input'), 'Mine')
       await submit(host.querySelector('dialog form'))
-      const saved = loadStore().store.groups[0]!
+      const saved = readSavedStore().store.groups[0]!
       expect(saved.name).toBe('Mine')
       expect(saved.updatedAt).toBe('2026-10-09T12:00:00.001Z')
       expect(host.querySelector('.toast')?.textContent).toContain('Group settings saved')
@@ -657,7 +657,7 @@ describe('editing a shared group', () => {
     await click(host.querySelector('[aria-label="Group settings"]'))
     await clickButton('Remove from this device')
     await click([...host.querySelectorAll('dialog form button[type="submit"]')].find(item => item.textContent === 'Remove from this device'))
-    const saved = loadStore().store
+    const saved = readSavedStore().store
     expect(saved.groups).toEqual([])
     expect(saved.pinnedIds).toEqual([])
     expect(saved.removedGroupIds).toEqual(['a'])

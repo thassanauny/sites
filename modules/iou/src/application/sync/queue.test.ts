@@ -4,7 +4,7 @@ import { acknowledgeGroup, queueGroup, queueJoin } from './queue'
 import { mergeLatestGroup } from './merge'
 import { groupBytes, MAX_GROUP_BYTES } from '../../domain/groups/size'
 import { emptyStore, mergeCloudStore, removeGroupFromDevice } from '../deviceStore'
-import { loadStore, saveStore, STORE_KEY } from '../../infrastructure/storage/store'
+import { readSavedStore, saveStore, STORE_KEY } from '../../infrastructure/storage/store'
 
 const time = (minute: number) => `2026-10-08T09:${String(minute).padStart(2, '0')}:00.000Z`
 const group = (): Group => ({
@@ -130,7 +130,7 @@ describe('durable offline changes', () => {
       transactions: [expense('dinner'), { id: 'payment', type: 'payment', fromId: 'ben', toId: 'amy', amount: 500, note: '', date: '2026-10-08', createdAt: time(2) }],
     })
     saveStore(store)
-    expect(loadStore()).toEqual({ store })
+    expect(readSavedStore()).toEqual({ store, raw })
     expect(store.cloudRevisions.trip).toBe(0)
     expect(store.outbox[0].base).toBeNull()
     expect(store.memberByGroup.trip).toBe('amy')
@@ -215,7 +215,7 @@ describe('durable offline changes', () => {
     const queued = queueGroup(cached(), { ...group(), name: 'Changed offline', updatedAt: time(1) })
     const hidden = removeGroupFromDevice(queued, 'trip')
     saveToMemory(hidden)
-    expect(loadStore().store.outbox).toEqual(queued.outbox)
+    expect(readSavedStore().store.outbox).toEqual(queued.outbox)
     const ack = acknowledgeGroup(hidden, queued.outbox[0], { group: queued.groups[0], revision: 2 })
     expect(ack.groups).toEqual([])
     expect(ack.outbox).toEqual([])
@@ -232,13 +232,13 @@ describe('durable offline changes', () => {
       },
     })
     expect(() => saveStore(queueGroup(previous, { ...group(), name: 'Unsaved', updatedAt: time(2) }))).toThrow(/Could not save/)
-    expect(loadStore().store).toEqual(previous)
+    expect(readSavedStore().store).toEqual(previous)
   })
 
   it('persists a join request once and rejects malformed queues without rewriting them', () => {
     const queued = queueJoin(emptyStore(), { code: 'c'.repeat(32), name: 'Amy', memberId: 'amy', createdAt: time(0) })
     saveToMemory(queued)
-    expect(loadStore().store).toEqual(queued)
+    expect(readSavedStore().store).toEqual(queued)
     expect(queueJoin(queued, queued.pendingJoins[0]).pendingJoins).toHaveLength(1)
     for (const invalid of [
       { ...queued, pendingJoins: null },
@@ -247,7 +247,7 @@ describe('durable offline changes', () => {
     ]) {
       const raw = JSON.stringify(invalid)
       vi.stubGlobal('localStorage', { getItem: () => raw, setItem: vi.fn() })
-      expect(loadStore().error).toMatch(/kept in browser storage/)
+      expect(readSavedStore().error).toMatch(/kept in browser storage/)
       expect(localStorage.setItem).not.toHaveBeenCalled()
     }
   })

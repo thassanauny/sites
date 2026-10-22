@@ -222,18 +222,10 @@ describe('iou current schema executed in embedded PostgreSQL', () => {
     ).toEqual([{ anonymous: false, private_anonymous: false, signed_in: true, writes: false }])
   })
 
-  it('retires obsolete installed writes/history without cascading unknown dependencies', async () => {
+  it('keeps retired writes and backfill history absent when refreshing the current schema', async () => {
     await database.exec('reset role')
     const before = (await database.query('select * from public.iou_groups order by id')).rows
-    await database.exec(`create function private.iou_save_group(jsonb,bigint) returns jsonb language sql as $$select $1$$;
-      create function public.iou_save_group(jsonb,bigint) returns jsonb language sql as $$select $1$$;
-      create table private.iou_row_backfill(group_id text primary key,source_version bigint,source_hash text);
-      create view private.iou_test_dependency as select public.iou_save_group('{}'::jsonb,1::bigint) result;`)
     const source = await readFile(new URL('../../../supabase/schema.sql', import.meta.url), 'utf8')
-    await expect(database.exec(source)).rejects.toMatchObject({ code: '2BP01' })
-    await database.exec('rollback')
-    expect((await database.query('select * from public.iou_groups order by id')).rows).toEqual(before)
-    await database.exec('drop view private.iou_test_dependency')
     await database.exec(source)
     expect(
       (

@@ -428,8 +428,6 @@ function* buildSteps({ preview, origin, stagedSource, stage, env, label }) {
   return dist;
 }
 
-export const buildStagedApp = ({ run, ...build }) => perform(buildSteps(build), run);
-
 function* prepareSteps(spec, origin, target, { preview = false, reuseVerified = true } = {}) {
   const { app: name, label, site: siteName, source: sourceName } = spec;
   requireNode24(label + ' preparation');

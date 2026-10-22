@@ -3,13 +3,6 @@
 -- Keep private OUT of the Data API's exposed schemas.
 begin;
 create schema if not exists private;
-drop function if exists public.textdrop_load_page(uuid);
-drop function if exists public.textdrop_save_page(uuid,text);
-drop function if exists public.textdrop_save_page_receipt(uuid,text);
-drop function if exists public.textdrop_rename_page(uuid,text);
-drop function if exists private.textdrop_load_page(uuid);
-drop function if exists private.textdrop_save_page(uuid,text);
-drop function if exists private.textdrop_rename_page(uuid,text);
 
 create table if not exists public.textdrop_pages (
   id uuid primary key,

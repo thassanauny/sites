@@ -254,17 +254,6 @@ create table if not exists public.pinboard_cards (
 );
 create index if not exists pinboard_cards_position_idx on public.pinboard_cards(board_id, column_id, position, id);
 create index if not exists pinboard_cards_order_idx on public.pinboard_cards(board_id, ordinal);
--- A count whose generated expression was removed has no default or NOT NULL.
--- Reassert the current row-storage invariant under the transaction's DDL lock.
-alter table public.pinboard_boards alter column active_card_count set default 0;
-update public.pinboard_boards b set active_card_count=(
-  select count(*) from public.pinboard_cards c where c.board_id=b.id
-    and not coalesce((c.data->>'archived')::boolean,false)
-) where b.active_card_count is null;
-alter table public.pinboard_boards alter column active_card_count set not null;
--- The completed JSON backfill audit is no longer needed by the current schema.
-drop table if exists private.pinboard_row_storage_audit;
-
 alter table public.pinboard_boards enable row level security;
 alter table public.pinboard_board_access enable row level security;
 alter table public.pinboard_columns enable row level security;
@@ -758,10 +747,6 @@ revoke all on function public.pinboard_create_board(uuid,text,text), public.pinb
 grant usage on schema private to authenticated;
 grant execute on function private.pinboard_create_board(uuid,text,text), private.pinboard_join_board(text) to authenticated;
 grant execute on function public.pinboard_create_board(uuid,text,text), public.pinboard_join_board(text) to authenticated;
-
--- Retire unchecked entry points after replacing their only current caller.
-drop function if exists public.pinboard_mutate_board(uuid,jsonb);
-drop function if exists private.pinboard_mutate_board(uuid,jsonb);
 
 -- Refresh PostgREST's cached table and RPC names after commit.
 notify pgrst, 'reload schema';

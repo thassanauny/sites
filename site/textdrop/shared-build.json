@@ -1,7 +1,7 @@
 {
   "format": 1,
   "app": "textdrop",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "base": "./",
   "cloudConfigured": true,
   "publicConfig": {
@@ -11,8 +11,8 @@
   },
   "scripts": {
     "registerSW.js": "e12c8db54e3cc247034427f2b661b305a78fea7e7cdec1eac179fecec3da0fc7",
-    "sw.js": "328692a6b46cce316bc60318a2c20ede9378be0b1d2963b612be09bc489ffa0d",
+    "sw.js": "c50f297d05514f3ae4acc7d9633019824ebff5684b2585bf876db6e00486d059",
     "workbox-9c191d2f.js": "04b086f1b2f4215ee4b659a7bc9c76162894abdb43fa876247bc7c0bd6fd1c37",
-    "assets/index-atFRwHmH.js": "aec6461ffdcf559a1ed96d7b3f1b1d719f7e8fd02f48c2f08e3f72cce9eb7d7a"
+    "assets/index-CEc_y00h.js": "7c3dff8edfac1a27fa328dd113317d1dc25da8c1bd39f206f3e1fb042c5dc030"
   }
 }
