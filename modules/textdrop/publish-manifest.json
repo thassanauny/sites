@@ -73,7 +73,7 @@
     "src/infrastructure/cloud/offline.ts": "8f566e976a05b285d2e98b664af6c61db95d69ac0deb969acf9d096abf62f971",
     "src/infrastructure/cloud/requestTimeout.test.ts": "0751f2340676202b1425a6fed6261e7fca97bb8c21a1a4ac00ed3a7ac1b9c397",
     "src/infrastructure/cloud/requestTimeout.ts": "74a701c942a2e767e67a9272e5167b3e069cc4eee3ba07257a87e9c103f0d501",
-    "src/infrastructure/cloud/snippets.network.test.ts": "f869b53df735910b4555a8a2c1e943636276b91b83d048052a4c9e286f1ece1f",
+    "src/infrastructure/cloud/snippets.network.test.ts": "d8784d1abe03136bdf882265b6f8d7a6d6375fb00f8db76f13d6ae386bd78725",
     "src/infrastructure/cloud/snippets.test.ts": "16867c1bf3c350541b0a8940447acae4bcb857afee919d1319d25518fecb7933",
     "src/infrastructure/cloud/snippets.ts": "5b1439e8cc4a7f35da1f23c671ad707cb907ada6e7f3f3ad3a58b9cbd88e9b48",
     "src/infrastructure/storage/deviceSnippets.test.ts": "af2e04bfb0ce19d1aa497269add5c243d39d6d0f55aafa79c4ccd374b463fd91",
@@ -109,6 +109,6 @@
     "tsconfig.json": "770b4140bbb581e2dfd9ea9946ffc9c75a1d86ba7d2db5f77c83e37cbdf9d808",
     "tsconfig.node.json": "43bdad139e730c2f5fa447996cd4abd7ce6f8bf187767dd992eea54717237bb9",
     "vite.config.test.ts": "ccf26ee46516760183d851fcc31652533b98dae999494ffba8e4d7c74ebe17de",
-    "vite.config.ts": "79d2539741280fdf6dfb0cee3c2c0306e8b1741c69d45057f4a1de57b15d599e"
+    "vite.config.ts": "2fca80fa849fa28867ebcf6f0cc6fd39f342046113cbae2f520c186eaba30193"
   }
 }

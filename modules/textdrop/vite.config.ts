@@ -49,6 +49,9 @@ export default defineConfig(({ mode, command }) => {
         },
     server: { host: '127.0.0.1', port: 5175 },
     preview: { host: '127.0.0.1', port: 4175 },
-    test: { include: ['src/**/*.test.ts', 'tests/**/*.test.ts', '*.test.ts'] },
+    test: {
+      maxWorkers: 2,
+      include: ['src/**/*.test.ts', 'tests/**/*.test.ts', '*.test.ts'],
+    },
   };
 });

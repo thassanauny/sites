@@ -477,7 +477,7 @@ begin
     if not private.pinboard_has_keys(p_operation,array['type','column']) or not private.pinboard_valid_state(jsonb_build_array(replacement),'[]'::jsonb)
       then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
     if replacement->>'id'=any(deleted_columns) or exists(select 1 from public.pinboard_columns where board_id=b.id and id=replacement->>'id')
-      then return private.pinboard_board_json(b); end if;
+      then return to_jsonb(b); end if;
     insert into public.pinboard_columns(board_id,data,ordinal) values(b.id,replacement,(select coalesce(max(ordinal),0)+1 from public.pinboard_columns where board_id=b.id));
     bytes:=bytes+octet_length(replacement::text)+2; column_total:=column_total+1; changed:=true;
   elsif kind='reorder_columns' then
@@ -529,7 +529,7 @@ begin
     if not private.pinboard_has_keys(p_operation,array['type','card']) or not coalesce(private.pinboard_valid_uuid(replacement->'id'),false)
       then raise exception 'PINBOARD_INVALID_OPERATION' using errcode='22023'; end if;
     if replacement->>'id'=any(deleted_cards) or exists(select 1 from public.pinboard_cards where board_id=b.id and id=(replacement->>'id')::uuid)
-      then return private.pinboard_board_json(b); end if;
+      then return to_jsonb(b); end if;
   elsif kind in ('update_card','move_card') then
     if kind='update_card' then
       if not private.pinboard_has_keys(p_operation,array['type','id','patch']) or not private.pinboard_allowed_keys(patch,array['title','description','columnId','position','priority','assignee','dueDate','labels','customFields','archived'])
@@ -590,7 +590,7 @@ begin
       active_card_count=active_total,content_bytes=bytes,next_card_ordinal=next_ordinal,
       revision=revision+1,updated_at=clock_timestamp() where id=b.id returning * into b;
   end if;
-  return private.pinboard_board_json(b);
+  return to_jsonb(b);
 end;
 $$;
 
@@ -660,7 +660,7 @@ create index if not exists pinboard_operation_receipts_recent_idx
 revoke all on private.pinboard_operation_receipts from public, anon, authenticated;
 revoke all on sequence private.pinboard_operation_receipts_receipt_id_seq from public, anon, authenticated;
 
-create or replace function private.pinboard_mutate_board_once(p_board_id uuid, p_operation_id uuid, p_operation jsonb, p_base_revision bigint default null)
+create or replace function private.pinboard_mutate_board_result(p_board_id uuid, p_operation_id uuid, p_operation jsonb, p_base_revision bigint, p_known_revision bigint)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   caller uuid := auth.uid();
@@ -668,6 +668,7 @@ declare
   expected_hash bytea;
   expired_revision bigint;
   result jsonb;
+  previous_revision bigint;
 begin
   if caller is null then raise exception 'PINBOARD_AUTH_REQUIRED' using errcode = '42501'; end if;
   if not exists (select 1 from public.pinboard_board_access where board_id = p_board_id and user_id = caller)
@@ -691,7 +692,10 @@ begin
   if board_row.operation_receipt_floor > 0
     and (p_base_revision is null or p_base_revision <= board_row.operation_receipt_floor)
     then raise exception 'PINBOARD_OPERATION_TOO_OLD' using errcode = 'P0001'; end if;
-  result := private.pinboard_apply_operation(p_board_id, p_operation);
+  previous_revision := board_row.revision;
+  perform private.pinboard_apply_operation(p_board_id, p_operation);
+  select * into board_row from public.pinboard_boards where id=p_board_id;
+  result := to_jsonb(board_row);
   insert into private.pinboard_operation_receipts (board_id, user_id, operation_id, operation_hash, accepted_revision)
     values (p_board_id, caller, p_operation_id, sha256(convert_to(p_operation::text, 'UTF8')), (result->>'revision')::bigint);
   -- The most recent 1,000 accepted operation IDs per board remain retryable.
@@ -709,15 +713,47 @@ begin
         then raise exception 'PINBOARD_BOARD_LIMIT' using errcode = 'P0001'; end if;
       update public.pinboard_boards set revision = revision + 1, updated_at = clock_timestamp()
         where id = p_board_id returning * into board_row;
-      result := private.pinboard_board_json(board_row);
+      result := to_jsonb(board_row);
     end if;
   end if;
   delete from private.pinboard_operation_receipts where board_id = p_board_id
     and receipt_id <= (select receipt_id from private.pinboard_operation_receipts
       where board_id = p_board_id order by receipt_id desc offset 1000 limit 1);
-  return result;
+  select * into board_row from public.pinboard_boards where id=p_board_id;
+  -- Only an exact cached baseline can accept a small authoritative patch. A
+  -- replay or stale cache receives current full state, never an old patch.
+  if p_known_revision = previous_revision and p_operation->>'type' not in ('replace_board','delete_column','delete_assignee') then
+    return jsonb_build_object('format',1,'baseRevision',previous_revision,
+      'board',jsonb_strip_nulls(jsonb_build_object('id',board_row.id,'invite_code',board_row.invite_code,
+        'title',board_row.title,'description',board_row.description,'revision',(result->>'revision')::bigint,
+        'created_at',board_row.created_at,'updated_at',result->'updated_at',
+        'card_fields',board_row.card_fields,
+        'columns',(select coalesce(jsonb_agg(data order by ordinal),'[]'::jsonb)
+          from public.pinboard_columns where board_id=p_board_id))),
+      'cards',(select coalesce(jsonb_agg(data order by ordinal),'[]'::jsonb)
+        from public.pinboard_cards where board_id=p_board_id and id=case
+          when p_operation->>'type' in ('create_card','update_card','move_card','delete_card')
+          then coalesce(p_operation->>'id',p_operation->'card'->>'id')::uuid else null end),
+      'removedCardIds',case when p_operation->>'type' in ('create_card','update_card','move_card','delete_card') then
+        jsonb_build_array(coalesce(p_operation->>'id',p_operation->'card'->>'id')) else '[]'::jsonb end);
+  end if;
+  return private.pinboard_board_json(board_row);
 end;
 $$;
+create or replace function private.pinboard_mutate_board_once(p_board_id uuid,p_operation_id uuid,p_operation jsonb,p_base_revision bigint default null)
+returns jsonb language sql security definer set search_path='' as $$
+  select private.pinboard_mutate_board_result(p_board_id,p_operation_id,p_operation,p_base_revision,null);
+$$;
+-- Compact ordinary writes; original full-state callers keep their response contract.
+create or replace function public.pinboard_mutate_board_receipt(p_board_id uuid,p_operation_id uuid,p_operation jsonb,p_base_revision bigint,p_known_revision bigint)
+returns jsonb language sql security invoker set search_path='' as $$
+  select private.pinboard_mutate_board_result(p_board_id,p_operation_id,p_operation,p_base_revision,p_known_revision);
+$$;
+revoke all on function private.pinboard_mutate_board_result(uuid,uuid,jsonb,bigint,bigint),
+  public.pinboard_mutate_board_receipt(uuid,uuid,jsonb,bigint,bigint) from public,anon,authenticated;
+grant execute on function private.pinboard_mutate_board_result(uuid,uuid,jsonb,bigint,bigint),
+  public.pinboard_mutate_board_receipt(uuid,uuid,jsonb,bigint,bigint) to authenticated;
+
 create or replace function public.pinboard_mutate_board_once(p_board_id uuid, p_operation_id uuid, p_operation jsonb, p_base_revision bigint default null)
 returns jsonb language sql security invoker set search_path = '' as $$
   select private.pinboard_mutate_board_once(p_board_id, p_operation_id, p_operation, p_base_revision);

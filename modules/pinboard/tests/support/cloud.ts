@@ -377,7 +377,7 @@ export async function createCloud() {
             return;
           }
           if (
-            url.pathname === '/rest/v1/rpc/pinboard_mutate_board_once' ||
+            url.pathname === '/rest/v1/rpc/pinboard_mutate_board_receipt' ||
             url.pathname === '/rest/v1/rpc/pinboard_force_board_once'
           ) {
             const force = url.pathname.endsWith('/pinboard_force_board_once');
@@ -395,15 +395,18 @@ export async function createCloud() {
                 user,
                 force
                   ? 'select public.pinboard_force_board_once($1,$2,$3::jsonb,$4::bigint) board'
-                  : 'select public.pinboard_mutate_board_once($1, $2, $3::jsonb, $4::bigint) as board',
+                  : 'select public.pinboard_mutate_board_receipt($1, $2, $3::jsonb, $4::bigint, $5::bigint) as board',
                 [
                   write.boardId,
                   write.operationId,
                   JSON.stringify(force ? args.p_board : write.operation),
                   write.baseRevision,
+                  ...(!force ? [args.p_known_revision] : []),
                 ],
               );
-              write.revision = rows[0]!.board.revision;
+              write.revision =
+                rows[0]!.board.revision ??
+                (rows[0]!.board as unknown as { board: Board }).board.revision;
               await notify(write.boardId);
               const gate = await waitAt(user, 'response');
               if (gate?.loseReply) await route.abort('failed');

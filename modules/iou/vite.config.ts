@@ -107,6 +107,7 @@ export default defineConfig(({ mode, command }) => {
       }),
     ],
     test: {
+      maxWorkers: 2,
       environment: 'node',
       include: ['src/**/*.test.ts'],
     },

@@ -68,7 +68,10 @@ export function createConfig(appDirectory: string) {
           },
       server: { host: '127.0.0.1', port: 5174 },
       preview: { host: '127.0.0.1', port: 4174 },
-      test: { include: ['src/**/*.test.{ts,tsx}', '*.test.ts'] },
+      test: {
+        maxWorkers: 2,
+        include: ['src/**/*.test.{ts,tsx}', '*.test.ts'],
+      },
     };
   });
 }

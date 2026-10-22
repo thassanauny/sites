@@ -243,7 +243,7 @@ describe('iou current schema executed in embedded PostgreSQL', () => {
     await database.query(
       `insert into public.iou_group_headers(id,invite_code,metadata,member_count,transaction_count,member_bytes,transaction_bytes,payload_bytes)
       select 'bulk-' || n, md5('bulk-' || n), $1::jsonb || jsonb_build_object('id','bulk-' || n,'inviteCode',md5('bulk-' || n)),0,0,0,0,0
-      from generate_series(1,1100) n`,
+      from generate_series(1,1001) n`,
       [JSON.stringify((({ members: _members, transactions: _transactions, ...metadata }) => metadata)(group()))],
     )
     // Administrator fixture bypasses per-identity create/join quotas, while each
@@ -259,9 +259,11 @@ describe('iou current schema executed in embedded PostgreSQL', () => {
     await identity(reader)
     const reply = await database.query<{ result: { format: number; heads: { id: string; version: number }[] } }>('select public.iou_group_heads() as result')
     expect(reply.rows).toHaveLength(1)
-    expect(reply.rows[0]!.result.heads).toHaveLength(1100)
+    expect(reply.rows[0]!.result.heads).toHaveLength(1001)
     expect(reply.rows[0]!.result.heads.every(({ version }) => version === 1)).toBe(true)
-  })
+    // Includes constructing and validating 1,001 normalized ledgers in PGlite.
+    // Publishing checks compete for CPU; this is a correctness test, not a latency benchmark.
+  }, 90_000)
 
   it('installs optional private invalidations repeatedly without changing data or allowing client publishing', async () => {
     await database.exec('reset role')

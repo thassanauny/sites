@@ -172,7 +172,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       where n.nspname in ('public','private') and p.proname like 'pinboard_%'
       order by n.nspname, p.proname
     `);
-    assert.equal(permissions.rows.length, 24);
+    assert.equal(permissions.rows.length, 26);
     for (const permission of permissions.rows) {
       assert.equal(permission.anonymous, false, permission.proname);
       assert.equal(permission.public, false, permission.proname);
@@ -184,6 +184,8 @@ describe('Supabase schema in actual embedded PostgreSQL', {
           'pinboard_force_board_once',
           'pinboard_join_board',
           'pinboard_mutate_board_once',
+          'pinboard_mutate_board_result',
+          'pinboard_mutate_board_receipt',
           'pinboard_sync_summaries',
         ].includes(permission.proname),
         permission.proname,

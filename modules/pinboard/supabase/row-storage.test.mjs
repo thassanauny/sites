@@ -513,3 +513,75 @@ test('bulk operations, archives and removals retain exact incremental counts and
   await db.exec(forward);
   assert.deepEqual(await document(db, board.id), board);
 });
+
+test('compact mutations avoid whole-board construction and safely reconcile stale caches and retries', async (t) => {
+  const db = await setup(forward);
+  t.after(() => db.close());
+  let board = await create(db);
+  const cards = Array.from({ length: 100 }, () => card({ description: 'x'.repeat(200) }));
+  for (const value of cards)
+    board = await mutate(db, board.id, { type: 'create_card', card: value });
+  const baseline = board.revision;
+  const token = randomUUID();
+  const operation = {
+    type: 'update_card',
+    id: cards[0].id,
+    patch: { title: 'Compact accepted edit' },
+  };
+  const save = async (op, receipt, known) =>
+    (
+      await db.query('select public.pinboard_mutate_board_receipt($1,$2,$3::jsonb,$4,$5) reply', [
+        board.id,
+        receipt,
+        JSON.stringify(op),
+        baseline,
+        known,
+      ])
+    ).rows[0].reply;
+  await db.exec('reset role');
+  const definition = (
+    await db.query(
+      "select pg_get_functiondef('private.pinboard_board_json(public.pinboard_boards)'::regprocedure) definition",
+    )
+  ).rows[0].definition;
+  // A compact save must not assemble full JSON and then discard most of it.
+  await db.exec(`create or replace function private.pinboard_board_json(p_board public.pinboard_boards)
+    returns jsonb language plpgsql stable security invoker set search_path='' as $$
+    begin raise exception 'FULL_BOARD_BUILDER_CALLED'; end; $$;`);
+  await actor(db, creator);
+  const reply = await save(operation, token, baseline);
+  assert.equal(reply.format, 1);
+  assert.equal(reply.baseRevision, baseline);
+  assert.equal(reply.board.revision, baseline + 1);
+  assert.deepEqual(reply.removedCardIds, [cards[0].id]);
+  assert.equal(reply.cards.length, 1);
+  assert.equal(reply.cards[0].title, 'Compact accepted edit');
+  assert.equal('cards' in reply.board, false);
+  assert.ok(
+    Buffer.byteLength(JSON.stringify(reply)) < Buffer.byteLength(JSON.stringify(board)) / 20,
+  );
+  const deletion = await save({ type: 'delete_card', id: cards[1].id }, randomUUID(), baseline + 1);
+  assert.deepEqual(deletion.cards, []);
+  assert.deepEqual(deletion.removedCardIds, [cards[1].id]);
+  await db.exec('reset role');
+  await db.exec(definition);
+  await actor(db, creator);
+  // Lost-response replay returns CURRENT state, retaining later collaborator edits.
+  board = await mutate(db, board.id, {
+    type: 'update_card',
+    id: cards[0].id,
+    patch: { title: 'Later shared edit' },
+  });
+  const replay = await save(operation, token, baseline);
+  assert.equal(replay.format, undefined);
+  assert.equal(replay.cards.find((c) => c.id === cards[0].id).title, 'Later shared edit');
+  const stale = await save(
+    { type: 'update_board', patch: { description: 'Independent edit' } },
+    randomUUID(),
+    baseline,
+  );
+  assert.equal(stale.format, undefined);
+  assert.equal(stale.cards.length, 99);
+  await actor(db, stranger);
+  await assert.rejects(save(operation, randomUUID(), baseline), /PINBOARD_ACCESS_DENIED/);
+});

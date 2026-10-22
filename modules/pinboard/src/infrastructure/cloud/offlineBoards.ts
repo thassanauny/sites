@@ -52,6 +52,7 @@ interface Remote {
     operation: Operation,
     operationId?: string,
     baseRevision?: number,
+    known?: Board,
   ): Promise<Board>;
 }
 interface OfflineBoards extends Omit<Remote, 'mutateBoard' | 'forceBoard'> {
@@ -255,6 +256,7 @@ export function withOfflineBoards(
                     current.pending[0]!.operation,
                     sent.id,
                     sent.baseRevision,
+                    current.board,
                   );
               if ((await database.owner()) !== identity) return;
               current = await database.change(

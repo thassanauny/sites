@@ -616,10 +616,11 @@ describe('online board sharing', () => {
       patch: { title: 'Booked' },
     };
     await expect(cloud.mutateBoard(board.id, operation)).resolves.toEqual(board);
-    expect(mock.rpc).toHaveBeenCalledWith('pinboard_mutate_board_once', {
+    expect(mock.rpc).toHaveBeenCalledWith('pinboard_mutate_board_receipt', {
       p_board_id: board.id,
       p_operation_id: expect.any(String),
       p_base_revision: null,
+      p_known_revision: null,
       p_operation: operation,
     });
     expect(mock.rpc).toHaveBeenCalledTimes(1);
@@ -643,10 +644,11 @@ describe('online board sharing', () => {
       type: 'reorder_columns',
       columnIds,
     });
-    expect(mock.rpc).toHaveBeenCalledWith('pinboard_mutate_board_once', {
+    expect(mock.rpc).toHaveBeenCalledWith('pinboard_mutate_board_receipt', {
       p_board_id: board.id,
       p_operation_id: expect.any(String),
       p_base_revision: null,
+      p_known_revision: null,
       p_operation: { type: 'reorder_columns', columnIds: ['done', 'todo'] },
     });
     expect(mock.rpc).toHaveBeenCalledTimes(1);
@@ -779,5 +781,50 @@ describe('online board sharing', () => {
     await expect(cloud.startNewSession()).rejects.toThrow('saved board session');
     expect(storage.removeItem).not.toHaveBeenCalled();
     expect(values.get('pinboard-auth')).toBe('{}');
+  });
+});
+
+describe('compact authoritative mutation replies', () => {
+  it('keeps unrelated cards and uses server card values, not the submitted patch', async () => {
+    const { readMutationResult } = await import('./boards');
+    const other = {
+      ...card,
+      id: '44444444-4444-4444-8444-444444444444',
+      title: 'Independent card',
+    };
+    const known = { ...board, cards: [card, other] };
+    const { cards: _cards, ...metadata } = board;
+    const reply = {
+      format: 1,
+      baseRevision: 1,
+      board: { ...metadata, created_at: '2026-10-10T01:00:00.123Z', revision: 2 },
+      cards: [{ ...card, title: 'Authoritative title', customFields: {} }],
+      removedCardIds: [card.id],
+    };
+    expect(readMutationResult(reply, known).cards).toEqual([reply.cards[0], other]);
+    expect(readMutationResult({ ...reply, cards: [] }, known).cards).toEqual([other]);
+    expect(
+      readMutationResult({ ...reply, removedCardIds: [], cards: [other] }, board).cards,
+    ).toEqual([card, other]);
+  });
+  it('rejects mismatched baselines and malformed card replies before queue acknowledgement', async () => {
+    const { readMutationResult } = await import('./boards');
+    const { cards: _cards, ...metadata } = board;
+    const reply = {
+      format: 1,
+      baseRevision: 1,
+      board: { ...metadata, revision: 2 },
+      cards: [card],
+      removedCardIds: [card.id],
+    };
+    expect(() => readMutationResult(reply)).toThrow('cached board');
+    expect(() => readMutationResult({ ...reply, baseRevision: 2 }, board)).toThrow('cached board');
+    expect(() =>
+      readMutationResult({ ...reply, board: { ...metadata, revision: 4 } }, board),
+    ).toThrow('metadata');
+    expect(() =>
+      readMutationResult({ ...reply, cards: [{ ...card, columnId: 'missing' }] }, board),
+    ).toThrow();
+    expect(readMutationResult({ ...board, revision: 9 }, board).revision).toBe(9);
   });
 });

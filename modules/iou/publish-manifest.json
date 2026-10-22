@@ -102,8 +102,8 @@
     "src/infrastructure/cloud/live.test.ts": "7de1229e7980063afbda409e7ae27243579e5cc990f49a54460e41f010183f50",
     "src/infrastructure/cloud/network.test.ts": "9c324fbec97ae3b4cd5dae33a78be964522ecd56cfce771fa423031d0b269a1d",
     "src/infrastructure/cloud/network.ts": "3d9655359f42df13b3c94666ab488a30719b4c7122f698e9767fb98a52003ffe",
-    "src/infrastructure/cloud/rowStorage.test.ts": "1883a3b2458a173cb21c6d8f0f3974e247d6ecf6f1843552d0ea02b1f144ea36",
-    "src/infrastructure/cloud/schema.test.ts": "5f9a8f77650063e9f9ca257eb13ba70ec456fb2071311822d036a8196914b576",
+    "src/infrastructure/cloud/rowStorage.test.ts": "a4f39b68fea1cbec9d5688866b384b0112bfce608f8ba45eb95438840e03baf7",
+    "src/infrastructure/cloud/schema.test.ts": "33d5a1ac14dc95693699b32ddeab962b5e18c4ec0fc4e960de15edb0a8c79d22",
     "src/infrastructure/cloud/session.test.ts": "0f32429a6ac37341a09c499ace9b911feaf69bf6c09c4eb291655b9e88a73cee",
     "src/infrastructure/storage/store.test.ts": "d85309ebd99fa20bee9a0824e3195cba67a6f6a44a0e583262d5f76fcf0f4369",
     "src/infrastructure/storage/store.ts": "76d78419f6166f0a4f0ee4290635ffbd9d0328af6ff5803fb2097b26914c62e8",
@@ -131,6 +131,6 @@
     "tsconfig.app.json": "e7bcdd921c9b32e8351683b36922112bcea9cafcc2f6fca48ddd438e7a7b7a2f",
     "tsconfig.json": "e8d6f7b50828db3953e21c7e92584f9206b3cd2551b4012507372afbb7fe9ce3",
     "tsconfig.node.json": "402c5c574255ad51ad11f30608d956b311828b9b0ee265627598dda5e52cc9b3",
-    "vite.config.ts": "97375f67a31e936a6cc6bfdd11bb76934fae079672bc269dd3cf64b4048136c9"
+    "vite.config.ts": "cd36dab6f5a6badd42a8a9515556104aeaef9f9bf695c8060c43d5febdb4228a"
   }
 }

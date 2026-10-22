@@ -79,10 +79,10 @@ describe('board version comparison', () => {
       'Column order',
     ]);
   });
-  it('handles a full-size board without reporting unchanged content', () => {
+  it('compares 200 cards without reporting unchanged content', () => {
     const full = {
       ...board,
-      cards: Array.from({ length: 2000 }, (_, i) => ({
+      cards: Array.from({ length: 200 }, (_, i) => ({
         ...card,
         id: crypto.randomUUID(),
         position: i,

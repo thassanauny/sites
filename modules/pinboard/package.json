@@ -1,7 +1,7 @@
 {
   "name": "pinboard",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5174",
     "build": "tsc -b && vite build",
-    "test": "vitest run && node --test supabase/*.test.mjs",
+    "test": "vitest run && node --test --test-concurrency=1 supabase/*.test.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 4174"
   },
   "dependencies": {

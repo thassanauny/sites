@@ -44,20 +44,34 @@ afterEach(() => {
 
 describe('snippet requests on a stalled connection', () => {
   it('fails a save or a poll that gets no answer so the draft stays and Retry can send it again', async () => {
+    let requestStarted: (() => void) | undefined;
+    const nextRequest = () =>
+      new Promise<void>(resolve => {
+        requestStarted = resolve;
+      });
+    const stalledRequest = () => {
+      requestStarted?.();
+      return stalled();
+    };
     const network = vi
       .fn()
-      .mockImplementationOnce(stalled)
-      .mockImplementationOnce(stalled)
+      .mockImplementationOnce(stalledRequest)
+      .mockImplementationOnce(stalledRequest)
       .mockImplementation(async url => reply(url));
     vi.stubGlobal('fetch', network);
     // One client for the whole test: a second one with the same storage key makes the SDK warn.
     const cloud = createCloud('https://test-project.supabase.co', 'public-test-key');
     const unreachable = 'Could not connect to shared snippets. Check your connection and try again.';
 
+    const saveStarted = nextRequest();
     const saving = expect(cloud.saveCheckedPage(page.id, 'Typed text', { baseVersion: 1, baseText: page.text })).rejects.toThrow(unreachable);
+    // WebCrypto hashing is real async work; let the request start before moving its clock.
+    await saveStarted;
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 1000);
     await saving;
+    const pollStarted = nextRequest();
     const polling = expect(cloud.pollPage(page.id, 0)).rejects.toThrow(unreachable);
+    await pollStarted;
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 1000);
     await polling;
     expect(network).toHaveBeenCalledTimes(2);

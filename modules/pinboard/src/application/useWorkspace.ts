@@ -29,11 +29,14 @@ export function useWorkspace() {
   // An error caused by background syncing disappears once a later refresh succeeds; one caused by
   // something the person did (a failed save or join) stays until they dismiss it or act again.
   const syncFailed = useRef(false);
+  const actionFailed = useRef(false);
   const setError = useCallback((text: string) => {
+    actionFailed.current = text !== '';
     syncFailed.current = false;
     setErrorText(text);
   }, []);
   const setSyncError = useCallback((text: string) => {
+    if (actionFailed.current) return;
     syncFailed.current = text !== '';
     setErrorText(text);
   }, []);

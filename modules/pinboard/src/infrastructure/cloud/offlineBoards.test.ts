@@ -40,6 +40,7 @@ const mutate =
       operation: Operation,
       operationId?: string,
       baseRevision?: number,
+      known?: Board,
     ) => Promise<Board>
   >();
 beforeEach(() => {
@@ -207,7 +208,13 @@ describe('durable offline boards', () => {
     const saved = await open().loadBoard(original.id);
     expect(saved.cards).toEqual([{ ...newCard, title: 'Edited before upload' }]);
     expect(mutate.mock.calls).toEqual(
-      pending.map((change) => [original.id, change.operation, change.id, change.baseRevision]),
+      pending.map((change, index) => [
+        original.id,
+        change.operation,
+        change.id,
+        change.baseRevision,
+        expect.objectContaining({ revision: index + 1, cards: index === 0 ? [] : [newCard] }),
+      ]),
     );
     expect((await database.read(original.id))?.pending).toEqual([]);
     expect((await database.read(original.id))?.backups).toBeUndefined();
@@ -585,7 +592,13 @@ describe('durable offline boards', () => {
       title: 'Reviewed local title',
       description: 'Independent shared note',
     });
-    expect(mutate).toHaveBeenCalledWith(original.id, old.operation, expect.any(String), 1002);
+    expect(mutate).toHaveBeenCalledWith(
+      original.id,
+      old.operation,
+      expect.any(String),
+      1002,
+      expect.objectContaining({ revision: 1002 }),
+    );
     expect(mutate.mock.calls[0]![2]).not.toBe(old.id);
     expect((await database.read(original.id))?.backups?.[0]?.board.title).toBe(
       'Reviewed local title',
@@ -797,6 +810,7 @@ describe('durable offline boards', () => {
       operation,
       pending[0]!.id,
       pending[0]!.baseRevision,
+      expect.objectContaining({ revision: original.revision }),
     );
     expect((await database.read(original.id))?.pending).toEqual(pending);
   });
@@ -894,8 +908,22 @@ describe('durable offline boards', () => {
     current = { ...current, title: 'Later remote edit', revision: 3 };
     await open().loadBoardList();
     expect(current.title).toBe('Later remote edit');
-    expect(mutate).toHaveBeenNthCalledWith(1, original.id, pending.operation, pending.id, 1);
-    expect(mutate).toHaveBeenNthCalledWith(2, original.id, pending.operation, pending.id, 1);
+    expect(mutate).toHaveBeenNthCalledWith(
+      1,
+      original.id,
+      pending.operation,
+      pending.id,
+      1,
+      original,
+    );
+    expect(mutate).toHaveBeenNthCalledWith(
+      2,
+      original.id,
+      pending.operation,
+      pending.id,
+      1,
+      original,
+    );
     expect(await database.all(true)).toEqual([]);
   });
 });

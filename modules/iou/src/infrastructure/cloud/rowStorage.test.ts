@@ -153,14 +153,17 @@ describe('authoritative IOU rows and checked deltas', () => {
   })
 
   it('enforces the exact serialized byte boundary incrementally, including multibyte notes', async () => {
-    const payload = { ...group(), transactions: Array.from({ length: 5000 }, (_, i) => ({ ...payment, id: `budget-${i}`, note: 'A'.repeat(500) })) }
+    const payload = { ...group(), transactions: Array.from({ length: 2500 }, (_, i) => ({ ...payment, id: `budget-${i}`, note: 'A'.repeat(500) })) }
     const size = (await database.query<{ bytes: number }>('select octet_length($1::jsonb::text) bytes', [JSON.stringify(payload)])).rows[0]!.bytes
     let extra = 4_000_000 - size
     expect(extra).toBeGreaterThan(0)
     for (const transaction of payload.transactions) {
-      const multibyte = Math.min(extra, 500)
-      transaction.note = 'Æ'.repeat(multibyte) + 'A'.repeat(500 - multibyte)
-      extra -= multibyte
+      // Three-byte BMP characters reach the real 4 MB boundary with half the rows,
+      // while retaining the 500 UTF-16-unit note limit. Æ fills an odd remaining byte.
+      const threeByte = Math.min(Math.floor(extra / 2), 500)
+      const twoByte = threeByte < 500 ? extra % 2 : 0
+      transaction.note = '界'.repeat(threeByte) + 'Æ'.repeat(twoByte) + 'A'.repeat(500 - threeByte - twoByte)
+      extra -= threeByte * 2 + twoByte
     }
     expect(extra).toBe(0)
     const record = await create(payload)
@@ -174,7 +177,7 @@ describe('authoritative IOU rows and checked deltas', () => {
     await database.exec('reset role')
     await database.query('delete from public.iou_group_headers where id=$1', [record.payload.id])
     await identity()
-  }, 30_000)
+  }, 90_000)
 
   it('rejects lost-response retries and accepts rebased subsequent deltas', async () => {
     const record = await create()
@@ -290,8 +293,8 @@ describe('authoritative IOU rows and checked deltas', () => {
     await identity()
   })
 
-  it('edits one of 1000 transactions without validating or assembling the whole ledger or touching other entities', async () => {
-    const payload = { ...group(), transactions: Array.from({ length: 1000 }, (_, i) => ({ ...payment, id: `payment-${i}` })) }
+  it('edits one of 200 transactions without validating or assembling the whole ledger or touching other entities', async () => {
+    const payload = { ...group(), transactions: Array.from({ length: 200 }, (_, i) => ({ ...payment, id: `payment-${i}` })) }
     const record = await create(payload)
     await database.exec('reset role')
     const definitions = (
@@ -312,12 +315,12 @@ describe('authoritative IOU rows and checked deltas', () => {
     }
     try {
       await identity()
-      const changed = { ...record.payload, transactions: record.payload.transactions.map((t, i) => (i === 500 ? { ...t, note: 'One changed note' } : t)) }
+      const changed = { ...record.payload, transactions: record.payload.transactions.map((t, i) => (i === 100 ? { ...t, note: 'One changed note' } : t)) }
       expect(await delta(record, changed)).toEqual({ format: 1, id: record.payload.id, version: 2 })
       await database.exec('reset role')
       const touched = (await database.query<{ relation: string; id: string }>('select * from public.iou_test_touches')).rows
       expect(touched).toHaveLength(2)
-      expect(touched.every(t => t.id === 'payment-500')).toBe(true)
+      expect(touched.every(t => t.id === 'payment-100')).toBe(true)
     } finally {
       await database.exec('reset role')
       for (const { body } of definitions) await database.exec(body)

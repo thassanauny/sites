@@ -364,11 +364,54 @@ async function remoteForceBoard(
   );
 }
 
+/** Rebuild only from a matching acknowledged cache, never from optimistic queued edits. */
+export function readMutationResult(input: unknown, known?: Board): Board {
+  if (!input || typeof input !== 'object' || !('format' in input)) return readCloudBoard(input);
+  const value = input as {
+    format?: unknown;
+    baseRevision?: unknown;
+    board?: Partial<Board>;
+    cards?: unknown;
+    removedCardIds?: unknown;
+  };
+  if (
+    value.format !== 1 ||
+    !known ||
+    value.baseRevision !== known.revision ||
+    value.board?.id !== known.id ||
+    !Array.isArray(value.cards) ||
+    !Array.isArray(value.removedCardIds)
+  )
+    throw new Error(
+      'The save receipt does not match the cached board. Your pending edits are kept.',
+    );
+  const removed = new Set(value.removedCardIds.map((id) => validateUuid(id, 'Card ID')));
+  // Validate partial card data using the complete board validator before acknowledging anything.
+  const patch = readCloudBoard({ ...value.board, cards: value.cards });
+  if (
+    patch.revision < known.revision ||
+    patch.revision > known.revision + 1 ||
+    patch.invite_code !== known.invite_code ||
+    Date.parse(patch.created_at) !== Date.parse(known.created_at)
+  )
+    throw new Error(
+      'The save receipt contains invalid board metadata. Your pending edits are kept.',
+    );
+  const replacements = new Map(patch.cards.map((card) => [card.id, card]));
+  const cards = known.cards.flatMap((card) => {
+    const updated = replacements.get(card.id);
+    replacements.delete(card.id);
+    return updated ? [updated] : removed.has(card.id) ? [] : [card];
+  });
+  return readCloudBoard({ ...patch, cards: [...cards, ...replacements.values()] });
+}
+
 async function remoteMutateBoard(
   boardId: string,
   operation: Operation,
   operationId = crypto.randomUUID(),
   baseRevision?: number,
+  known?: Board,
 ): Promise<Board> {
   const id = validateUuid(boardId, 'Board ID');
   const token = validateUuid(operationId, 'Operation ID');
@@ -376,15 +419,16 @@ async function remoteMutateBoard(
   await initializeCloud();
   ensureOnline();
   const { data, error } = await call('save your changes', () =>
-    getClient().rpc('pinboard_mutate_board_once', {
+    getClient().rpc('pinboard_mutate_board_receipt', {
       p_board_id: id,
       p_operation_id: token,
       p_operation: payload,
       p_base_revision: baseRevision ?? null,
+      p_known_revision: known?.revision ?? null,
     }),
   );
   if (error) throw serviceError(error, 'save your changes');
-  const board = readCloudBoard(data);
+  const board = readMutationResult(data, known);
   if (board.id !== id)
     throw new Error('The server returned a different board. Refresh the app and try again.');
   return board;

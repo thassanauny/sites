@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // @vitest-environment-options {"url":"http://localhost/"}
 import { describe, expect, it, vi } from 'vitest';
+import { act } from 'react';
 import { cloud } from './cloudMock';
 import { board, button, click, field, fill, installHarness, mount } from './testSupport';
 vi.mock('../infrastructure/cloud/boards', async () => (await import('./cloudMock')).cloudModule);
@@ -116,6 +117,14 @@ describe('reviewing queued device edits', () => {
       'Pending edits changed in another tab',
     );
     expect(button('Download backup 1')).toBeDefined();
+    cloud.loadBoardList.mockRejectedValueOnce(new Error('Background retry failed'));
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(document.querySelector('dialog')?.textContent).toContain(
+      'Pending edits changed in another tab',
+    );
+    expect(document.querySelector('dialog')?.textContent).not.toContain('Background retry failed');
     cloud.reviewPendingBoard.mockResolvedValue({ ...review, pendingIds: [], online: false });
     await click('Refresh review');
     expect(document.body.textContent).toContain('No edits are waiting to sync');
