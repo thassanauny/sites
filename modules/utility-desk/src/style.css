@@ -45,7 +45,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 main { width: 100%; max-width: 1430px; margin: 0 auto; padding: 39px 38px 32px; flex: 1; }
 main:focus { outline: none; }
 .app-footer { --sidebar-width: 238px; position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; padding: 10px 26px 10px 20px; font-size: 10px; line-height: 12px; color: var(--muted); gap: 16px; background: linear-gradient(to right, #fbfcf8 0 calc(var(--sidebar-width) - 1px), var(--line) calc(var(--sidebar-width) - 1px) var(--sidebar-width), var(--background) var(--sidebar-width)); }
-.app-footer > span { white-space: nowrap; }
+.app-footer > span { margin-left: auto; white-space: nowrap; }
 .page-header { margin-bottom: 24px; }
 h1 { font-size: 31px; font-weight: 550; letter-spacing: -1.1px; line-height: 1.2; margin: 0 0 8px; }
 h1:focus { outline: none; }

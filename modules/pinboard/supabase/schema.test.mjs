@@ -141,7 +141,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
     const functions = await database.query(`
       select n.nspname, p.proname, p.prosecdef, p.proconfig
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where p.proname in ('pinboard_create_board','pinboard_join_board','pinboard_mutate_board_once')
+      where p.proname in ('pinboard_create_board','pinboard_join_board','pinboard_mutate_board_once','pinboard_mutate_board_result')
       order by n.nspname, p.proname
     `);
     assert.equal(functions.rows.length, 6);
@@ -172,7 +172,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       where n.nspname in ('public','private') and p.proname like 'pinboard_%'
       order by n.nspname, p.proname
     `);
-    assert.equal(permissions.rows.length, 26);
+    assert.equal(permissions.rows.length, 25);
     for (const permission of permissions.rows) {
       assert.equal(permission.anonymous, false, permission.proname);
       assert.equal(permission.public, false, permission.proname);
@@ -381,7 +381,7 @@ describe('Supabase schema in actual embedded PostgreSQL', {
       );
       await assert.rejects(
         database.query(
-          `select ${schema}.pinboard_mutate_board_once($1::uuid,gen_random_uuid(),$2::jsonb,null)`,
+          `select ${schema}.${schema === 'private' ? 'pinboard_mutate_board_result' : 'pinboard_mutate_board_once'}($1::uuid,gen_random_uuid(),$2::jsonb,null${schema === 'private' ? ',null' : ''})`,
           [board.id, '{"type":"update_board","patch":{}}'],
         ),
         /PINBOARD_AUTH_REQUIRED/,

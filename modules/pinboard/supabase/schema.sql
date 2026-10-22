@@ -740,10 +740,6 @@ begin
   return private.pinboard_board_json(board_row);
 end;
 $$;
-create or replace function private.pinboard_mutate_board_once(p_board_id uuid,p_operation_id uuid,p_operation jsonb,p_base_revision bigint default null)
-returns jsonb language sql security definer set search_path='' as $$
-  select private.pinboard_mutate_board_result(p_board_id,p_operation_id,p_operation,p_base_revision,null);
-$$;
 -- Compact ordinary writes; original full-state callers keep their response contract.
 create or replace function public.pinboard_mutate_board_receipt(p_board_id uuid,p_operation_id uuid,p_operation jsonb,p_base_revision bigint,p_known_revision bigint)
 returns jsonb language sql security invoker set search_path='' as $$
@@ -756,20 +752,21 @@ grant execute on function private.pinboard_mutate_board_result(uuid,uuid,jsonb,b
 
 create or replace function public.pinboard_mutate_board_once(p_board_id uuid, p_operation_id uuid, p_operation jsonb, p_base_revision bigint default null)
 returns jsonb language sql security invoker set search_path = '' as $$
-  select private.pinboard_mutate_board_once(p_board_id, p_operation_id, p_operation, p_base_revision);
+  select private.pinboard_mutate_board_result(p_board_id, p_operation_id, p_operation, p_base_revision, null);
 $$;
-revoke all on function private.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint),
-  public.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint) from public, anon, authenticated;
-grant execute on function private.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint),
-  public.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint) to authenticated;
+revoke all on function public.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint) from public, anon, authenticated;
+grant execute on function public.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint) to authenticated;
 
 create or replace function public.pinboard_force_board_once(p_board_id uuid,p_operation_id uuid,p_board jsonb,p_base_revision bigint)
 returns jsonb language sql security invoker set search_path='' as $$
-  select private.pinboard_mutate_board_once(p_board_id,p_operation_id,
-    jsonb_build_object('type','replace_board','board',p_board),p_base_revision);
+  select private.pinboard_mutate_board_result(p_board_id,p_operation_id,
+    jsonb_build_object('type','replace_board','board',p_board),p_base_revision,null);
 $$;
 revoke all on function public.pinboard_force_board_once(uuid,uuid,jsonb,bigint) from public,anon,authenticated;
 grant execute on function public.pinboard_force_board_once(uuid,uuid,jsonb,bigint) to authenticated;
+
+-- Callers now use the shared checked implementation directly. No CASCADE: unknown dependencies abort refresh.
+drop function if exists private.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint);
 
 revoke all on function private.pinboard_has_keys(jsonb,text[]), private.pinboard_allowed_keys(jsonb,text[]),
   private.pinboard_valid_text(jsonb,integer,boolean), private.pinboard_valid_uuid(jsonb),

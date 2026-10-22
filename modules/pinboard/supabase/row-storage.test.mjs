@@ -324,8 +324,21 @@ test('refresh preserves current rows, invitations and receipts with only checked
   ).rows;
   const access = (await db.query('select * from public.pinboard_board_access order by user_id'))
     .rows;
+  // Model an installed schema with the redundant delegating function still present.
+  await db.exec(`create function private.pinboard_mutate_board_once(p_board_id uuid,p_operation_id uuid,p_operation jsonb,p_base_revision bigint default null)
+    returns jsonb language sql security definer set search_path='' as $$
+    select private.pinboard_mutate_board_result(p_board_id,p_operation_id,p_operation,p_base_revision,null); $$;
+    grant execute on function private.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint) to authenticated;`);
   await db.exec(forward);
   await db.exec(forward);
+  assert.equal(
+    (
+      await db.query(
+        "select to_regprocedure('private.pinboard_mutate_board_once(uuid,uuid,jsonb,bigint)') is null absent",
+      )
+    ).rows[0].absent,
+    true,
+  );
   assert.deepEqual(await document(db, board.id), board);
   assert.deepEqual(
     (await db.query('select * from private.pinboard_operation_receipts order by receipt_id')).rows,
