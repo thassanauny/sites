@@ -179,6 +179,11 @@ test('every precached asset and manifest icon exists in the distributable app', 
   assert.equal(manifest.start_url, './');
   assert.equal(manifest.scope, './');
   assert.equal(manifest.display, 'standalone');
+  assert.equal(manifest.name, 'শব্দকোষ');
+  assert.equal(manifest.short_name, 'শব্দকোষ');
+  const html = await readFile(resolve(dist, 'index.html'), 'utf8');
+  assert.match(html, /<meta name="apple-mobile-web-app-title" content="শব্দকোষ">/);
+  assert.match(html, /<meta name="application-name" content="শব্দকোষ">/);
   assert.ok(manifest.icons.some((icon) => icon.purpose === 'maskable'));
   for (const icon of manifest.icons) {
     const bytes = await readFile(resolve(dist, icon.src));

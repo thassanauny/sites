@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Shobdokosh · শব্দকোষ — English & Bangla Dictionary",
-  "short_name": "Shobdokosh",
+  "name": "শব্দকোষ",
+  "short_name": "শব্দকোষ",
   "description": "Find the right word in English or Bangla. An offline dictionary for everyday discovery.",
   "lang": "en",
   "dir": "ltr",
@@ -10,7 +10,11 @@
   "display": "standalone",
   "background_color": "#f7f7f2",
   "theme_color": "#0b6b57",
-  "categories": ["education", "books", "reference"],
+  "categories": [
+    "education",
+    "books",
+    "reference"
+  ],
   "icons": [
     {
       "src": "./icons/icon-192.png",

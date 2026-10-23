@@ -94,7 +94,7 @@ function card(entry, searchResult = false) {
     : `<p class="translation-text" lang="${view.meaningLanguage}">${escape(view.meaningValues.join(' · '))}</p>`;
   const availability = view.englishUnavailable ? '<p class="meaning-availability">English translation is not available for this entry yet.</p>' : '';
   const examples = entry.example ? `<div class="example">“${escape(entry.example)}”${entry.exampleBn ? `<div class="bangla-example" lang="bn">${escape(entry.exampleBn)}</div>` : ''}</div>` : '';
-  const footer = searchResult || location.hash === '#saved' ? '' : `<div class="word-bottom"><button class="text-button" data-action="surprise">Discover another word ${icon('arrow')}</button></div>`;
+  const footer = searchResult || !['', '#dictionary'].includes(location.hash) ? '' : `<div class="word-bottom"><button class="text-button" data-action="surprise">Discover another word ${icon('arrow')}</button></div>`;
   return `<article class="word-card"><div class="word-top"><div><h3 class="word-title" lang="${view.titleLanguage}">${searchResult ? `<button type="button" class="word-open" data-open="${escape(entry.id)}">${escape(title)}</button>` : escape(title)}</h3><div class="word-subtitle">${entry.pronunciation && view.titleLanguage === 'en' ? `<span>${escape(entry.pronunciation)}</span>` : ''}${entry.pos ? `<span class="word-pos">${escape(entry.pos)}</span>` : ''}</div></div><div class="word-actions"><button class="icon-button" data-speak="${escape(entry.id)}" aria-label="Listen to ${escape(title)}" title="Listen">${icon('volume')}</button><button class="icon-button ${saved ? 'saved' : ''}" data-save="${escape(entry.id)}" aria-pressed="${saved}" aria-label="${saved ? 'Unsave' : 'Save'} ${escape(title)}" title="${saved ? 'Remove from saved words' : 'Save word'}">${icon('bookmark')}</button></div></div>${inferred}<div class="translation-label">${view.label}</div>${meanings}${availability}${definitions}${examples}${footer}</article>`;
 }
 
@@ -135,9 +135,11 @@ function render() {
   if (wordId) {
     const recentMatch = state.lastMatches.get(wordId);
     const entry = recentMatch?.lookup?.query === normalize(state.query) ? recentMatch : state.byId.get(wordId);
-    heading('A little more meaning', 'English & বাংলা', 'book');
+    heading('Word meaning', '', 'book');
+    $('#view-heading').classList.add('discovery-heading');
+    $('#view-heading').insertAdjacentHTML('beforeend', '<button type="button" class="text-button detail-back" data-action="back">← Back to words</button>');
     if (!entry) { $('#results').innerHTML = empty('This word is unavailable', 'The dictionary may have changed. Search again to find the word.'); return; }
-    $('#results').innerHTML = `<button class="text-button detail-back" data-action="back">← Back to words</button>${card(entry)}`;
+    $('#results').innerHTML = `<div class="word-detail">${card(entry)}</div>`;
     const title = $('#results .word-title');
     title.tabIndex = -1;
     title.focus({ preventScroll: true });

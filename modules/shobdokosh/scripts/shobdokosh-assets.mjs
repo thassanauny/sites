@@ -39,7 +39,6 @@ export const SHOBDOKOSH_FILES = new Set([
   "icons/apple-touch-icon.png",
   "icons/icon-192.png",
   "icons/icon-512.png",
-  "icons/icon.svg",
   "icons/maskable-512.png",
   "index.html",
   "manifest.webmanifest",

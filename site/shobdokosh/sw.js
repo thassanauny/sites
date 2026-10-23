@@ -1,5 +1,5 @@
 /* Bump this version whenever an app file or dictionary changes before deployment. */
-const VERSION = '1.1.5';
+const VERSION = '1.1.11';
 const CACHE_PREFIX = `shobdokosh:${new URL(self.registration.scope).pathname}:`;
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}`;
 const ASSETS = [
@@ -43,7 +43,6 @@ const ASSETS = [
   './icons/icon-512.png',
   './icons/maskable-512.png',
   './icons/apple-touch-icon.png',
-  './icons/icon.svg',
   './fonts/dm-sans-400.ttf',
   './fonts/dm-sans-600.ttf',
   './fonts/lora-400.ttf',
