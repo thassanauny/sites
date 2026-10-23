@@ -518,3 +518,8 @@
   :root { --app-header-height: 80.2px; }
 }
 .topbar { height: var(--app-header-height); min-height: var(--app-header-height); }
+
+/* Collection branding follows IOU's icon and type scale. */
+.topbar .brand { font-size:33px; gap:8px; }
+.topbar .brand-mark { width:32px; height:32px; flex-shrink:0; }
+@media (min-width:760px) { .topbar .brand { font-size:38px; } }

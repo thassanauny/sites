@@ -314,3 +314,9 @@ h3 { font-size: 14px; font-weight: 600; margin: 0 0 7px; }
 .qr-result { text-align: center; }
 .qr-preview { display: block; max-width: 100%; height: auto; margin: 0 auto 16px; image-rendering: pixelated; }
 .qr-result .action-buttons { justify-content: center; }
+
+/* Collection branding follows IOU's icon and type scale. */
+.sidebar .brand { font-size:33px; gap:8px; line-height:1.1; }
+.sidebar .brand-mark { width:32px; height:32px; flex:0 0 32px; }
+.sidebar .brand > span { min-width:0; }
+@media (min-width:760px) { .sidebar .brand { font-size:38px; } }

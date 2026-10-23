@@ -167,3 +167,8 @@
   :root { --app-header-height: 80.2px; }
 }
 .site-header { min-height: var(--app-header-height); padding-block: 10px; }
+
+/* Collection branding follows IOU's icon and type scale. */
+.site-header .brand { font-size:33px; gap:8px; }
+.site-header .brand img { width:32px; height:32px; flex-shrink:0; }
+@media (min-width:760px) { .site-header .brand { font-size:38px; } }

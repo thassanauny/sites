@@ -686,3 +686,22 @@
   min-height: calc(var(--app-header-height) - 1px);
   padding-block: 10px;
 }
+
+/* Collection branding follows IOU's icon and type scale. */
+.header-inner .brand,
+.header-inner:has(.header-board-title) .brand {
+  font-size: 33px;
+  gap: 8px;
+}
+.header-inner .brand-mark,
+.header-inner .brand-mark img {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+@media (min-width: 760px) {
+  .header-inner .brand,
+  .header-inner:has(.header-board-title) .brand {
+    font-size: 38px;
+  }
+}

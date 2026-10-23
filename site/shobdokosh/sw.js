@@ -1,5 +1,5 @@
 /* Bump this version whenever an app file or dictionary changes before deployment. */
-const VERSION = '1.1.2';
+const VERSION = '1.1.5';
 const CACHE_PREFIX = `shobdokosh:${new URL(self.registration.scope).pathname}:`;
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}`;
 const ASSETS = [

@@ -7,7 +7,7 @@ export const APPS = [
   { id: 'textdrop', folder: 'textdrop', label: 'TextDrop', kind: 'shared' },
   { id: 'pinboard', folder: 'pinboard', label: 'Pinboard', kind: 'shared' },
   { id: 'blueprint', folder: 'blueprint', label: 'Blueprint', kind: 'shared' },
-  { id: 'shobdokosh', folder: 'shobdokosh', label: 'Shobdokosh', kind: 'static' },
+  { id: 'shobdokosh', folder: 'shobdokosh', label: 'Shobdokosh', homepageLabel: 'শব্দকোষ', kind: 'static' },
 ];
 
 export const VITE_APPS = APPS.filter(app => !['drafts', 'static'].includes(app.kind));

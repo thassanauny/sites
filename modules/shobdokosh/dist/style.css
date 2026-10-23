@@ -1666,3 +1666,17 @@ body { padding-bottom:32px; }
   .search-form .typing-mode { padding-inline:7px; }
 }
 .word-bottom > .text-button:only-child { margin-left:auto; }
+
+/* Use the available desktop width, matching TextDrop’s page gutters. */
+@media (min-width:1024px) {
+  .site-shell { width:100%; max-width:none; padding-inline:32px; }
+}
+
+/* Match IOU branding and TextDrop's edge-to-edge header rule. */
+.header { position:relative; border-bottom:0; }
+.header::after { content:""; position:absolute; bottom:0; left:50%; width:100vw; transform:translateX(-50%); height:1px; background:var(--line); }
+.header .brand { gap:8px; }
+.header .brand-mark { width:32px; height:32px; flex-shrink:0; transform:none; }
+.header .brand-mark svg { width:22px; height:22px; transform:none; }
+.header .brand-name { font-size:33px; }
+@media (min-width:760px) { .header .brand-name { font-size:38px; } }

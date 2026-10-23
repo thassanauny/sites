@@ -121,3 +121,8 @@ footer { padding: 24px 0 30px; border-top: 1px solid var(--line); display: flex;
   .shortcut-list dt span { margin: 0 1px; }
   .footer-note { display: none; }
 }
+
+/* Collection branding follows IOU's icon and type scale. */
+.site-header .brand { font-size:33px; gap:8px; }
+.site-header .brand img { width:32px; height:32px; flex-shrink:0; }
+@media (min-width:760px) { .site-header .brand { font-size:38px; } }
