@@ -1,0 +1,1062 @@
+{
+  "retrievedAt": "2026-10-23",
+  "scope": "Top-level collection/title listings from all seven NLTR Bengali literature category pages; title presence is not a proof of complete text coverage. Alphabetical song navigation links have been excluded.",
+  "categories": [
+    {
+      "category": "novel",
+      "url": "https://rabindra-rachanabali.nltr.org/node/6582",
+      "htmlSha256": "5963a456679f83e7e181c41e15428a1be7f6b1ae241da0e5da7c27bcd90e65e4",
+      "listedRecordCount": 13,
+      "entries": [
+        {
+          "title": "দুই বোন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/345"
+        },
+        {
+          "title": "বউ-ঠাকুরানীর হাট",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1377"
+        },
+        {
+          "title": "চোখের বালি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3597"
+        },
+        {
+          "title": "ঘরে-বাইরে",
+          "url": "https://rabindra-rachanabali.nltr.org/node/886"
+        },
+        {
+          "title": "প্রজাপতির নির্বন্ধ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/531"
+        },
+        {
+          "title": "চতুরঙ্গ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/514"
+        },
+        {
+          "title": "চার অধ্যায়",
+          "url": "https://rabindra-rachanabali.nltr.org/node/891"
+        },
+        {
+          "title": "যোগাযোগ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3598"
+        },
+        {
+          "title": "মালঞ্চ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/285"
+        },
+        {
+          "title": "রাজর্ষি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/395"
+        },
+        {
+          "title": "গোরা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1943"
+        },
+        {
+          "title": "শেষের কবিতা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/338"
+        },
+        {
+          "title": "নৌকাডুবি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/951"
+        }
+      ]
+    },
+    {
+      "category": "song",
+      "url": "https://rabindra-rachanabali.nltr.org/node/6585",
+      "htmlSha256": "6d28725e898de619b4bd4c41c96dcecf1bf996cb48034a2cfc02a3597a9746bf",
+      "listedRecordCount": 15,
+      "entries": [
+        {
+          "title": "ভূমিকা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3619"
+        },
+        {
+          "title": "পূজা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6594"
+        },
+        {
+          "title": "নাট্যগীতি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6598"
+        },
+        {
+          "title": "প্রেম",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6599"
+        },
+        {
+          "title": "আনুষ্ঠানিক",
+          "url": "https://rabindra-rachanabali.nltr.org/node/8871"
+        },
+        {
+          "title": "আনুষ্ঠানিক সংগীত",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6601"
+        },
+        {
+          "title": "ভানুসিংহ ঠাকুরের পদাবলী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6603"
+        },
+        {
+          "title": "বিচিত্র",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6604"
+        },
+        {
+          "title": "জাতীয় সংগীত",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6605"
+        },
+        {
+          "title": "প্রেম ও প্রকৃতি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6606"
+        },
+        {
+          "title": "প্রকৃতি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6610"
+        },
+        {
+          "title": "পূজা ও প্রার্থনা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6614"
+        },
+        {
+          "title": "স্বদেশ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6619"
+        },
+        {
+          "title": "গীতিনাট্য এবং নৃত্যনাট্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=13&catId=2"
+        },
+        {
+          "title": "পরিশিষ্ট",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=15&catId=2"
+        }
+      ]
+    },
+    {
+      "category": "story",
+      "url": "https://rabindra-rachanabali.nltr.org/node/6584",
+      "htmlSha256": "4ee8d2526ec3c075498e78ae61cd68913c2396597e3da9ecb9a922a596561010",
+      "listedRecordCount": 8,
+      "entries": [
+        {
+          "title": "গল্পগুচ্ছ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=2&catId=5"
+        },
+        {
+          "title": "গল্পসল্প",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=3&catId=5"
+        },
+        {
+          "title": "তিনসঙ্গী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=4&catId=5"
+        },
+        {
+          "title": "লিপিকা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=7&catId=5"
+        },
+        {
+          "title": "প্রায়শ্চিত্ত",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2268"
+        },
+        {
+          "title": "ললাটের লিখন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2206"
+        },
+        {
+          "title": "ইঁদুরের ভোজ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1705"
+        },
+        {
+          "title": "সে",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1727"
+        }
+      ]
+    },
+    {
+      "category": "drama",
+      "url": "https://rabindra-rachanabali.nltr.org/node/6583",
+      "htmlSha256": "136627f2c34a3024a80f8a7c3715001d5942b836504986c2014bd0bc56d5d945",
+      "listedRecordCount": 65,
+      "entries": [
+        {
+          "title": "শারদোৎসব",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1951"
+        },
+        {
+          "title": "মুকুট",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3428"
+        },
+        {
+          "title": "প্রায়শ্চিত্ত",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5898"
+        },
+        {
+          "title": "রাজা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5774"
+        },
+        {
+          "title": "অচলায়তন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1161"
+        },
+        {
+          "title": "ডাকঘর",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1312"
+        },
+        {
+          "title": "ফাল্গুনী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5870"
+        },
+        {
+          "title": "গুরু",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1324"
+        },
+        {
+          "title": "অরূপরতন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1176"
+        },
+        {
+          "title": "মুক্তধারা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3634"
+        },
+        {
+          "title": "রক্তকরবী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2220"
+        },
+        {
+          "title": "শোধবোধ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1340"
+        },
+        {
+          "title": "গৃহপ্রবেশ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1317"
+        },
+        {
+          "title": "নটীর পূজা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1334"
+        },
+        {
+          "title": "পরিত্রাণ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4858"
+        },
+        {
+          "title": "তাসের দেশ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5600"
+        },
+        {
+          "title": "তপতী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5392"
+        },
+        {
+          "title": "কালের যাত্রা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4717"
+        },
+        {
+          "title": "বাঁশরি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3216"
+        },
+        {
+          "title": "মুক্তির উপায়",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4435"
+        },
+        {
+          "title": "ঋণশোধ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2309"
+        },
+        {
+          "title": "চণ্ডালিকা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4393"
+        },
+        {
+          "title": "গোড়ায় গলদ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3614"
+        },
+        {
+          "title": "বৈকুণ্ঠের খাতা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1306"
+        },
+        {
+          "title": "চিরকুমার-সভা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4389"
+        },
+        {
+          "title": "শেষরক্ষা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5321"
+        },
+        {
+          "title": "ভূমিকা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/351"
+        },
+        {
+          "title": "ছাত্রের পরীক্ষা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5400"
+        },
+        {
+          "title": "পেটে ও পিঠে",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5419"
+        },
+        {
+          "title": "অভ্যর্থনা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5478"
+        },
+        {
+          "title": "রোগের চিকিৎসা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5514"
+        },
+        {
+          "title": "চিন্তাশীল",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5545"
+        },
+        {
+          "title": "ভাব ও অভাব",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5563"
+        },
+        {
+          "title": "রোগীর বন্ধু",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5578"
+        },
+        {
+          "title": "খ্যাতির বিড়ম্বনা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5595"
+        },
+        {
+          "title": "আর্য ও অনার্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5613"
+        },
+        {
+          "title": "একান্নবর্তী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5617"
+        },
+        {
+          "title": "সূক্ষ্ম বিচার",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5626"
+        },
+        {
+          "title": "আশ্রমপীড়া",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5633"
+        },
+        {
+          "title": "অন্ত্যেষ্টি-সৎকার",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5664"
+        },
+        {
+          "title": "রসিক",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5685"
+        },
+        {
+          "title": "গুরুবাক্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5700"
+        },
+        {
+          "title": "বিনি পয়সার ভোজ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5825"
+        },
+        {
+          "title": "নূতন অবতার",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5826"
+        },
+        {
+          "title": "অরসিকের স্বর্গপ্রাপ্তি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5835"
+        },
+        {
+          "title": "স্বর্গীয় প্রহসন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5833"
+        },
+        {
+          "title": "বশীকরণ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5828"
+        },
+        {
+          "title": "বাল্মীকিপ্রতিভা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2112"
+        },
+        {
+          "title": "মায়ার খেলা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5943"
+        },
+        {
+          "title": "বসন্ত",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2701"
+        },
+        {
+          "title": "শেষ বর্ষণ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3762"
+        },
+        {
+          "title": "নটরাজ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4305"
+        },
+        {
+          "title": "নবীন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4658"
+        },
+        {
+          "title": "শাপমোচন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4084"
+        },
+        {
+          "title": "প্রকৃতির প্রতিশোধ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1945"
+        },
+        {
+          "title": "শ্রাবণগাথা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2418"
+        },
+        {
+          "title": "নৃত্যনাট্য চিত্রাঙ্গদা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3977"
+        },
+        {
+          "title": "নৃত্যনাট্য চণ্ডালিকা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3117"
+        },
+        {
+          "title": "শ্যামা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6181"
+        },
+        {
+          "title": "রাজা ও রানী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/6021"
+        },
+        {
+          "title": "বিসর্জন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5991"
+        },
+        {
+          "title": "চিত্রাঙ্গদা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2861"
+        },
+        {
+          "title": "মালিনী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2305"
+        },
+        {
+          "title": "বিদায়-অভিশাপ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4371"
+        },
+        {
+          "title": "কাহিনী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5371"
+        }
+      ]
+    },
+    {
+      "category": "misc",
+      "url": "https://rabindra-rachanabali.nltr.org/node/15185",
+      "htmlSha256": "6486585318b8949b59bb229d700b62537d402b7a493d938e59e6306ec98ef099",
+      "listedRecordCount": 38,
+      "entries": [
+        {
+          "title": "বন-ফুল",
+          "url": "https://rabindra-rachanabali.nltr.org/node/16174"
+        },
+        {
+          "title": "ভগ্নহৃদয়",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2479"
+        },
+        {
+          "title": "রুদ্রচন্ড",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2294"
+        },
+        {
+          "title": "কালমৃগয়া",
+          "url": "https://rabindra-rachanabali.nltr.org/node/1183"
+        },
+        {
+          "title": "হাস্যকৌতুক: হেঁয়ালি নাট্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/15207"
+        },
+        {
+          "title": "মালঞ্চ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3191"
+        },
+        {
+          "title": "বিসর্জন সংক্ষিপ্ত",
+          "url": "https://rabindra-rachanabali.nltr.org/node/5099"
+        },
+        {
+          "title": "যোগাযোগ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/3800"
+        },
+        {
+          "title": "ব্যঙ্গকৌতুক: স্বর্গে চক্রটেবিল বৈঠক",
+          "url": "https://rabindra-rachanabali.nltr.org/node/15935"
+        },
+        {
+          "title": "সুন্দর",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2459"
+        },
+        {
+          "title": "নলিনী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2989"
+        },
+        {
+          "title": "বাল্মীকিপ্রতিভা-প্রথম সংস্করণ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/2133"
+        },
+        {
+          "title": "শৈশবসঙ্গীত",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=1&catId=9"
+        },
+        {
+          "title": "চিত্রবিচিত্র",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=2&catId=9"
+        },
+        {
+          "title": "রূপান্তর",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=3&catId=9"
+        },
+        {
+          "title": "অনূদিত কবিতা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=4&catId=9"
+        },
+        {
+          "title": "কবিতা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=5&catId=9"
+        },
+        {
+          "title": "অনুবাদ কবিতা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=6&catId=9"
+        },
+        {
+          "title": "ব্যক্তিপ্রসঙ্গ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/15932"
+        },
+        {
+          "title": "স্ফুলিঙ্গ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/15065"
+        },
+        {
+          "title": "আলোচনা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=1&catId=10"
+        },
+        {
+          "title": "সমালোচনা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=2&catId=10"
+        },
+        {
+          "title": "ইংরাজি-সোপান",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=7&catId=10"
+        },
+        {
+          "title": "ইংরেজি-শ্রুতিশিক্ষা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=8&catId=10"
+        },
+        {
+          "title": "ইংরেজি-সহজশিক্ষা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=9&catId=10"
+        },
+        {
+          "title": "সহজ পাঠ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=11&catId=10"
+        },
+        {
+          "title": "সাহিত্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=14&catId=10"
+        },
+        {
+          "title": "শিক্ষা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=15&catId=10"
+        },
+        {
+          "title": "সমাজ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=16&catId=10"
+        },
+        {
+          "title": "বিবিধ প্রসঙ্গ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=17&catId=10"
+        },
+        {
+          "title": "পরিশিষ্ট",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=18&catId=10"
+        },
+        {
+          "title": "মন্ত্রি-অভিষেক",
+          "url": "https://rabindra-rachanabali.nltr.org/node/15405"
+        },
+        {
+          "title": "ব্রহ্মমন্ত্র",
+          "url": "https://rabindra-rachanabali.nltr.org/node/15570"
+        },
+        {
+          "title": "ঔপনিষদ ব্রহ্ম",
+          "url": "https://rabindra-rachanabali.nltr.org/node/15098"
+        },
+        {
+          "title": "সংস্কৃত শিক্ষা (দ্বিতীয় ভাগ)",
+          "url": "https://rabindra-rachanabali.nltr.org/node/15308"
+        },
+        {
+          "title": "অনুবাদ-চর্চা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/15302"
+        },
+        {
+          "title": "ইংরাজি-পাঠ (প্রথম)",
+          "url": "https://rabindra-rachanabali.nltr.org/node/15482"
+        },
+        {
+          "title": "আদর্শ প্রশ্ন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/15067"
+        }
+      ]
+    },
+    {
+      "category": "poetry",
+      "url": "https://rabindra-rachanabali.nltr.org/node/10609",
+      "htmlSha256": "a9bff46df5286cee419c88cbf67415d974f5b8b999362c769a70a969c3d45007",
+      "listedRecordCount": 51,
+      "entries": [
+        {
+          "title": "সন্ধ্যাসংগীত",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=1&catId=7"
+        },
+        {
+          "title": "প্রভাতসংগীত",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=2&catId=7"
+        },
+        {
+          "title": "ছবি ও গান",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=3&catId=7"
+        },
+        {
+          "title": "ভানুসিংহ ঠাকুরের পদাবলী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=4&catId=7"
+        },
+        {
+          "title": "কড়ি ও কোমল",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=5&catId=7"
+        },
+        {
+          "title": "মানসী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=6&catId=7"
+        },
+        {
+          "title": "সোনার তরী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=7&catId=7"
+        },
+        {
+          "title": "নদী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=8&catId=7"
+        },
+        {
+          "title": "চিত্রা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=9&catId=7"
+        },
+        {
+          "title": "চৈতালি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=10&catId=7"
+        },
+        {
+          "title": "কণিকা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/10333"
+        },
+        {
+          "title": "কথা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=12&catId=7"
+        },
+        {
+          "title": "কাহিনী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=13&catId=7"
+        },
+        {
+          "title": "কল্পনা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=14&catId=7"
+        },
+        {
+          "title": "ক্ষণিকা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=15&catId=7"
+        },
+        {
+          "title": "নৈবেদ্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=16&catId=7"
+        },
+        {
+          "title": "স্মরণ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=17&catId=7"
+        },
+        {
+          "title": "শিশু",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=18&catId=7"
+        },
+        {
+          "title": "উৎসর্গ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=19&catId=7"
+        },
+        {
+          "title": "খেয়া",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=20&catId=7"
+        },
+        {
+          "title": "গীতাঞ্জলি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=21&catId=7"
+        },
+        {
+          "title": "গীতিমাল্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=22&catId=7"
+        },
+        {
+          "title": "গীতালি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=23&catId=7"
+        },
+        {
+          "title": "বলাকা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=24&catId=7"
+        },
+        {
+          "title": "পলাতকা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=25&catId=7"
+        },
+        {
+          "title": "শিশু ভোলানাথ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=26&catId=7"
+        },
+        {
+          "title": "পূরবী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=27&catId=7"
+        },
+        {
+          "title": "লেখন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/10814"
+        },
+        {
+          "title": "মহুয়া",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=29&catId=7"
+        },
+        {
+          "title": "বনবাণী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=30&catId=7"
+        },
+        {
+          "title": "পরিশেষ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=31&catId=7"
+        },
+        {
+          "title": "পুনশ্চ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=32&catId=7"
+        },
+        {
+          "title": "বিচিত্রিতা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=33&catId=7"
+        },
+        {
+          "title": "শেষ সপ্তক",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=34&catId=7"
+        },
+        {
+          "title": "বীথিকা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=35&catId=7"
+        },
+        {
+          "title": "পত্রপুট",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=36&catId=7"
+        },
+        {
+          "title": "শ্যামলী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=37&catId=7"
+        },
+        {
+          "title": "খাপছাড়া",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=38&catId=7"
+        },
+        {
+          "title": "ছড়ার ছবি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=39&catId=7"
+        },
+        {
+          "title": "প্রান্তিক",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=40&catId=7"
+        },
+        {
+          "title": "সেঁজুতি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=41&catId=7"
+        },
+        {
+          "title": "প্রহাসিনী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=42&catId=7"
+        },
+        {
+          "title": "আকাশপ্রদীপ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=43&catId=7"
+        },
+        {
+          "title": "নবজাতক",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=44&catId=7"
+        },
+        {
+          "title": "সানাই",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=45&catId=7"
+        },
+        {
+          "title": "রোগশয্যায়",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=46&catId=7"
+        },
+        {
+          "title": "আরোগ্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=47&catId=7"
+        },
+        {
+          "title": "জন্মদিনে",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=48&catId=7"
+        },
+        {
+          "title": "ছড়া",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=49&catId=7"
+        },
+        {
+          "title": "শেষ লেখা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=50&catId=7"
+        },
+        {
+          "title": "স্ফুলিঙ্গ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=53&catId=7"
+        }
+      ]
+    },
+    {
+      "category": "essay",
+      "url": "https://rabindra-rachanabali.nltr.org/node/8347",
+      "htmlSha256": "57b82e8e1ffd193e23a364ebd5bea32eb548350b127730023111e11561a7f2c4",
+      "listedRecordCount": 60,
+      "entries": [
+        {
+          "title": "য়ুরোপ-প্রবাসীর পত্র",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=56&catId=6"
+        },
+        {
+          "title": "য়ুরোপ-যাত্রীর ডায়ারি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/9108"
+        },
+        {
+          "title": "চিঠিপত্র",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=25&catId=6"
+        },
+        {
+          "title": "পঞ্চভূত",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=26&catId=6"
+        },
+        {
+          "title": "আত্মশক্তি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=27&catId=6"
+        },
+        {
+          "title": "ভারতবর্ষ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=28&catId=6"
+        },
+        {
+          "title": "চারিত্রপূজা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=29&catId=6"
+        },
+        {
+          "title": "বিচিত্র প্রবন্ধ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=30&catId=6"
+        },
+        {
+          "title": "প্রাচীন সাহিত্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=32&catId=6"
+        },
+        {
+          "title": "লোকসাহিত্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=31&catId=6"
+        },
+        {
+          "title": "ব্যঙ্গকৌতুক",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=1&catId=6"
+        },
+        {
+          "title": "সাহিত্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=2&catId=6"
+        },
+        {
+          "title": "আধুনিক সাহিত্য",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=33&catId=6"
+        },
+        {
+          "title": "রাজা প্রজা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=34&catId=6"
+        },
+        {
+          "title": "সমূহ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=35&catId=6"
+        },
+        {
+          "title": "স্বদেশ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=6&catId=6"
+        },
+        {
+          "title": "সমাজ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=3&catId=6"
+        },
+        {
+          "title": "শিক্ষা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=5&catId=6"
+        },
+        {
+          "title": "শব্দতত্ত্ব",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=4&catId=6"
+        },
+        {
+          "title": "ধর্ম",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=36&catId=6"
+        },
+        {
+          "title": "শান্তিনিকেতন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=37&catId=6"
+        },
+        {
+          "title": "জীবনস্মৃতি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=57&catId=6"
+        },
+        {
+          "title": "সঞ্চয়",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=58&catId=6"
+        },
+        {
+          "title": "পরিচয়",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=59&catId=6"
+        },
+        {
+          "title": "কর্তার ইচ্ছায় কর্ম",
+          "url": "https://rabindra-rachanabali.nltr.org/node/14760"
+        },
+        {
+          "title": "জাপান-যাত্রী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=38&catId=6"
+        },
+        {
+          "title": "পশ্চিম-যাত্রীর ডায়ারি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/8179"
+        },
+        {
+          "title": "জাভা-যাত্রীর পত্র",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=39&catId=6"
+        },
+        {
+          "title": "রাশিয়ার চিঠি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=42&catId=6"
+        },
+        {
+          "title": "মানুষের ধর্ম",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=40&catId=6"
+        },
+        {
+          "title": "ছন্দ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=7&catId=6"
+        },
+        {
+          "title": "পারস্যে",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=8&catId=6"
+        },
+        {
+          "title": "সাহিত্যের পথে",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=10&catId=6"
+        },
+        {
+          "title": "কালান্তর",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=9&catId=6"
+        },
+        {
+          "title": "বিশ্বপরিচয়",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=11&catId=6"
+        },
+        {
+          "title": "বাংলাভাষা-পরিচয়",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=12&catId=6"
+        },
+        {
+          "title": "পথের সঞ্চয়",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=14&catId=6"
+        },
+        {
+          "title": "ছেলেবেলা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/7125"
+        },
+        {
+          "title": "সভ্যতার সংকট",
+          "url": "https://rabindra-rachanabali.nltr.org/node/7230"
+        },
+        {
+          "title": "আত্মপরিচয়",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=17&catId=6"
+        },
+        {
+          "title": "সাহিত্যের স্বরূপ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=21&catId=6"
+        },
+        {
+          "title": "মহাত্মা গান্ধী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=19&catId=6"
+        },
+        {
+          "title": "আশ্রমের রূপ ও বিকাশ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=16&catId=6"
+        },
+        {
+          "title": "বিশ্বভারতী",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=24&catId=6"
+        },
+        {
+          "title": "শান্তিনিকেতন ব্রহ্মচর্যাশ্রম",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=23&catId=6"
+        },
+        {
+          "title": "সমবায়নীতি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=22&catId=6"
+        },
+        {
+          "title": "খৃষ্ট",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=18&catId=6"
+        },
+        {
+          "title": "পল্লীপ্রকৃতি",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=20&catId=6"
+        },
+        {
+          "title": "বাংলা শব্দতত্ত্ব",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=43&catId=6"
+        },
+        {
+          "title": "সংগীতচিন্তা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=44&catId=6"
+        },
+        {
+          "title": "সংগীত",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=52&catId=6"
+        },
+        {
+          "title": "শিল্প",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=53&catId=6"
+        },
+        {
+          "title": "ধর্ম / দর্শন",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=47&catId=6"
+        },
+        {
+          "title": "ইতিহাস",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=49&catId=6"
+        },
+        {
+          "title": "বিজ্ঞান",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=46&catId=6"
+        },
+        {
+          "title": "বিবিধ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/4?subcatid=45&catId=6"
+        },
+        {
+          "title": "গ্রন্থসমালোচনা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/8902"
+        },
+        {
+          "title": "সাময়িক সাহিত্য সমালোচনা",
+          "url": "https://rabindra-rachanabali.nltr.org/node/9073"
+        },
+        {
+          "title": "সাময়িক সারসংগ্রহ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/9411"
+        },
+        {
+          "title": "ব্যক্তিপ্রসঙ্গ",
+          "url": "https://rabindra-rachanabali.nltr.org/node/9825"
+        }
+      ]
+    }
+  ]
+}

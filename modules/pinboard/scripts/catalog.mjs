@@ -7,7 +7,8 @@ export const APPS = [
   { id: 'textdrop', folder: 'textdrop', label: 'TextDrop', kind: 'shared' },
   { id: 'pinboard', folder: 'pinboard', label: 'Pinboard', kind: 'shared' },
   { id: 'blueprint', folder: 'blueprint', label: 'Blueprint', kind: 'shared' },
+  { id: 'shobdokosh', folder: 'shobdokosh', label: 'Shobdokosh', kind: 'static' },
 ];
 
-export const VITE_APPS = APPS.filter(app => app.kind !== 'drafts');
+export const VITE_APPS = APPS.filter(app => !['drafts', 'static'].includes(app.kind));
 export const SHARED_APPS = APPS.filter(app => app.kind === 'shared');

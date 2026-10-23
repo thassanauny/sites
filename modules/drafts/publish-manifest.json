@@ -17,7 +17,7 @@
   },
   "sourceFiles": {
     "scripts/prepare-site.mjs": "44ce66e327c68a847b17f45ad7059cf6c8b817132b90a5a2a0e5a4a731b60b7b",
-    "scripts/snapshot-lib.mjs": "c608517c6619011a59e36670bf823486a2b3be56305a804213b4a66918c449b7",
+    "scripts/snapshot-lib.mjs": "880895f3364e4e7891a568cf0e52be3c31c88c6a1a4678036f0917f5a7fdbbae",
     "site/assets/drafts-icon.png": "d4e6af5fba91fb4387cfbdc15853e5b55f266ab0d79c86201b38145af69a4e0e",
     "site/assets/drafts-screenshot.png": "9aeb713895926cd9a4b128c1a6bbeb64b84471f3bf03cda10b40d03f97df9543",
     "site/index.html": "b104510cff8fc20867f9fdf1dc863fa8e3ce4c0e3da2ddd8bfb0bec416783317",

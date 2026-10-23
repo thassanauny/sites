@@ -288,7 +288,7 @@
     "public/licenses/tslib.txt": "0e8d2550baea17eb3072c4f919b36fbf9852bb49dba948549872e713863c0834",
     "public/logo.svg": "f92b15ffffd5fc453762df31f26d907583e96e552aa8e872988fff555613a65c",
     "scripts/prepare-shared.mjs": "3aeacf46c9b44e14ecd48a2cff7e004d93a5ae86c450c0a4de3b2afe5f1fb060",
-    "scripts/snapshot-lib.mjs": "c608517c6619011a59e36670bf823486a2b3be56305a804213b4a66918c449b7",
+    "scripts/snapshot-lib.mjs": "880895f3364e4e7891a568cf0e52be3c31c88c6a1a4678036f0917f5a7fdbbae",
     "src/application/page.ts": "58793486afecb45086c68d688255cb6de8fb290f901d4261e8ebe40087afc1ae",
     "src/application/registry.ts": "7b846297407b9d91f19a020ce300e041696b16e9dabffd06808b16223967aaed",
     "src/application/router.ts": "5a5b8a846212cec2ecbb3301cb00960d38580ba45d22db4287531c9a10df3daa",

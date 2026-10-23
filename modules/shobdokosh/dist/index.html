@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b6b57">
+  <meta name="description" content="শব্দকোষ — your English–Bangla dictionary. Find a word, discover its meaning, and keep learning, even offline.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>শব্দকোষ · English–Bangla Dictionary</title>
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./fonts.css">
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <svg class="icon-definitions" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 5.5C9 3.5 5 3.5 2.5 4.5v15C5 18.5 9 18.5 12 20c3-1.5 7-1.5 9.5-.5v-15C19 3.5 15 3.5 12 5.5Z"/><path d="M12 5.5V20M6 8l3 .5M15 8.5l3-.5M6 12l3 .5M15 12.5l3-.5"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17l-6-4-6 4Z"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-5-5 5 5-5 5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="m11 4-6 5H2v6h3l6 5Zm4 4a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5ZM20 2v4m-2-2h4"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M20 3c-9-1-17 3-16 10a7 7 0 0 0 7 7c7 0 9-9 9-17ZM4 21 15 10"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20 5a5 5 0 0 0-8 2 5 5 0 0 0-8-2c-5 5 3 11 8 15 5-4 13-10 8-15Z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0m-11 4a6 6 0 0 1 8 0m-4 4h.01"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M7 16h10"/></symbol>
+  </defs></svg>
+  <a class="skip-link" href="#search">Skip to search</a>
+  <div class="site-shell">
+    <header class="header">
+      <a href="#dictionary" class="brand" aria-label="শব্দকোষ home"><span class="brand-mark"><svg><use href="#i-book"/></svg></span><span><span class="brand-name" lang="bn">শব্দকোষ</span></span></a>
+      <div class="header-actions">
+        <nav class="navigation" aria-label="Main navigation">
+          <a class="nav-link" href="#saved" id="nav-saved" aria-label="Saved words"><svg aria-hidden="true"><use href="#i-bookmark"/></svg><span class="saved-label">Saved words</span><span class="count" id="saved-count">0</span></a>
+        </nav>
+        <button type="button" class="icon-button help-button" id="help-button" aria-label="Help" title="Help"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2-3 4m.1 3h.01"/></svg></button>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="search-section" aria-label="Dictionary search">
+        <div class="language-switch" role="group" aria-label="Translation direction">
+          <button class="language-button active" data-direction="en" aria-pressed="true">English <span class="direction-to">to</span> <span lang="bn">বাংলা</span></button>
+          <button class="language-button" data-direction="bn" aria-pressed="false"><span lang="bn">বাংলা</span> <span class="direction-to">to</span> English</button>
+        </div>
+        <form class="search-form" id="search-form" role="search">
+          <svg class="search-icon"><use href="#i-search"/></svg>
+          <label class="sr-only" for="search">Search the dictionary</label>
+          <input id="search" type="search" placeholder="Search an English word…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="120" enterkeyhint="search" aria-controls="results" aria-describedby="typing-help">
+          <span id="typing-help" class="sr-only">English letters → বাংলা · Space or Enter inserts Bangla</span>
+          <button class="bangla-entry-button" type="button" id="bangla-toggle" aria-controls="bangla-keyboard" aria-expanded="false" aria-label="Open Bangla keyboard" aria-pressed="false" title="Type in Bangla"><svg><use href="#i-keyboard"/></svg><span lang="bn">বাংলা</span></button>
+          <button class="search-submit" type="submit" aria-label="Search"><svg><use href="#i-arrow"/></svg></button>
+        </form>
+        <div class="bangla-input" id="bangla-input" hidden>
+          <div class="phonetic-preview" id="phonetic-preview" hidden><span class="candidate-label">বাংলা</span><div class="phonetic-word"><output id="phonetic-candidate" lang="bn" aria-live="polite"></output><span id="phonetic-meaning" lang="en" aria-live="polite" hidden></span></div><button type="button" id="commit-phonetic">Use this word <svg><use href="#i-check"/></svg></button></div>
+          <div class="bangla-keyboard" id="bangla-keyboard" aria-label="Bangla on-screen keyboard" hidden></div>
+          <template id="typing-guide-content"><div class="phonetic-guide"><p><strong>Type the sound in English letters.</strong> Search updates as you type. Press Space, Enter, or “Use this word” to insert the Bangla text.</p><div class="typing-examples"><span>bangla → <b lang="bn">বাংলা</b></span><span>boi → <b lang="bn">বই</b></span><span>pani → <b lang="bn">পানি</b></span><span>bhalo → <b lang="bn">ভালো</b></span><span>jatona → <b lang="bn">যাতনা</b></span><span>jirno → <b lang="bn">জীর্ণ</b></span><span>sundor → <b lang="bn">সুন্দর</b></span><span>shundor → <b lang="bn">সুন্দর</b></span><span>sundar → <b lang="bn">সুন্দর</b></span><span>shomoy → <b lang="bn">সময়</b></span><span>orghyo → <b lang="bn">অর্ঘ্য</b></span><span>jIrrNo → <b lang="bn">জীর্ণ</b></span></div><p>Common spellings such as <strong>sundor, shundor, sundar</strong> all give <strong lang="bn">সুন্দর</strong>. Other words follow Avro rules. In Avro, <strong>I → ী</strong> and <strong>rrN → র্ণ</strong>, so <strong>jIrrNo → জীর্ণ</strong>. The easier <strong>jirno</strong> also works. Uppercase letters can change the sound: <strong>t → ত</strong>, <strong>T → ট</strong>, <strong>n → ন</strong>, <strong>N → ণ</strong>. Use vowel marks after consonants, and <span lang="bn">্</span> (hasant) to form conjuncts: <span lang="bn">ক + ্ + ষ = ক্ষ</span>. Bangla script is detected automatically and accepted directly.</p></div></template>
+        </div>
+      </section>
+
+      <div class="content-grid">
+        <section class="primary-column" aria-label="Words">
+          <div id="view-heading" class="section-heading discovery-heading"><h2><svg><use href="#i-spark"/></svg>Discover a word</h2></div>
+          <div id="results" aria-live="polite" aria-busy="true"><div class="loading-card"><span class="loading-dot"></span>Opening your dictionary…</div></div>
+        </section>
+
+        <aside class="side-column">
+          <section class="recent-section" aria-labelledby="recent-heading"><div class="section-heading"><h2 id="recent-heading"><svg><use href="#i-clock"/></svg>Recently explored</h2><button class="text-button" id="clear-history" hidden>Clear</button></div><div id="recent-list" class="recent-list"><p class="quiet-text">Your next discovery starts with a search. Words you open will appear here.</p></div></section>
+          <span id="offline-status" class="sr-only" role="status">Preparing offline dictionary</span>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="app-version" aria-label="App version">শব্দকোষ · 1.1.2</footer>
+  </div>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+  <div class="update-banner" id="update-banner" role="status" hidden><span>A fresh version of শব্দকোষ is ready.</span><button type="button" id="update-button">Update</button><button type="button" id="dismiss-update" aria-label="Dismiss update"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div>
+  <dialog id="info-dialog" aria-labelledby="dialog-title"><div class="dialog-heading"><h2 id="dialog-title"></h2><button class="icon-button" id="close-dialog" aria-label="Close dialog"><svg><use href="#i-close"/></svg></button></div><div id="dialog-content"></div></dialog>
+  <noscript><p class="noscript">Please enable JavaScript to search শব্দকোষ and use the offline dictionary.</p></noscript>
+</body>
+</html>

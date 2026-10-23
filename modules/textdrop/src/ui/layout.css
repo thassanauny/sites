@@ -160,3 +160,10 @@
   visibility: hidden;
   pointer-events: none;
 }
+
+/* Match IOU's header after a 10% reduction; keep control and type sizes. */
+:root { --app-header-height: 69.4px; }
+@media (min-width: 760px) {
+  :root { --app-header-height: 80.2px; }
+}
+.site-header { min-height: var(--app-header-height); padding-block: 10px; }

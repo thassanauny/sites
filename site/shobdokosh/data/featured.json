@@ -1,0 +1,366 @@
+[
+  {
+    "id": "featured-serendipity",
+    "en": "serendipity",
+    "bn": [
+      "আকস্মিক সৌভাগ্য",
+      "সৌভাগ্যক্রমে আবিষ্কার"
+    ],
+    "pos": "noun",
+    "pronunciation": "/ˌser.ənˈdɪp.ə.ti/",
+    "definition": "The happy surprise of finding something good when you weren't looking for it.",
+    "example": "Finding this little bookshop was pure serendipity.",
+    "exampleBn": "এই ছোট্ট বইয়ের দোকানটি খুঁজে পাওয়া ছিল এক আকস্মিক সৌভাগ্য।",
+    "collection": "Feelings"
+  },
+  {
+    "id": "featured-wonder",
+    "en": "wonder",
+    "bn": [
+      "বিস্ময়",
+      "আশ্চর্য"
+    ],
+    "pos": "noun",
+    "pronunciation": "/ˈwʌn.dər/",
+    "definition": "A feeling of surprise and curiosity about something beautiful or unexpected.",
+    "example": "She looked at the night sky with wonder.",
+    "exampleBn": "সে বিস্ময় নিয়ে রাতের আকাশের দিকে তাকাল।",
+    "collection": "Feelings"
+  },
+  {
+    "id": "featured-hope",
+    "en": "hope",
+    "bn": [
+      "আশা"
+    ],
+    "pos": "noun",
+    "pronunciation": "/həʊp/",
+    "definition": "The feeling that something good is possible.",
+    "example": "A new day brings new hope.",
+    "exampleBn": "একটি নতুন দিন নতুন আশা নিয়ে আসে।",
+    "collection": "Feelings"
+  },
+  {
+    "id": "featured-kindness",
+    "en": "kindness",
+    "bn": [
+      "দয়া",
+      "সদয়তা"
+    ],
+    "pos": "noun",
+    "pronunciation": "/ˈkaɪnd.nəs/",
+    "definition": "The quality of being caring, generous, and considerate.",
+    "example": "A little kindness can change someone's day.",
+    "exampleBn": "একটু সদয়তা কারও দিন বদলে দিতে পারে।",
+    "collection": "Feelings"
+  },
+  {
+    "id": "featured-morning",
+    "en": "morning",
+    "bn": [
+      "সকাল",
+      "প্রভাত"
+    ],
+    "pos": "noun",
+    "pronunciation": "/ˈmɔː.nɪŋ/",
+    "definition": "The first part of the day, from sunrise until noon.",
+    "example": "I like reading in the morning.",
+    "exampleBn": "সকালে পড়তে আমার ভালো লাগে।",
+    "collection": "Everyday life"
+  },
+  {
+    "id": "featured-friend",
+    "en": "friend",
+    "bn": [
+      "বন্ধু"
+    ],
+    "pos": "noun",
+    "pronunciation": "/frend/",
+    "definition": "Someone you know well, like, and trust.",
+    "example": "A good friend makes the journey better.",
+    "exampleBn": "একজন ভালো বন্ধু যাত্রাকে আরও সুন্দর করে তোলে।",
+    "collection": "Everyday life"
+  },
+  {
+    "id": "featured-book",
+    "en": "book",
+    "bn": [
+      "বই",
+      "গ্রন্থ"
+    ],
+    "pos": "noun",
+    "pronunciation": "/bʊk/",
+    "definition": "A collection of written or printed pages bound together.",
+    "example": "Every book opens a different world.",
+    "exampleBn": "প্রতিটি বই এক একটি নতুন জগতের দরজা খুলে দেয়।",
+    "collection": "Everyday life"
+  },
+  {
+    "id": "featured-home",
+    "en": "home",
+    "bn": [
+      "বাড়ি",
+      "ঘর"
+    ],
+    "pos": "noun",
+    "pronunciation": "/həʊm/",
+    "definition": "The place where you live and feel you belong.",
+    "example": "There is no place like home.",
+    "exampleBn": "বাড়ির মতো আর কোনো জায়গা নেই।",
+    "collection": "Everyday life"
+  },
+  {
+    "id": "featured-river",
+    "en": "river",
+    "bn": [
+      "নদী"
+    ],
+    "pos": "noun",
+    "pronunciation": "/ˈrɪv.ər/",
+    "definition": "A large natural stream of water flowing towards a lake, sea, or another river.",
+    "example": "The river flows quietly past the village.",
+    "exampleBn": "নদীটি গ্রামের পাশ দিয়ে নীরবে বয়ে যায়।",
+    "collection": "The natural world"
+  },
+  {
+    "id": "featured-rain",
+    "en": "rain",
+    "bn": [
+      "বৃষ্টি"
+    ],
+    "pos": "noun",
+    "pronunciation": "/reɪn/",
+    "definition": "Drops of water that fall from clouds.",
+    "example": "The sound of rain helps me sleep.",
+    "exampleBn": "বৃষ্টির শব্দ আমাকে ঘুমোতে সাহায্য করে।",
+    "collection": "The natural world"
+  },
+  {
+    "id": "featured-sky",
+    "en": "sky",
+    "bn": [
+      "আকাশ"
+    ],
+    "pos": "noun",
+    "pronunciation": "/skaɪ/",
+    "definition": "The space above the earth where clouds and the sun appear.",
+    "example": "The sky turned pink at sunset.",
+    "exampleBn": "সূর্যাস্তের সময় আকাশ গোলাপি হয়ে গেল।",
+    "collection": "The natural world"
+  },
+  {
+    "id": "featured-flower",
+    "en": "flower",
+    "bn": [
+      "ফুল",
+      "পুষ্প"
+    ],
+    "pos": "noun",
+    "pronunciation": "/ˈflaʊ.ər/",
+    "definition": "The colorful part of a plant that produces seeds.",
+    "example": "A small flower grew beside the path.",
+    "exampleBn": "পথের পাশে একটি ছোট ফুল ফুটেছিল।",
+    "collection": "The natural world"
+  },
+  {
+    "id": "featured-journey",
+    "en": "journey",
+    "bn": [
+      "যাত্রা",
+      "ভ্রমণ"
+    ],
+    "pos": "noun",
+    "pronunciation": "/ˈdʒɜː.ni/",
+    "definition": "An act of traveling from one place to another.",
+    "example": "Every journey begins with a single step.",
+    "exampleBn": "প্রতিটি যাত্রা একটি পদক্ষেপ দিয়ে শুরু হয়।",
+    "collection": "On the move"
+  },
+  {
+    "id": "featured-road",
+    "en": "road",
+    "bn": [
+      "রাস্তা",
+      "সড়ক",
+      "পথ"
+    ],
+    "pos": "noun",
+    "pronunciation": "/rəʊd/",
+    "definition": "A way that vehicles and people can travel along.",
+    "example": "This road leads to the station.",
+    "exampleBn": "এই রাস্তা স্টেশনের দিকে যায়।",
+    "collection": "On the move"
+  },
+  {
+    "id": "featured-train",
+    "en": "train",
+    "bn": [
+      "ট্রেন",
+      "রেলগাড়ি"
+    ],
+    "pos": "noun",
+    "pronunciation": "/treɪn/",
+    "definition": "Connected railway vehicles used to carry people or goods.",
+    "example": "We took the early train to the city.",
+    "exampleBn": "আমরা ভোরের ট্রেনে শহরে গেলাম।",
+    "collection": "On the move"
+  },
+  {
+    "id": "featured-destination",
+    "en": "destination",
+    "bn": [
+      "গন্তব্য"
+    ],
+    "pos": "noun",
+    "pronunciation": "/ˌdes.tɪˈneɪ.ʃən/",
+    "definition": "The place that someone is traveling to.",
+    "example": "We reached our destination before sunset.",
+    "exampleBn": "সূর্যাস্তের আগেই আমরা গন্তব্যে পৌঁছালাম।",
+    "collection": "On the move"
+  },
+  {
+    "id": "featured-orgho-offering",
+    "en": "offering",
+    "bn": [
+      "অর্ঘ্য",
+      "অর্ঘ"
+    ],
+    "pos": "noun",
+    "definition": "A gift or ritual article presented during Hindu worship.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%B0%E0%A7%8D%E0%A6%98%E0%A7%8D%E0%A6%AF",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  },
+  {
+    "id": "featured-orgho-price",
+    "en": "price",
+    "bn": [
+      "অর্ঘ"
+    ],
+    "pos": "noun",
+    "definition": "The price or cost of something.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%B0%E0%A7%8D%E0%A6%98",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  },
+  {
+    "id": "featured-orgho-cost",
+    "en": "cost",
+    "bn": [
+      "অর্ঘ"
+    ],
+    "pos": "noun",
+    "definition": "The price or cost of something.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%B0%E0%A7%8D%E0%A6%98",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  },
+  {
+    "id": "featured-orgho-worship",
+    "en": "worship",
+    "bn": [
+      "অর্ঘ"
+    ],
+    "pos": "noun",
+    "definition": "The act of religious worship.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%B0%E0%A7%8D%E0%A6%98",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  },
+  {
+    "id": "featured-orghyo-tribute",
+    "en": "tribute",
+    "bn": [
+      "অর্ঘ্য"
+    ],
+    "pos": "noun",
+    "definition": "A gift offered to an honoured person as a sign of respect.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%B0%E0%A7%8D%E0%A6%98%E0%A7%8D%E0%A6%AF",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  },
+  {
+    "id": "featured-orghyo-gift",
+    "en": "gift",
+    "bn": [
+      "অর্ঘ্য"
+    ],
+    "pos": "noun",
+    "definition": "A respectful offering or gift presented to an honoured person.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%B0%E0%A7%8D%E0%A6%98%E0%A7%8D%E0%A6%AF",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  },
+  {
+    "id": "featured-jirno-worn-out",
+    "en": "worn-out",
+    "bn": [
+      "জীর্ণ"
+    ],
+    "pos": "adjective",
+    "definition": "Worn through age or repeated use.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9C%E0%A7%80%E0%A6%B0%E0%A7%8D%E0%A6%A3",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  },
+  {
+    "id": "featured-jirno-dilapidated",
+    "en": "dilapidated",
+    "bn": [
+      "জীর্ণ"
+    ],
+    "pos": "adjective",
+    "definition": "Old, decayed, or in a poor state of repair.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9C%E0%A7%80%E0%A6%B0%E0%A7%8D%E0%A6%A3",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  },
+  {
+    "id": "featured-jirno-emaciated",
+    "en": "emaciated",
+    "bn": [
+      "জীর্ণ"
+    ],
+    "pos": "adjective",
+    "definition": "Made very thin or weak, especially by illness.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9C%E0%A7%80%E0%A6%B0%E0%A7%8D%E0%A6%A3",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  },
+  {
+    "id": "featured-jirno-digested",
+    "en": "digested",
+    "bn": [
+      "জীর্ণ"
+    ],
+    "pos": "adjective",
+    "definition": "Broken down in the stomach after eating.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9C%E0%A7%80%E0%A6%B0%E0%A7%8D%E0%A6%A3",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  },
+  {
+    "id": "featured-jirno-corroded",
+    "en": "corroded",
+    "bn": [
+      "জীর্ণ"
+    ],
+    "pos": "adjective",
+    "definition": "Worn or eaten away by corrosion.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9C%E0%A7%80%E0%A6%B0%E0%A7%8D%E0%A6%A3",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  },
+  {
+    "id": "featured-jirno-decrepit",
+    "en": "decrepit",
+    "bn": [
+      "জীর্ণ"
+    ],
+    "pos": "adjective",
+    "definition": "Weak or infirm from age.",
+    "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9C%E0%A7%80%E0%A6%B0%E0%A7%8D%E0%A6%A3",
+    "sourceName": "Accessible Dictionary",
+    "sourceKind": "curated"
+  }
+]

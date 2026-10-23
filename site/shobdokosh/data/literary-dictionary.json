@@ -1,0 +1,1821 @@
+{
+  "meta": {
+    "source": "Shobdokosh original literary and reading glossary",
+    "url": "./sources/LITERARY_DICTIONARY_NOTICES.md",
+    "license": "Original editorial English wording; linked references retain their rights",
+    "licenseUrl": "./sources/LITERARY_DICTIONARY_NOTICES.md",
+    "entryCount": 135,
+    "verifiedAt": "2026-10-23",
+    "description": "Selected vocabulary for reading Bengali literature, including poetry, fiction and older prose. Each concise explanation is original English wording checked against a linked lexical reference. This targeted supplement is not an exhaustive concordance or a complete set of senses.",
+    "statistics": {
+      "englishHeadwords": 131,
+      "bengaliHeadwords": 149,
+      "additionalBengaliHeadwords": 111
+    },
+    "sourceUrls": [
+      "https://accessibledictionary.gov.bd/",
+      "https://en.wiktionary.org/"
+    ],
+    "editorialNotice": "No dictionary example sentences, poems or passages are reproduced. Common lexical facts are expressed in original concise English. Spelling variants are included only when the reference identifies them; grammatical meanings include context notes."
+  },
+  "entries": [
+    {
+      "id": "literary-8d00f7a6f6629f33",
+      "en": "cupped hands; offering",
+      "bn": [
+        "অঞ্জলি"
+      ],
+      "pos": "noun",
+      "definition": "The two palms held together, or a respectful offering made with them.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%9E%E0%A7%8D%E0%A6%9C%E0%A6%B2%E0%A6%BF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-da6cdceb2b413ad5",
+      "en": "very; exceedingly",
+      "bn": [
+        "অতি"
+      ],
+      "pos": "adverb",
+      "definition": "Marks a high or excessive degree; it also occurs at the start of compounds.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%A4%E0%A6%BF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-f439bbef429022fc",
+      "en": "afterwards; then",
+      "bn": [
+        "অনন্তর"
+      ],
+      "pos": "adverb",
+      "definition": "At a later point, following the event just mentioned.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%A8%E0%A6%A8%E0%A7%8D%E0%A6%A4%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-a8432072e58b110b",
+      "en": "without beginning; eternal",
+      "bn": [
+        "অনাদি"
+      ],
+      "pos": "adjective",
+      "definition": "Having no first point, origin or beginning in time.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%A8%E0%A6%BE%E0%A6%A6%E0%A6%BF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-594bd690a67a8104",
+      "en": "unhurt; unharmed",
+      "bn": [
+        "অনাহত"
+      ],
+      "pos": "adjective",
+      "definition": "Not injured or wounded by an attack or impact.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%A8%E0%A6%BE%E0%A6%B9%E0%A6%A4",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-2746920f1fe5039f",
+      "en": "unstruck; unplayed",
+      "bn": [
+        "অনাহত"
+      ],
+      "pos": "adjective",
+      "definition": "Not struck or sounded, especially when describing a musical instrument.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%A8%E0%A6%BE%E0%A6%B9%E0%A6%A4",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-32bcef9ad4dd0498",
+      "en": "unblinking; steadfast",
+      "bn": [
+        "অনিমেষ",
+        "অনিমিষ"
+      ],
+      "pos": "adjective",
+      "definition": "Describes eyes or a gaze that stay fixed without blinking.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%A8%E0%A6%BF%E0%A6%AE%E0%A7%87%E0%A6%B7",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-5ad01c354e36a734",
+      "en": "heart; inner self",
+      "bn": [
+        "অন্তর"
+      ],
+      "pos": "noun",
+      "definition": "The inward mind and feelings, or the inside and depth of something.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%A8%E0%A7%8D%E0%A6%A4%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-72c848a671424680",
+      "en": "sky; space above the earth",
+      "bn": [
+        "অন্তরীক্ষ",
+        "অন্তরিক্ষ"
+      ],
+      "pos": "noun",
+      "definition": "The open region overhead, beyond the surface of the earth.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%A8%E0%A7%8D%E0%A6%A4%E0%A6%B0%E0%A7%80%E0%A6%95%E0%A7%8D%E0%A6%B7",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-625492dffb75cb3a",
+      "en": "wonderful; incomparable",
+      "bn": [
+        "অপরূপ"
+      ],
+      "pos": "adjective",
+      "definition": "Remarkable or extraordinary in appearance or quality; selected here from the word’s several senses.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%AA%E0%A6%B0%E0%A7%82%E0%A6%AA",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-a692a80dac60722b",
+      "en": "veil",
+      "bn": [
+        "অবগুণ্ঠন",
+        "অবগুন্ঠন"
+      ],
+      "pos": "noun",
+      "definition": "A covering drawn over the head or face.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%AC%E0%A6%97%E0%A7%81%E0%A6%A8%E0%A7%8D%E0%A6%A0%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "অবগুন্ঠন"
+    },
+    {
+      "id": "literary-bf0a19bc9394ea11",
+      "en": "earth; land",
+      "bn": [
+        "অবনী",
+        "অবণি"
+      ],
+      "pos": "noun",
+      "definition": "The earth or the land on which people live.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%AC%E0%A6%A8%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-92992344aff3df75",
+      "en": "finally; at last",
+      "bn": [
+        "অবশেষে"
+      ],
+      "pos": "adverb",
+      "definition": "After the preceding events or delay, at the end of the sequence.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%AC%E0%A6%B6%E0%A7%87%E0%A6%B7",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "অবশেষ"
+    },
+    {
+      "id": "literary-93fe6da780505223",
+      "en": "hurt affection; wounded pride",
+      "bn": [
+        "অভিমান"
+      ],
+      "pos": "noun",
+      "definition": "Hurt feelings caused by someone close; in other contexts, pride or self-regard.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%AD%E0%A6%BF%E0%A6%AE%E0%A6%BE%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-be30b688c317599b",
+      "en": "journey to a lover’s meeting",
+      "bn": [
+        "অভিসার"
+      ],
+      "pos": "noun",
+      "definition": "Going to an arranged meeting with a beloved, often secretly.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%AD%E0%A6%BF%E0%A6%B8%E0%A6%BE%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-4cfe354005bc07f1",
+      "en": "pure; spotless",
+      "bn": [
+        "অমল"
+      ],
+      "pos": "adjective",
+      "definition": "Clear and free of dirt, stain or impurity.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%AE%E0%A6%B2",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-d0b5c6a497c23d7e",
+      "en": "sky",
+      "bn": [
+        "অম্বর"
+      ],
+      "pos": "noun",
+      "definition": "The open expanse above the earth; a literary word for the sky.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%AE%E0%A7%8D%E0%A6%AC%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-3f5a2f2e227ecb84",
+      "en": "rising sun; dawn glow",
+      "bn": [
+        "অরুণ"
+      ],
+      "pos": "noun",
+      "definition": "The newly risen sun, or the red light seen around sunrise or sunset.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%B0%E0%A7%81%E0%A6%A3",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-e3436ae6d083bc44",
+      "en": "rosy colour",
+      "bn": [
+        "অরুণিমা"
+      ],
+      "pos": "noun",
+      "definition": "A reddish or rose-coloured glow.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%B0%E0%A7%81%E0%A6%A3%E0%A6%BF%E0%A6%AE%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-7cebdba3e4961625",
+      "en": "formless; shapeless",
+      "bn": [
+        "অরূপ"
+      ],
+      "pos": "adjective",
+      "definition": "Having no visible or definite shape; selected here from the word’s several senses.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%B0%E0%A7%82%E0%A6%AA",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-3ee35b7e81fa14f7",
+      "en": "curl; ringlet",
+      "bn": [
+        "অলক"
+      ],
+      "pos": "noun",
+      "definition": "A lock of hair that curves or coils.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%B2%E0%A6%95",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-c3888c18080a044d",
+      "en": "tear; tears",
+      "bn": [
+        "অশ্রু"
+      ],
+      "pos": "noun",
+      "definition": "Drops of liquid from the eyes, especially when someone cries.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%85%E0%A6%B6%E0%A7%8D%E0%A6%B0%E0%A7%81",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-ebcc3b2b1c7edaac",
+      "en": "eye",
+      "bn": [
+        "আঁখি"
+      ],
+      "pos": "noun",
+      "definition": "A literary word for the eye.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%86%E0%A6%81%E0%A6%96%E0%A6%BF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-4f87f052317e4028",
+      "en": "loose end of a sari",
+      "bn": [
+        "আঁচল"
+      ],
+      "pos": "noun",
+      "definition": "The free end of a sari, which may be draped over the shoulder or head.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%86%E0%A6%81%E0%A6%9A%E0%A6%B2",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-34561e317199c03d",
+      "en": "longing; desire",
+      "bn": [
+        "আকাঙ্ক্ষা"
+      ],
+      "pos": "noun",
+      "definition": "A wish to obtain, experience or achieve something.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%86%E0%A6%95%E0%A6%BE%E0%A6%99%E0%A7%8D%E0%A6%95%E0%A7%8D%E0%A6%B7%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-57b4f7aa981080e2",
+      "en": "desire; craving",
+      "bn": [
+        "আকিঞ্চন"
+      ],
+      "pos": "noun",
+      "definition": "A strong wish or longing for something.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%86%E0%A6%95%E0%A6%BF%E0%A6%9E%E0%A7%8D%E0%A6%9A%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-0d90285d053c4740",
+      "en": "anxious; yearning",
+      "bn": [
+        "আকুল"
+      ],
+      "pos": "adjective",
+      "definition": "Strongly unsettled by worry or longing; intensely eager for something.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%86%E0%A6%95%E0%A7%81%E0%A6%B2",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-b76731a6ed12f3e3",
+      "en": "necessary; essential",
+      "bn": [
+        "আবশ্যক"
+      ],
+      "pos": "adjective",
+      "definition": "Needed for a purpose or impossible to dispense with in the situation.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%86%E0%A6%AC%E0%A6%B6%E0%A7%8D%E0%A6%AF%E0%A6%95",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-9195f8fab1c6240a",
+      "en": "glow; radiance",
+      "bn": [
+        "আভা"
+      ],
+      "pos": "noun",
+      "definition": "Light or brightness appearing around a person or thing.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%86%E0%A6%AD%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-4e1484ff751f3f35",
+      "en": "detached; indifferent",
+      "bn": [
+        "উদাস"
+      ],
+      "pos": "adjective",
+      "definition": "Without much interest in worldly concerns or emotional attachment.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%89%E0%A6%A6%E0%A6%BE%E0%A6%B8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-8766d059781c7ccb",
+      "en": "melancholy; low-spirited",
+      "bn": [
+        "উদাস"
+      ],
+      "pos": "adjective",
+      "definition": "Quietly sad or lacking cheer and enthusiasm.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%89%E0%A6%A6%E0%A6%BE%E0%A6%B8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-4c35d194d84e15c1",
+      "en": "distracted; absent-minded",
+      "bn": [
+        "উন্মনা"
+      ],
+      "pos": "adjective",
+      "definition": "Mentally preoccupied or unsettled, with attention drawn away from the present.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%89%E0%A6%A8%E0%A7%8D%E0%A6%AE%E0%A6%A8%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-649dcabc75ad665e",
+      "en": "unfolding; emergence",
+      "bn": [
+        "উন্মেষ",
+        "উন্মেষণ"
+      ],
+      "pos": "noun",
+      "definition": "The beginning or opening out of something, such as a bud, thought or feeling.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%89%E0%A6%A8%E0%A7%8D%E0%A6%AE%E0%A7%87%E0%A6%B7",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-f4116e8b02ebb3ce",
+      "en": "present; in attendance",
+      "bn": [
+        "উপস্থিত"
+      ],
+      "pos": "adjective",
+      "definition": "At the place being spoken about, having arrived there.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%89%E0%A6%AA%E0%A6%B8%E0%A7%8D%E0%A6%A5%E0%A6%BF%E0%A6%A4",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-05815b7f3bbceb79",
+      "en": "wave; surge",
+      "bn": [
+        "ঊর্মি"
+      ],
+      "pos": "noun",
+      "definition": "A rolling rise of water, especially on a river or the sea.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%8A%E0%A6%B0%E0%A7%8D%E0%A6%AE%E0%A6%BF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-3ab0d4b458ef8f93",
+      "en": "daybreak; dawn",
+      "bn": [
+        "ঊষা"
+      ],
+      "pos": "noun",
+      "definition": "The first light and beginning of the day.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%8A%E0%A6%B7%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-2627a1574c4aa381",
+      "en": "one; a",
+      "bn": [
+        "একটা"
+      ],
+      "pos": "determiner",
+      "definition": "Marks a single countable thing; context may give it the sense of an indefinite article.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%8F%E0%A6%95%E0%A6%9F%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-32a0ded47a9a4c0e",
+      "en": "one; a",
+      "bn": [
+        "একটি"
+      ],
+      "pos": "determiner",
+      "definition": "A form of একটা used with one countable item, often in formal writing.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%8F%E0%A6%95%E0%A6%9F%E0%A6%BF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-6e7e24d07eb87a85",
+      "en": "earnest; private",
+      "bn": [
+        "একান্ত"
+      ],
+      "pos": "adjective",
+      "definition": "Deeply sincere or intense; in another sense, personal and removed from others.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%8F%E0%A6%95%E0%A6%BE%E0%A6%A8%E0%A7%8D%E0%A6%A4",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-5dc42934e5b4c3c4",
+      "en": "bangle; bracelet",
+      "bn": [
+        "কঙ্কণ"
+      ],
+      "pos": "noun",
+      "definition": "A decorative band worn around the wrist.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%95%E0%A6%99%E0%A7%8D%E0%A6%95%E0%A6%A3",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "কঙ্কণ → কাঁকন",
+      "referenceUrls": [
+        "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%95%E0%A6%BE%E0%A6%81%E0%A6%95%E0%A6%A8"
+      ]
+    },
+    {
+      "id": "literary-c117b2b0be2451ca",
+      "en": "sorrowful; compassionate",
+      "bn": [
+        "করুণ"
+      ],
+      "pos": "adjective",
+      "definition": "Expressing or causing tender sadness; it can also describe a sympathetic heart.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%95%E0%A6%B0%E0%A7%81%E0%A6%A3",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-70e9afc17ee86c12",
+      "en": "wife; beloved woman",
+      "bn": [
+        "কান্তা"
+      ],
+      "pos": "noun",
+      "definition": "A female spouse or a woman who is loved.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%95%E0%A6%BE%E0%A6%A8%E0%A7%8D%E0%A6%A4%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-126456a12d84e6b9",
+      "en": "anything at all",
+      "bn": [
+        "কিছুই"
+      ],
+      "pos": "pronoun",
+      "definition": "Adds emphasis to something or anything; with negation, it means nothing at all.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%95%E0%A6%BF%E0%A6%9B%E0%A7%81",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "কিছু"
+    },
+    {
+      "id": "literary-e5f3eed26928ffd2",
+      "en": "flower",
+      "bn": [
+        "কুসুম"
+      ],
+      "pos": "noun",
+      "definition": "A blossom; the flower sense is especially common in literary language.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%95%E0%A7%81%E0%A6%B8%E0%A7%81%E0%A6%AE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-94be176a4e4491a8",
+      "en": "cuckoo call",
+      "bn": [
+        "কুহু",
+        "কুহূ"
+      ],
+      "pos": "noun",
+      "definition": "The soft musical cry associated with a cuckoo.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%95%E0%A7%81%E0%A6%B9%E0%A7%81",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-ab3ab026afd3379d",
+      "en": "mist; fog",
+      "bn": [
+        "কুহেলি",
+        "কুহেলিকা",
+        "কুহেলী"
+      ],
+      "pos": "noun",
+      "definition": "A haze of tiny water droplets that obscures the air and view.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%95%E0%A7%81%E0%A6%B9%E0%A7%87%E0%A6%B2%E0%A6%BF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-ecef402cca5ad962",
+      "en": "which; what",
+      "bn": [
+        "কোন্"
+      ],
+      "pos": "determiner",
+      "definition": "Asks which person or thing is meant, or identifies an unspecified one.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%95%E0%A7%8B%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "কোন"
+    },
+    {
+      "id": "literary-fb1f6bad9d7f3301",
+      "en": "unopened flower; bud",
+      "bn": [
+        "কোরক"
+      ],
+      "pos": "noun",
+      "definition": "A flower still closed before its petals open.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%95%E0%A7%8B%E0%A6%B0%E0%A6%95",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-2ddba3c419bdd26f",
+      "en": "wagtail",
+      "bn": [
+        "খঞ্জন"
+      ],
+      "pos": "noun",
+      "definition": "A small bird known for repeatedly moving its long tail up and down.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%96%E0%A6%9E%E0%A7%8D%E0%A6%9C%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-83721474ae2e9203",
+      "en": "buzz; hum",
+      "bn": [
+        "গুঞ্জন"
+      ],
+      "pos": "noun",
+      "definition": "A low continuing sound, like the vibration of insects or quiet voices.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%97%E0%A7%81%E0%A6%9E%E0%A7%8D%E0%A6%9C%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-56153cb5300dba2a",
+      "en": "O; you there",
+      "bn": [
+        "গো"
+      ],
+      "pos": "interjection",
+      "definition": "An address or call meant to draw someone’s attention; its feeling depends on context.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%97%E0%A7%8B",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-65e44c5d62bf1151",
+      "en": "restless; fickle",
+      "bn": [
+        "চপল"
+      ],
+      "pos": "adjective",
+      "definition": "Quick to move or change, rather than remaining steady in action or thought.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9A%E0%A6%AA%E0%A6%B2",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-45f91a90c5ae3515",
+      "en": "foot; line of verse",
+      "bn": [
+        "চরণ"
+      ],
+      "pos": "noun",
+      "definition": "A foot; in the description of poetry it can also mean a verse line.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9A%E0%A6%B0%E0%A6%A3",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-148d811de3fffdf6",
+      "en": "eternal; enduring",
+      "bn": [
+        "চিরন্তন"
+      ],
+      "pos": "adjective",
+      "definition": "Continuing across time, or existing from a very distant past.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9A%E0%A6%BF%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "চির"
+    },
+    {
+      "id": "literary-0e7d41d63cc639ba",
+      "en": "of Chaitra",
+      "bn": [
+        "চৈতালী",
+        "চৈতালি"
+      ],
+      "pos": "adjective",
+      "definition": "Belonging to Chaitra, the final month of the Bengali calendar.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9A%E0%A7%88%E0%A6%A4%E0%A6%BE%E0%A6%B2%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-392f173d45d66052",
+      "en": "spring breeze",
+      "bn": [
+        "চৈতালী",
+        "চৈতালি"
+      ],
+      "pos": "noun",
+      "definition": "A breeze of spring; one selected seasonal sense of the word.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9A%E0%A7%88%E0%A6%A4%E0%A6%BE%E0%A6%B2%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-ba53076788af4dba",
+      "en": "awakening; wakefulness",
+      "bn": [
+        "জাগরণ"
+      ],
+      "pos": "noun",
+      "definition": "Waking from sleep or remaining awake; figuratively, a return to active awareness.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%9C%E0%A6%BE%E0%A6%97%E0%A6%B0%E0%A6%A3",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-5ca7fa0c64f8b5c8",
+      "en": "darkness; gloom",
+      "bn": [
+        "তমসা"
+      ],
+      "pos": "noun",
+      "definition": "A state without light; it can also suggest ignorance in figurative use.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A4%E0%A6%AE%E0%A6%B8%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-b79585c26ffb752d",
+      "en": "boat; vessel",
+      "bn": [
+        "তরণী",
+        "তরণি"
+      ],
+      "pos": "noun",
+      "definition": "A craft used to carry people or goods across water.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A4%E0%A6%B0%E0%A6%A3%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-2c42b0d26d56dcfa",
+      "en": "tree",
+      "bn": [
+        "তরু"
+      ],
+      "pos": "noun",
+      "definition": "A literary word for a tree or growing plant.",
+      "sourceKind": "curated",
+      "sourceName": "Wiktionary (lexical reference)",
+      "sourceUrl": "https://en.wiktionary.org/wiki/%E0%A6%A4%E0%A6%B0%E0%A7%81#Bengali",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-3979d6218588bd68",
+      "en": "darkness",
+      "bn": [
+        "তিমির"
+      ],
+      "pos": "noun",
+      "definition": "The absence of light, or a deep surrounding gloom.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A4%E0%A6%BF%E0%A6%AE%E0%A6%BF%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-404246b49120a68a",
+      "en": "thirst",
+      "bn": [
+        "তৃষা"
+      ],
+      "pos": "noun",
+      "definition": "The need or strong desire to drink.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A4%E0%A7%83%E0%A6%B7%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-fa1f3306d032af6b",
+      "en": "in the same way; like that",
+      "bn": [
+        "তেমনি"
+      ],
+      "pos": "adverb",
+      "definition": "Expresses a similar manner or likeness to something already mentioned.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A4%E0%A7%87%E0%A6%AE%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "তেমন"
+    },
+    {
+      "id": "literary-4e050337b3b6791a",
+      "en": "earth; world",
+      "bn": [
+        "ধরণী"
+      ],
+      "pos": "noun",
+      "definition": "The earth or the world on which people live.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A7%E0%A6%B0%E0%A6%A3%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-69ca5da7aa9d5707",
+      "en": "slowly; gently",
+      "bn": [
+        "ধীরে"
+      ],
+      "pos": "adverb",
+      "definition": "At an unhurried pace, with little force, or through gradual steps.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A7%E0%A7%80%E0%A6%B0%E0%A7%87",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-ae9317e9e0608149",
+      "en": "dust",
+      "bn": [
+        "ধূলি",
+        "ধূলী"
+      ],
+      "pos": "noun",
+      "definition": "Fine loose particles lying on or rising from a surface.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A7%E0%A7%82%E0%A6%B2%E0%A6%BF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-d98d90b04adfe700",
+      "en": "is not",
+      "bn": [
+        "নহে"
+      ],
+      "pos": "verb",
+      "definition": "An older literary present form of নহা, the negative verb meaning not to be.",
+      "sourceKind": "curated",
+      "sourceName": "Wiktionary (lexical reference)",
+      "sourceUrl": "https://en.wiktionary.org/wiki/%E0%A6%A8%E0%A6%B9%E0%A6%BE#Bengali",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "নহা"
+    },
+    {
+      "id": "literary-60a604e812b4710f",
+      "en": "not; is not",
+      "bn": [
+        "নাহি"
+      ],
+      "pos": "particle",
+      "definition": "An older negative form related to নাই, used to deny an action or presence.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A6%BE%E0%A6%B9%E0%A6%BF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-46850a1fbf0cc274",
+      "en": "not",
+      "bn": [
+        "নি"
+      ],
+      "pos": "particle",
+      "definition": "A colloquial negative used with a verb; it commonly follows the verb.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A6%BF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-c9401ddf448f9e5d",
+      "en": "bower; leafy retreat",
+      "bn": [
+        "নিকুঞ্জ"
+      ],
+      "pos": "noun",
+      "definition": "A sheltered spot enclosed by trees, shrubs or thick growth.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A6%BF%E0%A6%95%E0%A7%81%E0%A6%9E%E0%A7%8D%E0%A6%9C",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-1af5516b4332918c",
+      "en": "utterly; extremely",
+      "bn": [
+        "নিতান্ত"
+      ],
+      "pos": "adverb",
+      "definition": "Adds strong emphasis, suggesting a complete or very high degree.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A6%BF%E0%A6%A4%E0%A6%BE%E0%A6%A8%E0%A7%8D%E0%A6%A4",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-76aecd87e93e22f5",
+      "en": "summer heat",
+      "bn": [
+        "নিদাঘ"
+      ],
+      "pos": "noun",
+      "definition": "The hot season or its intense, oppressive warmth.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A6%BF%E0%A6%A6%E0%A6%BE%E0%A6%98",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-18ffe570a3c72cc2",
+      "en": "secluded; quiet",
+      "bn": [
+        "নিভৃত"
+      ],
+      "pos": "adjective",
+      "definition": "Private or away from other people; also quiet and undisturbed.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A6%BF%E0%A6%AD%E0%A7%83%E0%A6%A4",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-3c12495b56ebf72c",
+      "en": "waterfall; mountain stream",
+      "bn": [
+        "নির্ঝর"
+      ],
+      "pos": "noun",
+      "definition": "Water flowing down from higher ground, especially a cascading mountain stream.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A6%BF%E0%A6%B0%E0%A7%8D%E0%A6%9D%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-44a6ec56ea445497",
+      "en": "midnight; deep night",
+      "bn": [
+        "নিশীথ"
+      ],
+      "pos": "noun",
+      "definition": "The middle of the night, or night in a literary setting.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A6%BF%E0%A6%B6%E0%A7%80%E0%A6%A5",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-2812fea85479f73a",
+      "en": "cloud",
+      "bn": [
+        "নীরদ"
+      ],
+      "pos": "noun",
+      "definition": "A literary name for a cloud.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A7%80%E0%A6%B0%E0%A6%A6",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-6ac81bc0528ecd87",
+      "en": "silent; hushed",
+      "bn": [
+        "নীরব"
+      ],
+      "pos": "adjective",
+      "definition": "Making no sound, or remaining without speech.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A7%80%E0%A6%B0%E0%A6%AC",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-127ca9a034ea3c5e",
+      "en": "anklet",
+      "bn": [
+        "নূপুর"
+      ],
+      "pos": "noun",
+      "definition": "An ornament worn around the ankle or foot.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A7%82%E0%A6%AA%E0%A7%81%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-8269a4d2037b44c1",
+      "en": "devotional offering",
+      "bn": [
+        "নৈবেদ্য"
+      ],
+      "pos": "noun",
+      "definition": "A gift of food or other material presented to a deity during worship.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%A8%E0%A7%88%E0%A6%AC%E0%A7%87%E0%A6%A6%E0%A7%8D%E0%A6%AF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-bb196d32aab34152",
+      "en": "touch; contact",
+      "bn": [
+        "পরশ"
+      ],
+      "pos": "noun",
+      "definition": "A poetic form of স্পর্শ, referring to touch or physical contact.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A6%B0%E0%A6%B6",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-ddd3d1e912397b9a",
+      "en": "life; heart",
+      "bn": [
+        "পরাণ"
+      ],
+      "pos": "noun",
+      "definition": "A poetic or regional form of প্রাণ, referring to life, vitality or the heart.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A6%B0%E0%A6%BE%E0%A6%A3",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-e0bbd89c8fe392f9",
+      "en": "shoot; sprout",
+      "bn": [
+        "পল্লব"
+      ],
+      "pos": "noun",
+      "definition": "New growth on a plant, such as a fresh shoot, twig or budding spray.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A6%B2%E0%A7%8D%E0%A6%B2%E0%A6%AC",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-3a370381b4b7d31e",
+      "en": "lest; for fear that",
+      "bn": [
+        "পাছে"
+      ],
+      "pos": "conjunction",
+      "definition": "Introduces a possibility that someone wants to avoid or is worried about.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A6%BE%E0%A6%9B%E0%A7%87",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-2fd5272ffaa0e6f2",
+      "en": "wayfarer; traveller",
+      "bn": [
+        "পান্থ"
+      ],
+      "pos": "noun",
+      "definition": "A person on a journey, especially one travelling along a road.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A6%BE%E0%A6%A8%E0%A7%8D%E0%A6%A5",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-3cd66b26b23ba513",
+      "en": "thrill; delight",
+      "bn": [
+        "পুলক"
+      ],
+      "pos": "noun",
+      "definition": "A surge of happiness or excitement, sometimes felt as hair rising on the skin.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A7%81%E0%A6%B2%E0%A6%95",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-111d42f6b7c5450a",
+      "en": "thrilled; overjoyed",
+      "bn": [
+        "পুলকিত"
+      ],
+      "pos": "adjective",
+      "definition": "Filled with a vivid rush of pleasure or happiness.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A7%81%E0%A6%B2%E0%A6%95%E0%A6%BF%E0%A6%A4",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-a06f99b8da513a18",
+      "en": "love; affection",
+      "bn": [
+        "প্রণয়"
+      ],
+      "pos": "noun",
+      "definition": "Affectionate attachment between people; it can also mean friendship or intimacy.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A7%8D%E0%A6%B0%E0%A6%A3%E0%A7%9F",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "প্রণয়"
+    },
+    {
+      "id": "literary-556f6a7f163e9511",
+      "en": "coral",
+      "bn": [
+        "প্রবাল"
+      ],
+      "pos": "noun",
+      "definition": "The hard material formed by tiny marine animals and often used as an ornament.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A7%8D%E0%A6%B0%E0%A6%AC%E0%A6%BE%E0%A6%B2",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-4147d54fbba6c3ee",
+      "en": "young shoot; new leaf",
+      "bn": [
+        "প্রবাল"
+      ],
+      "pos": "noun",
+      "definition": "Fresh plant growth, such as a tender leaf, shoot or branch.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A7%8D%E0%A6%B0%E0%A6%AC%E0%A6%BE%E0%A6%B2",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-809f8784e77aa600",
+      "en": "delight; recreation",
+      "bn": [
+        "প্রমোদ"
+      ],
+      "pos": "noun",
+      "definition": "Pleasure and enjoyment, or an activity pursued for amusement.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A7%8D%E0%A6%B0%E0%A6%AE%E0%A7%8B%E0%A6%A6",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-e55d6a153574d7e9",
+      "en": "flower; blossom",
+      "bn": [
+        "প্রসূন"
+      ],
+      "pos": "noun",
+      "definition": "A literary name for an open flower.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AA%E0%A7%8D%E0%A6%B0%E0%A6%B8%E0%A7%82%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-c86681ed45336bce",
+      "en": "bamboo flute",
+      "bn": [
+        "বংশী"
+      ],
+      "pos": "noun",
+      "definition": "A flute or pipe made from a hollow piece of bamboo.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%82%E0%A6%B6%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-2f8593887591db4a",
+      "en": "chest; bosom",
+      "bn": [
+        "বক্ষ"
+      ],
+      "pos": "noun",
+      "definition": "The front part of the upper body; figuratively, the heart.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%95%E0%A7%8D%E0%A6%B7",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-a7c4d37e6ae86b21",
+      "en": "indeed; certainly",
+      "bn": [
+        "বটে"
+      ],
+      "pos": "particle",
+      "definition": "Affirms or concedes a statement; tone and context may also make it ironic.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%9F%E0%A7%87",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-cc4d37f9030cf1d4",
+      "en": "earth; world",
+      "bn": [
+        "বসুন্ধরা"
+      ],
+      "pos": "noun",
+      "definition": "A literary name for the earth.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%B8%E0%A7%81",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "বসু"
+    },
+    {
+      "id": "literary-e296493e17d11539",
+      "en": "varied; remarkable",
+      "bn": [
+        "বিচিত্র"
+      ],
+      "pos": "adjective",
+      "definition": "Having many different forms or colours; also strikingly unusual.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%BF%E0%A6%9A%E0%A6%BF%E0%A6%A4%E0%A7%8D%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-a841cef72853fb1b",
+      "en": "humility; modesty",
+      "bn": [
+        "বিনয়"
+      ],
+      "pos": "noun",
+      "definition": "An unassuming manner that shows courtesy and respect rather than self-importance.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%BF%E0%A6%A8%E0%A7%9F",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "বিনয়"
+    },
+    {
+      "id": "literary-27cb377e7b3643a9",
+      "en": "vast; abundant",
+      "bn": [
+        "বিপুল"
+      ],
+      "pos": "adjective",
+      "definition": "Very large in size or extent, or present in great quantity.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%BF%E0%A6%AA%E0%A7%81%E0%A6%B2",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-ede2c9363110ed58",
+      "en": "night",
+      "bn": [
+        "বিভাবরী"
+      ],
+      "pos": "noun",
+      "definition": "A poetic or literary word for night.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%BF%E0%A6%AD%E0%A6%BE%E0%A6%AC%E0%A6%B0%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-4db027356a6f76c1",
+      "en": "separation from a beloved",
+      "bn": [
+        "বিরহ"
+      ],
+      "pos": "noun",
+      "definition": "Being apart from someone dear, especially the separation of lovers.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%BF%E0%A6%B0%E0%A6%B9",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-7c29b556ccdedd85",
+      "en": "separated from a beloved (feminine)",
+      "bn": [
+        "বিরহিণী"
+      ],
+      "pos": "adjective",
+      "definition": "The feminine form of বিরহী, describing separation from a loved person.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%BF%E0%A6%B0%E0%A6%B9%E0%A6%BF%E0%A6%A3%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "বিরহিণী → বিরহী",
+      "referenceUrls": [
+        "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%BF%E0%A6%B0%E0%A6%B9%E0%A7%80"
+      ]
+    },
+    {
+      "id": "literary-60b408d48a038ed1",
+      "en": "separated from a beloved",
+      "bn": [
+        "বিরহী"
+      ],
+      "pos": "adjective",
+      "definition": "Apart from a loved person and feeling the loneliness of that separation.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%BF%E0%A6%B0%E0%A6%B9%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-e81dc7e9d4b97c9d",
+      "en": "pause; rest",
+      "bn": [
+        "বিরাম"
+      ],
+      "pos": "noun",
+      "definition": "A break in activity, movement or speech; also an ending or stopping point.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%BF%E0%A6%B0%E0%A6%BE%E0%A6%AE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-a8012041eda21e7d",
+      "en": "bird",
+      "bn": [
+        "বিহঙ্গ",
+        "বিহঙ্গম"
+      ],
+      "pos": "noun",
+      "definition": "A literary word for a bird.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%BF%E0%A6%B9%E0%A6%99%E0%A7%8D%E0%A6%97",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-67e9e5803e496ada",
+      "en": "overwhelmed; bewildered",
+      "bn": [
+        "বিহ্বল"
+      ],
+      "pos": "adjective",
+      "definition": "So affected by emotion, distress or surprise that clear thought becomes difficult.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A6%BF%E0%A6%B9%E0%A7%8D%E0%A6%AC%E0%A6%B2",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-001b6697b094ffd0",
+      "en": "veena; stringed instrument",
+      "bn": [
+        "বীণা"
+      ],
+      "pos": "noun",
+      "definition": "A traditional Indian instrument whose strings are plucked to make music.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A7%80%E0%A6%A3%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-633db85390bb19ce",
+      "en": "pain; sorrow",
+      "bn": [
+        "বেদনা"
+      ],
+      "pos": "noun",
+      "definition": "Physical suffering or an ache of grief and distress.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A7%87%E0%A6%A6%E0%A6%A8%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-dae1717f0690b011",
+      "en": "renunciation; detachment",
+      "bn": [
+        "বৈরাগ্য",
+        "বৈরাগ"
+      ],
+      "pos": "noun",
+      "definition": "Freedom from worldly desires and attachments; selected here from the word’s several senses.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A7%88%E0%A6%B0%E0%A6%BE%E0%A6%97%E0%A7%8D%E0%A6%AF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-a55f9ccbdd2e4f53",
+      "en": "restless with longing",
+      "bn": [
+        "ব্যাকুল"
+      ],
+      "pos": "adjective",
+      "definition": "Deeply agitated by desire, worry or eager anticipation.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AC%E0%A7%8D%E0%A6%AF%E0%A6%BE%E0%A6%95%E0%A7%81%E0%A6%B2",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-2ca60a16d4884969",
+      "en": "world; universe",
+      "bn": [
+        "ভুবন"
+      ],
+      "pos": "noun",
+      "definition": "The world or the whole realm of existence; sometimes a dwelling or abode.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AD%E0%A7%81%E0%A6%AC%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-2e908803f8ced600",
+      "en": "cluster of blossoms",
+      "bn": [
+        "মঞ্জরী",
+        "মঞ্জরি"
+      ],
+      "pos": "noun",
+      "definition": "Flowers or buds growing together in a small group on a stalk.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A6%9E%E0%A7%8D%E0%A6%9C%E0%A6%B0%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-6ba5c7cdcc332d80",
+      "en": "heart; inner feelings",
+      "bn": [
+        "মরম"
+      ],
+      "pos": "noun",
+      "definition": "The inward heart or private feelings; also the essential meaning of something.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A6%B0%E0%A6%AE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-16b82e018a7c3d2c",
+      "en": "marble",
+      "bn": [
+        "মর্মর"
+      ],
+      "pos": "noun",
+      "definition": "The ornamental stone used for buildings, sculpture and polished surfaces.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A6%B0%E0%A7%8D%E0%A6%AE%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-d6fbeb5fc1da2972",
+      "en": "rustling; murmuring",
+      "bn": [
+        "মর্মর"
+      ],
+      "pos": "noun",
+      "definition": "A soft repeated sound, such as dry leaves moving against one another.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A6%B0%E0%A7%8D%E0%A6%AE%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-e413228579431fd0",
+      "en": "southern breeze",
+      "bn": [
+        "মলয়"
+      ],
+      "pos": "noun",
+      "definition": "A gentle wind from the south; the word also names the Malaya hills.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A6%B2%E0%A7%9F",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "মলয়"
+    },
+    {
+      "id": "literary-de07d8ce906a5c30",
+      "en": "gloomy; sorrowful",
+      "bn": [
+        "মলিন"
+      ],
+      "pos": "adjective",
+      "definition": "Showing sadness or a lack of cheer, as in a person’s face.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A6%B2%E0%A6%BF%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-0296830a1a528341",
+      "en": "soiled; tarnished",
+      "bn": [
+        "মলিন"
+      ],
+      "pos": "adjective",
+      "definition": "Marked by dirt or a loss of cleanliness and brightness.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A6%B2%E0%A6%BF%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-b41a0c221b2d2c78",
+      "en": "exalted; noble (feminine)",
+      "bn": [
+        "মহীয়সী"
+      ],
+      "pos": "adjective",
+      "definition": "The feminine form of মহীয়ান, describing someone greatly honoured or distinguished.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A6%B9%E0%A7%80%E0%A7%9F%E0%A6%B8%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "মহীয়সী"
+    },
+    {
+      "id": "literary-a5020cb0fa5299a8",
+      "en": "sweetness; charm",
+      "bn": [
+        "মাধুরী"
+      ],
+      "pos": "noun",
+      "definition": "The pleasing quality of a voice, appearance, manner or expression.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A6%BE%E0%A6%A7%E0%A7%81%E0%A6%B0%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-745dccf242a52c0c",
+      "en": "bud",
+      "bn": [
+        "মুকুল"
+      ],
+      "pos": "noun",
+      "definition": "A flower before it has opened into a blossom.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A7%81%E0%A6%95%E0%A7%81%E0%A6%B2",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-8b3a2d85c046c06b",
+      "en": "flute",
+      "bn": [
+        "মুরলী",
+        "মুরলি"
+      ],
+      "pos": "noun",
+      "definition": "A wind instrument played by blowing across or into a tube.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A7%81%E0%A6%B0%E0%A6%B2%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-1043b0d5f1f9a5ae",
+      "en": "earthen; made of clay",
+      "bn": [
+        "মৃন্ময়",
+        "মৃন্ময়ী"
+      ],
+      "pos": "adjective",
+      "definition": "Formed from earth or clay, as a vessel, sculpture or building.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A7%83%E0%A6%A8%E0%A7%8D%E0%A6%AE%E0%A7%9F",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "মৃন্ময়"
+    },
+    {
+      "id": "literary-7818d80a6eb87dc5",
+      "en": "cloudy; overcast",
+      "bn": [
+        "মেঘলা"
+      ],
+      "pos": "adjective",
+      "definition": "Covered with clouds, especially when describing the sky or weather.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AE%E0%A7%87%E0%A6%98%E0%A6%B2%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-0cc14bd545e12c7e",
+      "en": "curtain; stage curtain",
+      "bn": [
+        "যবনিকা"
+      ],
+      "pos": "noun",
+      "definition": "A screen or hanging curtain, especially one raised or lowered at a theatre.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AF%E0%A6%AC%E0%A6%A8%E0%A6%BF%E0%A6%95%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-9e7ebce6a4bcdc86",
+      "en": "night",
+      "bn": [
+        "যামিনী"
+      ],
+      "pos": "noun",
+      "definition": "A literary name for the night.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%AF%E0%A6%BE%E0%A6%AE%E0%A6%BF%E0%A6%A8%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-bc2fff38016afa10",
+      "en": "night",
+      "bn": [
+        "রজনী",
+        "রজনি"
+      ],
+      "pos": "noun",
+      "definition": "A literary name for the time between evening and morning.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%B0%E0%A6%9C%E0%A6%A8%E0%A7%80",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-f2a85c9b6388027d",
+      "en": "fragrant autumn flower",
+      "bn": [
+        "শেফালি",
+        "শেফালী",
+        "শেফালিকা"
+      ],
+      "pos": "noun",
+      "definition": "A small scented white blossom associated with autumn; the name also denotes its tree.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%B6%E0%A7%87%E0%A6%AB%E0%A6%BE%E0%A6%B2%E0%A6%BF",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-35140ac448e311f3",
+      "en": "verdant; dark green",
+      "bn": [
+        "শ্যামল"
+      ],
+      "pos": "adjective",
+      "definition": "Rich green or dark in colour; often describes vegetation or a landscape.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%B6%E0%A7%8D%E0%A6%AF%E0%A6%BE%E0%A6%AE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference.",
+      "sourceHeadword": "শ্যাম"
+    },
+    {
+      "id": "literary-f78d589add54c6d2",
+      "en": "dense; thick",
+      "bn": [
+        "সঘন"
+      ],
+      "pos": "adjective",
+      "definition": "Closely packed or concentrated, as in vegetation or clouds.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%B8%E0%A6%98%E0%A6%A8",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-614390af9368ac66",
+      "en": "moist; tearful",
+      "bn": [
+        "সজল"
+      ],
+      "pos": "adjective",
+      "definition": "Containing water or wet with it; of eyes, filled with tears.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%B8%E0%A6%9C%E0%A6%B2",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-1194de5e44da1ec0",
+      "en": "nectar",
+      "bn": [
+        "সুধা"
+      ],
+      "pos": "noun",
+      "definition": "The divine drink of mythology; also the sweet liquid associated with flowers.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%B8%E0%A7%81%E0%A6%A7%E0%A6%BE",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-1ed3c591a63b55c0",
+      "en": "moon",
+      "bn": [
+        "সুধাকর"
+      ],
+      "pos": "noun",
+      "definition": "A poetic name for the moon.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%B8%E0%A7%81%E0%A6%A7%E0%A6%BE%E0%A6%95%E0%A6%B0",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-058b57abc98f7fd2",
+      "en": "fragrance",
+      "bn": [
+        "সৌরভ"
+      ],
+      "pos": "noun",
+      "definition": "A pleasant smell arising from flowers or another fragrant source.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%B8%E0%A7%8C%E0%A6%B0%E0%A6%AD",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-66c69a0db90e41d7",
+      "en": "motionless; stunned",
+      "bn": [
+        "স্তব্ধ",
+        "স্তব্ধীভূত"
+      ],
+      "pos": "adjective",
+      "definition": "Unable to move or react, sometimes because of shock or amazement.",
+      "sourceKind": "curated",
+      "sourceName": "Accessible Dictionary (lexical reference)",
+      "sourceUrl": "https://accessibledictionary.gov.bd/bengali-to-english/?q=%E0%A6%B8%E0%A7%8D%E0%A6%A4%E0%A6%AC%E0%A7%8D%E0%A6%A7",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    },
+    {
+      "id": "literary-31be630714d14918",
+      "en": "heart",
+      "bn": [
+        "হিয়া"
+      ],
+      "pos": "noun",
+      "definition": "A poetic name for the heart or the seat of inward feelings.",
+      "sourceKind": "curated",
+      "sourceName": "Wiktionary (lexical reference)",
+      "sourceUrl": "https://en.wiktionary.org/wiki/%E0%A6%B9%E0%A6%BF%E0%A6%AF%E0%A6%BC%E0%A6%BE#Bengali",
+      "editorial": "Original concise English gloss; factual sense checked against the linked reference."
+    }
+  ]
+}

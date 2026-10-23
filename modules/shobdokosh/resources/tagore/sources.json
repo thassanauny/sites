@@ -1,0 +1,36 @@
+{
+  "bulkSource": {
+    "id": "rabindranet-v2",
+    "title": "Complete Works of Rabindranath Tagore",
+    "creator": "Asadullah Al Galib",
+    "url": "https://www.kaggle.com/datasets/aagalib/complete-works-of-rabindranath-tagore",
+    "downloadUrl": "https://www.kaggle.com/api/v1/datasets/download/aagalib/complete-works-of-rabindranath-tagore?datasetVersionNumber=2",
+    "version": 2,
+    "lastUpdated": "2022-01-04T16:05:23.347Z",
+    "licenseAsDeclaredByProvider": "CC0: Public Domain",
+    "sha256": "de74a7177e4d1121f5ff382aeee0e5fb69b1cee1bba5a7eb0dedb163827d619f",
+    "expectedRecordCount": 3438,
+    "researchPaper": "https://arxiv.org/abs/2202.00481",
+    "originalDigitization": "https://rabindra-rachanabali.nltr.org/"
+  },
+  "supplementalBooks": [
+    {"page": "ভানুসিংহের পত্রাবলী", "description": "Published literary letters; transcribed first edition on Bengali Wikisource"}
+  ],
+  "sourceUrls": [
+    "https://www.kaggle.com/datasets/aagalib/complete-works-of-rabindranath-tagore",
+    "https://arxiv.org/abs/2202.00481",
+    "https://rabindra-rachanabali.nltr.org/",
+    "https://bn.wikisource.org/wiki/ভানুসিংহের_পত্রাবলী",
+    "https://bichitra.jdvu.ac.in/bichitra_user_manual.php"
+  ],
+  "coverageScope": "All 3,438 records in RabindraNet's version-2 Bengali NLTR-derived corpus across poetry, song groups, novels, stories, plays, essays and miscellany.",
+  "limitations": [
+    "A source corpus inventory is not proof that every work, manuscript version, private letter or rare word by Tagore is covered.",
+    "The research bulk corpus is a 2022 snapshot; additions and corrections to its original NLTR source after that date are not implied.",
+    "Records include introductory pieces and dedications; song records may contain groups of songs, so record count is not a count of distinct literary works.",
+    "NLTR's introduction says further letters and original English writings are planned; this Bengali inventory does not cover every private letter or English original.",
+    "Surface forms include inflections, archaic spellings, Brajabuli, proper names and possible transcription errors; occurrence in literature is not a verified dictionary meaning.",
+    "Per-item NLTR node URLs were not retained by the bulk dataset; its items link to the dataset and retain collection title and exact CSV row instead.",
+    "Only word counts and source references are distributed; original digitized literary texts remain in the external local cache."
+  ]
+}

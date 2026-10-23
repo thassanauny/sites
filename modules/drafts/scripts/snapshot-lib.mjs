@@ -456,7 +456,8 @@ function* prepareSteps(spec, origin, target, { preview = false, reuseVerified = 
     const dist = yield* buildSteps({ preview, origin, stagedSource, stage, env, label });
     spec.check?.(dist);
     mkdirSync(stagedSite);
-    copyFiles(dist, stagedSite, approvedFiles(Object.keys(collect(dist)), 'build', label, spec.allowed));
+    if (spec.copyBuild) spec.copyBuild(dist, stagedSite);
+    else copyFiles(dist, stagedSite, approvedFiles(Object.keys(collect(dist)), 'build', label, spec.allowed));
     writeFileSync(join(stagedSite, '.nojekyll'), '');
     spec.report?.(stagedSite, { version, env });
     const manifest = { format: 1, app: name, version, site: siteName, source: sourceName, files: collect(stagedSite), sourceFiles: collect(stagedSource) };

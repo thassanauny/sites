@@ -672,3 +672,17 @@
 .device-board-actions .button.secondary {
   color: #bc7669;
 }
+
+/* Match IOU's header after a 10% reduction; keep control and type sizes. */
+:root {
+  --app-header-height: 69.4px;
+}
+@media (min-width: 760px) {
+  :root {
+    --app-header-height: 80.2px;
+  }
+}
+.header-inner {
+  min-height: calc(var(--app-header-height) - 1px);
+  padding-block: 10px;
+}

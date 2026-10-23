@@ -1,0 +1,19 @@
+{
+  "name": "shobdokosh-dictionary",
+  "version": "1.1.2",
+  "private": true,
+  "description": "An offline English and Bangla dictionary PWA.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs && node --check dist/sw.js && node --check dist/search.js && node --check dist/app.js && node --check dist/bangla-input.js && node --check dist/bangla-keyboard.js && node --check dist/transliteration.js && node --check dist/vendor/avro-phonetic.js && node --check dist/bengali-morphology.js && node --check dist/coverage-core.js && node --check dist/entry-view.js && node --check dist/vocabulary-stats.js && node --check dist/dictionary-format.js && node --check scripts/build_vocabulary_summary.mjs && node --check scripts/pack_large_dictionaries.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "audit": "node scripts/audit_tagore_coverage.mjs",
+    "corpus": "uv run scripts/tagore_corpus.py",
+    "test:imports": "uv run --python '>=3.10' python -m unittest discover -s tests -p 'test_import_*.py'",
+    "vocabulary": "node scripts/pack_large_dictionaries.mjs && node scripts/build_vocabulary_summary.mjs"
+  }
+}
