@@ -13,10 +13,10 @@ const filesToCopy = ['index.html', 'Makefile', 'package.json', 'package-lock.jso
 
 // Source: code and its tests, plus the licence texts and notices that ship with the website.
 const allowedSource = (kind, name) => kind === 'public'
-  ? /^public\/(?:licenses\/[\w.-]+\.txt|logo\.svg|icons\/(?:icon-192|icon-512|apple-touch-icon)\.png|THIRD_PARTY_NOTICES\.md)$/.test(name)
+  ? /^public\/(?:licenses\/[\w.-]+\.txt|logo\.svg|icons\/(?:icon-192|icon-512|apple-touch-icon|favicon-[a-f0-9]{12})\.png|THIRD_PARTY_NOTICES\.md)$/.test(name)
   : /^(?:src|tests)\/.+\.(?:ts|tsx|css)$/.test(name);
 // Build: the page, bundled scripts, styles, wasm and fonts, and the PDF.js maps and fonts with their licences.
-const allowedBuild = name => ['index.html', 'logo.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'THIRD_PARTY_NOTICES.md', '.nojekyll'].includes(name)
+const allowedBuild = name => ['icons/favicon-9f8c330b2fca.png', 'index.html', 'logo.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'THIRD_PARTY_NOTICES.md', '.nojekyll'].includes(name)
   || /^licenses\/[\w.-]+\.txt$/.test(name)
   || /^assets\/[A-Za-z0-9._-]+\.(?:js|mjs|css|wasm|ttf)$/.test(name)
   || /^pdfjs\/cmaps\/(?:[\w.-]+\.bcmap|LICENSE)$/.test(name)

@@ -264,3 +264,16 @@ test('definition-only headwords are searchable without inventing bilingual pairs
   assert.equal(searchDictionary(own,'gnathostome','bn').total,0);
   assert.equal(resolveBanglaWord(own,'অকিঞ্চন').exact,true);
 });
+
+test('close Bangla matches favor common spelling differences and preserve exact words', async () => {
+  const { closeBanglaWords } = await import('../dist/search.js');
+  const index = buildIndex([
+    { id: 'bangle', en: 'bangle', bn: ['কঙ্কণ'] },
+    { id: 'other', en: 'other', bn: ['করণ'] },
+  ]);
+  assert.equal(closeBanglaWords(index, 'কঙ্কন')[0], 'কঙ্কণ');
+  assert.deepEqual(closeBanglaWords(index, 'কঙ্কণ'), []);
+  assert.deepEqual(closeBanglaWords(index, 'xyz'), []);
+  assert.deepEqual(closeBanglaWords(index, 'ক'), []);
+  assert.deepEqual(closeBanglaWords(index, 'অভ্রান্তশব্দ'), []);
+});

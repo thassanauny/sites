@@ -1767,3 +1767,8 @@ body { padding-bottom:32px; }
   .bangla-keyboard { grid-template-columns:repeat(5,minmax(0,1fr)); }
   .bangla-key.space { grid-column:span 1; }
 }
+
+.phonetic-suggestions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:8px; }
+.phonetic-suggestions[hidden] { display:none; }
+.phonetic-suggestions > span { color:var(--muted); font-size:13px; }
+.phonetic-suggestions button { min-height:44px; padding:8px 14px; border:1px solid var(--border); border-radius:10px; background:var(--white, #fff); color:var(--green); font:18px/1.5 'Noto Sans Bengali',sans-serif; cursor:pointer; }

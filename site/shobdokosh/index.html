@@ -67,6 +67,7 @@
         <div class="bangla-input" id="bangla-input" hidden>
           <div class="phonetic-preview" id="phonetic-preview" hidden><span class="candidate-label">বাংলা</span><div class="phonetic-word"><output id="phonetic-candidate" lang="bn" aria-live="polite"></output><span id="phonetic-meaning" lang="en" aria-live="polite" hidden></span></div><button type="button" id="commit-phonetic">Use this word <svg><use href="#i-check"/></svg></button></div>
           <div class="bangla-keyboard" id="bangla-keyboard" aria-label="Bangla on-screen keyboard" hidden></div>
+          <div id="phonetic-suggestions" class="phonetic-suggestions" aria-label="Close dictionary matches" hidden></div>
           <template id="typing-guide-content"><div class="phonetic-guide"><p><strong>Type the sound in English letters.</strong> Search updates as you type. Press Space, Enter, or “Use this word” to insert the Bangla text.</p><div class="typing-examples"><span>bangla → <b lang="bn">বাংলা</b></span><span>boi → <b lang="bn">বই</b></span><span>pani → <b lang="bn">পানি</b></span><span>bhalo → <b lang="bn">ভালো</b></span><span>jatona → <b lang="bn">যাতনা</b></span><span>jirno → <b lang="bn">জীর্ণ</b></span><span>sundor → <b lang="bn">সুন্দর</b></span><span>shundor → <b lang="bn">সুন্দর</b></span><span>sundar → <b lang="bn">সুন্দর</b></span><span>shomoy → <b lang="bn">সময়</b></span><span>orghyo → <b lang="bn">অর্ঘ্য</b></span><span>jIrrNo → <b lang="bn">জীর্ণ</b></span></div><p>Common spellings such as <strong>sundor, shundor, sundar</strong> all give <strong lang="bn">সুন্দর</strong>. Other words follow Avro rules. In Avro, <strong>I → ী</strong> and <strong>rrN → র্ণ</strong>, so <strong>jIrrNo → জীর্ণ</strong>. The easier <strong>jirno</strong> also works. Uppercase letters can change the sound: <strong>t → ত</strong>, <strong>T → ট</strong>, <strong>n → ন</strong>, <strong>N → ণ</strong>. Use vowel marks after consonants, and <span lang="bn">্</span> (hasant) to form conjuncts: <span lang="bn">ক + ্ + ষ = ক্ষ</span>. Bangla script is detected automatically and accepted directly.</p></div></template>
         </div>
       </section>
@@ -84,7 +85,7 @@
       </div>
     </main>
 
-    <footer class="app-version" aria-label="App version">শব্দকোষ · 1.1.15</footer>
+    <footer class="app-version" aria-label="App version">শব্দকোষ · 1.1.17</footer>
   </div>
 
   <div class="toast" id="toast" role="status" hidden></div>

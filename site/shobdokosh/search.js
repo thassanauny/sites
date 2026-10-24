@@ -85,3 +85,26 @@ export function dailyEntry(entries, date = new Date()) {
 import { getBanglaBaseForms } from './bengali-morphology.js';
 
 const banglaIndexes = new WeakMap();
+
+/** Dictionary-backed spelling suggestions; never replace the literal input. */
+export function closeBanglaWords(index, query, limit = 4) {
+  const needle = normalize(query);
+  const words = banglaIndexes.get(index);
+  if (!words || words.has(needle) || !/^[\u0980-\u09ff]+$/u.test(needle) || needle.length < 3) return [];
+  const fold = value => value.replace(/ণ/g, 'ন').replace(/[শষ]/g, 'স').replace(/[যয়]/g, 'য়').replace(/ী/g, 'ি').replace(/ূ/g, 'ু');
+  const folded = fold(needle);
+  const max = needle.length >= 6 ? 2 : 1;
+  const matches = [];
+  for (const word of words.keys()) {
+    if (Math.abs(word.length - needle.length) > max || !/^[\u0980-\u09ff]+$/u.test(word)) continue;
+    let previous = Array.from({ length: word.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= needle.length; i++) {
+      const row = [i];
+      for (let j = 1; j <= word.length; j++) row[j] = Math.min(row[j - 1] + 1, previous[j] + 1, previous[j - 1] + (needle[i - 1] === word[j - 1] ? 0 : 1));
+      previous = row;
+    }
+    const distance = previous[word.length];
+    if (distance <= max) matches.push({ word, score: distance + (fold(word) === folded ? -1 : 0) });
+  }
+  return matches.sort((a, b) => a.score - b.score || a.word.localeCompare(b.word, 'bn')).slice(0, limit).map(match => match.word);
+}

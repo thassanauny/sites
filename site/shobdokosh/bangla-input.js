@@ -2,12 +2,13 @@ import { transliterate } from './transliteration.js';
 import { KEYBOARD_ROWS, editText } from './bangla-keyboard.js';
 
 /** Bind the local input method without changing the user's operating-system keyboard. */
-export function createBanglaInput({ input, onChange, getMeanings = () => [] }) {
+export function createBanglaInput({ input, onChange, getMeanings = () => [], getSuggestions = () => [] }) {
   const panel = document.querySelector('#bangla-input');
   const keyboard = document.querySelector('#bangla-keyboard');
   const preview = document.querySelector('#phonetic-preview');
   const candidate = document.querySelector('#phonetic-candidate');
   const meaning = document.querySelector('#phonetic-meaning');
+  const suggestions = document.querySelector('#phonetic-suggestions');
   const help = document.querySelector('#typing-help');
   let direction = 'en';
   let keyboardOpen = false;
@@ -37,6 +38,29 @@ export function createBanglaInput({ input, onChange, getMeanings = () => [] }) {
     meaning.setAttribute('lang', Array.isArray(result) ? 'en' : result?.language || 'en');
     meaning.textContent = meanings.join(' · ');
     meaning.hidden = !meanings.length;
+    const alternatives = active && !composing && input.value.trim() ? getSuggestions(converted) : [];
+    suggestions.textContent = '';
+    suggestions.hidden = !alternatives.length;
+    if (alternatives.length) {
+      const label = document.createElement('span');
+      label.textContent = 'Close matches';
+      suggestions.append(label);
+      for (const word of alternatives) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.lang = 'bn';
+        button.textContent = word;
+        button.addEventListener('pointerdown', event => event.preventDefault());
+        button.addEventListener('click', () => {
+          input.value = word;
+          input.setSelectionRange(word.length, word.length);
+          input.focus({ preventScroll: true });
+          notify();
+        });
+        suggestions.append(button);
+      }
+    }
+    if (alternatives.length) panel.hidden = false;
     const toggle = document.querySelector('#bangla-toggle');
     toggle.setAttribute('aria-pressed', String(active && keyboardOpen));
     toggle.setAttribute('aria-expanded', String(active && keyboardOpen));

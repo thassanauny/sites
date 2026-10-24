@@ -135,3 +135,8 @@ test('empty, native and repeated input remain stable', () => {
   assert.equal(transliterate(bangla), bangla);
   assert.equal(transliterate('ami bangla bhalobashi'), bangla);
 });
+
+test('shoil and shoilo share the existing Avro spelling for শৈল', () => {
+  for (const word of ['shoil', 'shoilo', 'shOIl']) assert.equal(transliterate(word), 'শৈল');
+  assert.equal(transliterate('shoil, shoilo! শৈল'), 'শৈল, শৈল! শৈল');
+});

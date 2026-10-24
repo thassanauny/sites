@@ -1,4 +1,4 @@
-import { buildIndex, searchDictionary, detectDirection, dailyEntry, normalize, resolveBanglaWord } from './search.js';
+import { buildIndex, searchDictionary, detectDirection, dailyEntry, normalize, resolveBanglaWord, closeBanglaWords } from './search.js';
 import { createBanglaInput } from './bangla-input.js';
 import { entryView, banglaDefinitions, meaningPreview, excerpt } from './entry-view.js';
 import { unpackDictionary } from './dictionary-format.js';
@@ -21,6 +21,7 @@ let updateDismissed = false;
 const banglaInput = createBanglaInput({
   input: $('#search'),
   onChange: () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 120); },
+  getSuggestions: query => state.ready ? closeBanglaWords(state.index, query) : [],
   getMeanings: query => {
     if (!state.ready) return [];
     return meaningPreview(resolveBanglaWord(state.index, query).entries);

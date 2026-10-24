@@ -268,3 +268,19 @@ test('the auxiliary panel stays hidden until a preview or keyboard is needed', (
   assert.equal(element('#bangla-input').hidden, true);
   controller.setDirection('en');
 });
+
+test('close dictionary spelling can be chosen without overriding literal transliteration', t => {
+  const { input, controller, element, type, changes } = setup(t, {
+    getSuggestions: query => query === 'কঙ্কন' ? ['কঙ্কণ'] : [],
+  });
+  controller.setDirection('bn');
+  type('konkon');
+  assert.equal(controller.getQuery(), 'কঙ্কন');
+  const suggestions = element('#phonetic-suggestions');
+  assert.equal(suggestions.hidden, false);
+  suggestions.children.find(child => child.textContent === 'কঙ্কণ').emit('click');
+  assert.equal(input.value, 'কঙ্কণ');
+  assert.equal(controller.getQuery(), 'কঙ্কণ');
+  assert.equal(suggestions.hidden, true);
+  assert.equal(changes(), 1);
+});

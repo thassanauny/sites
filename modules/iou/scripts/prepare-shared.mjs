@@ -11,7 +11,7 @@ const file = fileURLToPath(import.meta.url);
 const { checkCloudBuild } = await import(isShipped(file) ? './check-cloud-build.mjs' : '../apps/iou/scripts/check-cloud-build.mjs');
 const label = 'iou';
 const filesToCopy = ['Makefile', 'index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json', 'vite.config.ts', 'biome.json', '.env.example', 'supabase/schema.sql', 'supabase/update-live-sync.sql', 'supabase/postgres-check.mjs', 'scripts/check-cloud-build.mjs', 'scripts/publishing.test.mjs'];
-const publicAssets = new Set(['logo.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png']);
+const publicAssets = new Set(['icons/favicon-1e1757b61e5d.png', 'logo.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png']);
 const baseExample = '\n# Optional: /repository-name/ for a GitHub project site, / for a custom domain.\n# Leaving this empty uses relative asset URLs for local previews.\nVITE_BASE_PATH=\n';
 // The Sites workflow runs this target; it only reads the prepared website.
 const checkSite = '\n.PHONY: check-site\ncheck-site: node-check\n\t@test -n "$(SITE)" || { printf \'%s\\n\' \'Set SITE to the prepared website folder.\' >&2; exit 1; }\n\t"$(NODE)" scripts/check-cloud-build.mjs "$(SITE)"\n';

@@ -14,10 +14,10 @@ const checkerName = 'scripts/check-shared-build.mjs';
 const schemaFiles = ['tsconfig.app.json', 'tsconfig.node.json', 'biome.json', 'build-config.test.ts', 'supabase/schema.sql'];
 const iconAssets = ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
 const apps = {
-  textdrop: { assets: new Set(['logo.svg', ...iconAssets]), files: [...schemaFiles, 'playwright.config.ts', 'supabase/update-live-sync.sql', 'supabase/postgres-check.mjs'], folders: ['src', 'public', 'tests'] },
-  pinboard: { assets: new Set(['favicon.svg', ...iconAssets]), files: [...schemaFiles, 'playwright.config.ts', 'supabase/schema.test.mjs', 'supabase/row-storage.test.mjs', 'supabase/postgres-check.mjs', 'supabase/live-sync.test.mjs', 'supabase/update-live-sync.sql'], folders: ['src', 'public', 'tests'] },
+  textdrop: { assets: new Set(['icons/favicon-ec432c861235.png', 'logo.svg', ...iconAssets]), files: [...schemaFiles, 'playwright.config.ts', 'supabase/update-live-sync.sql', 'supabase/postgres-check.mjs'], folders: ['src', 'public', 'tests'] },
+  pinboard: { assets: new Set(['icons/favicon-ecee3ffa297b.png', 'favicon.svg', ...iconAssets]), files: [...schemaFiles, 'playwright.config.ts', 'supabase/schema.test.mjs', 'supabase/row-storage.test.mjs', 'supabase/postgres-check.mjs', 'supabase/live-sync.test.mjs', 'supabase/update-live-sync.sql'], folders: ['src', 'public', 'tests'] },
   blueprint: {
-    assets: new Set([...iconAssets, 'favicon.svg', '.nojekyll', 'licenses/Manrope.txt', 'licenses/DM-Sans.txt', 'licenses/React-Flow.txt']),
+    assets: new Set(['icons/favicon-adccaf28804d.png', ...iconAssets, 'favicon.svg', '.nojekyll', 'licenses/Manrope.txt', 'licenses/DM-Sans.txt', 'licenses/React-Flow.txt']),
     files: ['supabase/schema.sql', 'supabase/update-live-sync.sql', 'playwright.config.ts'],
     folders: ['src', 'public', 'tests'], fonts: true,
   },

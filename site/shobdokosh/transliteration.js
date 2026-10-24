@@ -12,6 +12,7 @@ const familiarSpellings = new Map([
   ['অর্ঘ', ['orgho']],
   ['অর্ঘ্য', ['orghyo']],
   ['যাতনা', ['jatona']],
+  ['শৈল', ['shoil', 'shoilo']],
   ['জীর্ণ', ['jirno', 'jeerno', 'jirna']],
   ['সুন্দর', ['sundor', 'shundor', 'sundar', 'shundar']],
   ['সকাল', ['sokal', 'shokal', 'sakal']],
