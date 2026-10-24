@@ -25,7 +25,7 @@ export function createBanglaInput({ input, onChange, getMeanings = () => [] }) {
   function update() {
     const active = direction === 'bn';
     keyboard.hidden = !active || !keyboardOpen;
-    input.placeholder = active ? 'Search a Bangla word (বাংলা or bangla)…' : 'Search an English word…';
+    input.placeholder = active ? 'বাংলা / bangla…' : 'English word…';
     input.lang = active && /[\u0980-\u09ff]/u.test(input.value) ? 'bn' : 'en';
     help.textContent = 'Bangla is accepted directly; English letters transliterate automatically in Bangla mode.';
     const converted = active && !composing ? getQuery() : input.value;

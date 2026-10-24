@@ -37,6 +37,7 @@ export const SHOBDOKOSH_FILES = new Set([
   "fonts/noto-sans-bengali-400.ttf",
   "fonts/notosansbengali-OFL.txt",
   "icons/apple-touch-icon.png",
+  "icons/favicon-6d3131c64b5a.png",
   "icons/icon-192.png",
   "icons/icon-512.png",
   "icons/maskable-512.png",

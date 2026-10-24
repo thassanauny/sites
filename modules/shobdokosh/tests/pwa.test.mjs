@@ -255,3 +255,15 @@ test('Update requests activation and reloads after control changes', async () =>
   page.listeners.get('controllerchange')();
   assert.equal(page.reloads, 1);
 });
+
+test('tab favicon has a distinct content fingerprint and is cached offline', async () => {
+  const html = await readFile(resolve(dist, 'index.html'), 'utf8');
+  const match = html.match(/rel="icon" href="\.\/(icons\/favicon-[a-f0-9]{12}\.png)" type="image\/png" sizes="32x32"/);
+  assert.ok(match, 'use a dedicated fingerprinted tab icon instead of a reused app icon URL');
+  const bytes = await readFile(resolve(dist, match[1]));
+  assert.equal(bytes.readUInt32BE(16), 32);
+  assert.equal(bytes.readUInt32BE(20), 32);
+  const worker = createWorker();
+  await worker.dispatch('install');
+  assert.ok(worker.requests.some(url => url.endsWith(match[1])));
+});

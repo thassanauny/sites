@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>শব্দকোষ · বাংলা-English–বাংলা Dictionary</title>
-  <link rel="icon" href="./icons/icon-192.png" type="image/png">
+  <link rel="icon" href="./icons/favicon-6d3131c64b5a.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./fonts.css">
@@ -44,7 +44,7 @@
       <a href="#dictionary" class="brand" aria-label="শব্দকোষ home"><span class="brand-mark"><img src="./icons/icon-192.png" alt="" width="32" height="32"></span><span><span class="brand-name" lang="bn">শব্দকোষ</span></span></a>
       <div class="header-actions">
         <nav class="navigation" aria-label="Main navigation">
-          <a class="nav-link" href="#saved" id="nav-saved" aria-label="Saved words"><svg aria-hidden="true"><use href="#i-bookmark"/></svg><span class="saved-label">Saved words</span><span class="count" id="saved-count">0</span></a>
+          <a class="nav-link" href="#saved" id="nav-saved" aria-label="Saved words"><svg aria-hidden="true"><use href="#i-bookmark"/></svg><span class="saved-label"><span class="saved-label-long">Saved words</span><span class="saved-label-short">Saved</span></span><span class="count" id="saved-count">0</span></a>
         </nav>
         <button type="button" class="icon-button help-button" id="help-button" aria-label="Help" title="Help"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2-3 4m.1 3h.01"/></svg></button>
       </div>
@@ -59,7 +59,7 @@
         <form class="search-form" id="search-form" role="search">
           <svg class="search-icon"><use href="#i-search"/></svg>
           <label class="sr-only" for="search">Search the dictionary</label>
-          <input id="search" type="search" placeholder="Search an English word…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="120" enterkeyhint="search" aria-controls="results" aria-describedby="typing-help">
+          <input id="search" type="search" placeholder="English word…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="120" enterkeyhint="search" aria-controls="results" aria-describedby="typing-help">
           <span id="typing-help" class="sr-only">English letters → বাংলা · Space or Enter inserts Bangla</span>
           <button class="bangla-entry-button" type="button" id="bangla-toggle" aria-controls="bangla-keyboard" aria-expanded="false" aria-label="Open Bangla keyboard" aria-pressed="false" title="Type in Bangla"><svg><use href="#i-keyboard"/></svg><span lang="bn">বাংলা</span></button>
           <button class="search-submit" type="submit" aria-label="Search"><svg><use href="#i-arrow"/></svg></button>
@@ -84,7 +84,7 @@
       </div>
     </main>
 
-    <footer class="app-version" aria-label="App version">শব্দকোষ · 1.1.11</footer>
+    <footer class="app-version" aria-label="App version">শব্দকোষ · 1.1.15</footer>
   </div>
 
   <div class="toast" id="toast" role="status" hidden></div>

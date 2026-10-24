@@ -1,5 +1,5 @@
 /* Bump this version whenever an app file or dictionary changes before deployment. */
-const VERSION = '1.1.11';
+const VERSION = '1.1.15';
 const CACHE_PREFIX = `shobdokosh:${new URL(self.registration.scope).pathname}:`;
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}`;
 const ASSETS = [
@@ -39,6 +39,7 @@ const ASSETS = [
   './data/THIRD_PARTY_NOTICES.md',
   './data/LICENSE-CC-BY-SA-4.0.txt',
   './manifest.webmanifest',
+  './icons/favicon-6d3131c64b5a.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',

@@ -1,6 +1,6 @@
 {
   "name": "shobdokosh-dictionary",
-  "version": "1.1.11",
+  "version": "1.1.15",
   "private": true,
   "description": "An offline English and Bangla dictionary PWA.",
   "type": "module",
